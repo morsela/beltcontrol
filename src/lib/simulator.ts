@@ -7,8 +7,9 @@
 
 import type { Driver, DriverId, Telemetry } from './drivers.js';
 
-export function simulatedDriver(opts: { id?: DriverId } = {}): Driver {
+export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } = {}): Driver {
   const id: DriverId = opts.id ?? 'classic';
+  const rejectPause = opts.rejectPause ?? false;
 
   let timer: number | null = null;
   let target = 0;
@@ -19,10 +20,10 @@ export function simulatedDriver(opts: { id?: DriverId } = {}): Driver {
   let kcal = 0;
 
   const caps: Record<DriverId, Driver['capabilities']> = {
-    classic: { speed: true, mode: true, incline: false, steps: true, needsPolling: true },
-    ftms: { speed: true, mode: false, incline: false, steps: false, needsPolling: false },
-    ks1234: { speed: true, mode: false, incline: false, steps: true, needsPolling: false },
-    fitshow: { speed: false, mode: false, incline: false, steps: false, needsPolling: false },
+    classic: { speed: true, mode: true, incline: false, steps: true, pause: false, needsPolling: true },
+    ftms: { speed: true, mode: false, incline: false, steps: false, pause: true, needsPolling: false },
+    ks1234: { speed: true, mode: false, incline: false, steps: true, pause: false, needsPolling: false },
+    fitshow: { speed: false, mode: false, incline: false, steps: false, pause: false, needsPolling: false },
   };
 
   const self: Driver = {
@@ -51,6 +52,14 @@ export function simulatedDriver(opts: { id?: DriverId } = {}): Driver {
       self.onLog?.('simulator: stop');
       target = 0;
     },
+    async pause() {
+      if (!caps[id].pause) throw new Error(`the simulated ${id} protocol has no pause command`);
+      self.onLog?.('simulator: pause');
+      target = 0;
+      // A real unit may still answer "op code not supported"; connectSimulated('ftms',
+      // { rejectPause: true }) plays that back so the fallback is reachable in dev too.
+      return rejectPause ? 'stopped' : 'paused';
+    },
     async setSpeed(kmh: number) {
       target = kmh;
     },
@@ -65,8 +74,14 @@ export function simulatedDriver(opts: { id?: DriverId } = {}): Driver {
   function tick() {
     // Ramp toward the setpoint rather than snapping, so the "now" readout and the
     // ramping state in the speed control actually get exercised.
+    //
+    // Slowing is much quicker than speeding up, as it is on a real belt. That asymmetry
+    // matters now that a stop or a pause is only reported once the belt says zero: at the
+    // old symmetric 0.35 km/h per second, the brisk preset took fourteen seconds to coast
+    // down and the simulator failed a confirmation deadline real hardware passes easily.
     const delta = target - speed;
-    speed += Math.sign(delta) * Math.min(Math.abs(delta), 0.35);
+    const rate = delta > 0 ? 0.35 : 2;
+    speed += Math.sign(delta) * Math.min(Math.abs(delta), rate);
     if (Math.abs(target - speed) < 0.05) speed = target;
 
     if (speed > 0) {

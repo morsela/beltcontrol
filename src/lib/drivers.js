@@ -181,7 +181,14 @@ export function classicDriver() {
   const self = {
     id: 'classic',
     name: 'WalkingPad (classic fe00)',
-    capabilities: { speed: true, mode: true, incline: false, steps: true, needsPolling: true },
+    capabilities: {
+      speed: true,
+      mode: true,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: true,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.5,
@@ -247,6 +254,13 @@ export function classicDriver() {
       await self.setMode(CLASSIC_MODE.standby);
     },
 
+    async pause() {
+      // The fe00 command set is stats / speed / mode / start and nothing else. Speed 0
+      // without the standby that follows it in stop() would be the obvious candidate,
+      // but whether the belt picks up again from there has never been checked on a pad.
+      throw new Error('the classic fe00 protocol has no pause command');
+    },
+
     _parse(view) {
       self.onLog?.(`rx ${hex(view.buffer)}`);
       if (view.byteLength < 3) return;
@@ -287,13 +301,18 @@ export function classicDriver() {
 // FTMS — service 0x1826 (Bluetooth SIG Fitness Machine Service)
 // ---------------------------------------------------------------------------
 
+// The spec spends one op code on "Start or Resume" and one on "Stop or Pause"; the
+// parameter below is what separates a pause from a stop, and resume needs no parameter
+// because it is the same op code as start.
 const FTMS_OP = {
   requestControl: 0x00,
   reset: 0x01,
   setTargetSpeed: 0x02,
-  start: 0x07,
-  stop: 0x08,
+  startOrResume: 0x07,
+  stopOrPause: 0x08,
 };
+
+const FTMS_STOP_PARAM = { stop: 0x01, pause: 0x02 };
 
 const FTMS_RESULT = {
   0x01: 'success',
@@ -402,7 +421,14 @@ export function ftmsDriver() {
   const self = {
     id: 'ftms',
     name: 'FTMS (standard 1826)',
-    capabilities: { speed: true, mode: false, incline: false, steps: false, needsPolling: false },
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: true,
+      needsPolling: false,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.5,
@@ -539,6 +565,8 @@ export function ftmsDriver() {
     },
 
     // Write to the control point and wait for the 0x80 indication that acknowledges it.
+    // The result code rides on the thrown error, so callers that can do something about a
+    // particular rejection — start's reset-retry, pause's fallback — can tell them apart.
     _cp(bytes, { timeout = 3000 } = {}) {
       return queue(async () => {
         self.onLog?.(`tx cp ${hex(new Uint8Array(bytes).buffer)}`);
@@ -576,10 +604,11 @@ export function ftmsDriver() {
       haveControl = true;
     },
 
+    /** Start, and equally resume — 0x07 is "Start or Resume". */
     async start() {
       await self._requestControl();
       try {
-        await self._cp([FTMS_OP.start]);
+        await self._cp([FTMS_OP.startOrResume]);
       } catch (e) {
         // A unit that never fully left the previous session refuses 0x07 outright, so the
         // second start of a sitting fails where the first succeeded. Reset clears that
@@ -589,19 +618,49 @@ export function ftmsDriver() {
         haveControl = false;
         await self._cp([FTMS_OP.reset]);
         await self._requestControl();
-        await self._cp([FTMS_OP.start]);
+        await self._cp([FTMS_OP.startOrResume]);
       }
     },
 
     async stop() {
       await self._requestControl();
       try {
-        await self._cp([FTMS_OP.stop, 0x01]);
+        await self._cp([FTMS_OP.stopOrPause, FTMS_STOP_PARAM.stop]);
       } finally {
         // Most units drop control permission on stop. Clearing this even when the stop
         // itself failed matters: a stale `true` makes the next start skip Request Control
         // and get silently refused.
         haveControl = false;
+      }
+    },
+
+    /**
+     * Pause, resumed later by `start()`.
+     *
+     * Support cannot be discovered up front: FTMS has no pause bit anywhere, not in
+     * 0x2ACC Feature nor anywhere else, so the spec's own answer is to send it and read
+     * the result. A unit that cannot pause answers "op code not supported" or "invalid
+     * parameter" — and the only honest response to that is to stop the belt, because the
+     * alternative is a treadmill still running under a button that says Paused.
+     *
+     * Any other rejection is a transient failure rather than a verdict on this unit, so it
+     * is thrown like every other one and leaves the button alone.
+     */
+    async pause() {
+      await self._requestControl();
+      try {
+        await self._cp([FTMS_OP.stopOrPause, FTMS_STOP_PARAM.pause]);
+        return 'paused';
+      } catch (e) {
+        if (e.result !== 0x02 && e.result !== 0x03) throw e;
+        self.onLog?.(
+          `pause rejected (${FTMS_RESULT[e.result] ?? e.result}) — this unit has no pause; stopping instead`
+        );
+        // Control survives a "not supported" answer, so stop() will not re-request it.
+        await self.stop();
+        return 'stopped';
+      } finally {
+        haveControl = false; // as with stop, most units hand control back here
       }
     },
 
@@ -638,7 +697,14 @@ export function fitshowDriver() {
   const self = {
     id: 'fitshow',
     name: 'FitShow (fff0) — read-only',
-    capabilities: { speed: false, mode: false, incline: false, steps: false, needsPolling: false },
+    capabilities: {
+      speed: false,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: false,
+      needsPolling: false,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.5,
@@ -673,6 +739,9 @@ export function fitshowDriver() {
       throw new Error('FitShow control is not implemented yet');
     },
     async stop() {
+      throw new Error('FitShow control is not implemented yet');
+    },
+    async pause() {
       throw new Error('FitShow control is not implemented yet');
     },
     async setSpeed() {
@@ -769,7 +838,14 @@ export function ks1234Driver() {
   const self = {
     id: 'ks1234',
     name: 'KingSmith 0x1234 (chip:3)',
-    capabilities: { speed: true, mode: false, incline: false, steps: true, needsPolling: false },
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: false,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.1,
@@ -869,6 +945,17 @@ export function ks1234Driver() {
     async setSpeed(kmh) {
       self._requireOpen();
       await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
+    },
+    async pause() {
+      // KS+Fit does have one for this family — its BLE layer carries setPause alongside
+      // setStart/setStop, and it warns "speed adjustment is not supported when the device
+      // is paused" — but the capture only ever exercised runState 0 and 1, so the payload
+      // is unknown. `props runState 2` is the obvious guess and guessing a control command
+      // at a treadmill is not something this driver does. See docs/protocols.md.
+      throw new Error(
+        'no pause for the KingSmith 0x1234 protocol yet — KS+Fit has one, but its wire ' +
+          'format has not been captured'
+      );
     },
     async setMode() {
       throw new Error('this protocol has no mode switch');

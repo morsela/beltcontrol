@@ -347,12 +347,19 @@
   max-width: var(--maxw);
   margin-inline: auto;
   pointer-events: auto;
+  display: flex;
+  gap: 0.5rem;
 }
 .stopbar .btn {
-  width: 100%;
+  flex: 1;
   min-height: 64px;
   font-size: 1.1rem;
   box-shadow: 0 6px 24px rgb(0 0 0 / 28%);
+}
+/* Stop keeps twice the width of Pause. They sit side by side under a moving belt and
+   must never be mistaken for one another at a glance. */
+.stopbar .btn.danger {
+  flex: 2;
 }
 
 /* --- tab bar -------------------------------------------------------------- */

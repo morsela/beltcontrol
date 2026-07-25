@@ -89,6 +89,10 @@ The leading `askStats` is not decoration. Standby parks the same app-control pat
 `attach()` has to wake before anything works, so a start sent straight after a stop arrives at
 a pad that is not listening — which is why only the first start of a session used to land.
 
+There is **no pause** in this command set, in the APK or in `ph4-walkingpad`. Speed 0 without
+the standby that follows it in `stop()` is the obvious candidate, but whether the belt picks
+up again from there has never been checked on a pad, so `pause()` throws.
+
 Notifications arrive on `fe01`. Integers are **big-endian**.
 
 Current status — header `F8 A2`, 18 bytes:
@@ -136,6 +140,17 @@ control permission on stop, so the driver re-requests it — including when the 
 rejected, since a unit that refused to stop has certainly not handed control back. A unit that
 never fully left the previous session then refuses `07` outright; the driver answers `04`
 *operation failed* and `05` *control not permitted* with a `01` reset and one retry.
+
+**Pause is real here, and only here.** One op code covers "Start or Resume" and one covers
+"Stop or Pause", so resuming needs no command of its own — `07` does both jobs. Support
+cannot be discovered in advance: there is no pause bit in `2acc` Feature or anywhere else, so
+the spec's own answer is to send it and read the result. A unit that cannot pause replies
+`02` op-code-not-supported or `03` invalid-parameter, and `pause()` then stops the belt and
+reports `'stopped'` back to the caller, which drops the button for the rest of the
+connection. A belt still running under a button that says Paused is the one outcome worth
+writing code to prevent.
+
+KS+Fit does the same thing — `2ad9: request pause or stop, result: ` sits in its `libapp.so`.
 
 **Treadmill Data (`2acd`)** is a `uint16` flag field followed by only the present fields, in
 spec order. Layout varies per device, so `parseTreadmillData()` walks the flags with a cursor
@@ -225,6 +240,26 @@ real account.
 Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
 and ignored — the belt simply does not move, with no error anywhere. `ControlMode 1` therefore
 has to be re-asserted on every start, not just once during the handshake.
+
+**Pause exists on this family but has not been captured.** KS+Fit's BLE layer for these
+pads — the `Wilink*` classes, whose property names (`ControlMode`, `ChildLockSwitch`,
+`VelocitySensitivity`, `runState`) are exactly the ones above — carries a pause alongside
+start and stop, and the app has a paused device state to go with it:
+
+```
+WilinkDeviceActionExt|setStart    WilinkDeviceActionExt|setStop
+WilinkDeviceActionExt|setPause    WilinkDeviceActionExt|startOrStop
+KsTreadmillDevice startOrPause mode:
+Speed adjustment is not supported when the device is paused.
+```
+
+The payload is not recoverable from the binary — the command templates are built at runtime,
+which is the same reason the protocol needed a capture in the first place, and `blutter` is
+still arm64-only against this v7a build. The capture itself only ever exercised `runState`
+`0` and `1`. `props runState 2` is the obvious guess and it stays a guess: `ks1234Driver.pause()`
+throws rather than aim an unverified control command at a treadmill. Settling it needs one
+more HCI trace — start a walk in KS+Fit, press pause, press resume — through the same
+pipeline as above.
 
 **Telemetry** arrives on `fed8` as `props` lines, often **partial** — `props RunningSteps 3` on
 its own is normal, so merge updates rather than replacing state:

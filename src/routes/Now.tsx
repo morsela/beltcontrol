@@ -12,8 +12,11 @@ import {
   supported,
   driver,
   doStart,
+  doResume,
+  endWalk,
   setMode,
   running,
+  paused,
   stopPending,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
@@ -23,7 +26,10 @@ import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
-  const [confirmStart, setConfirmStart] = useState(false);
+  // Which kind of "the belt is about to move" is waiting on a yes, if any. Resuming is
+  // confirmed exactly like starting: it may not be the person who paused it standing on
+  // the belt now.
+  const [confirming, setConfirming] = useState<'start' | 'resume' | null>(null);
   const d = driver.value;
 
   return (
@@ -54,11 +60,28 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
               Start button and no mode row, an empty panel is just noise. */}
           {(!isMoving.value || d?.capabilities.mode) && (
             <div class="card">
-              {!isMoving.value && (
-                <button class="btn primary block lg" onClick={() => setConfirmStart(true)}>
-                  Start
-                </button>
-              )}
+              {!isMoving.value &&
+                (paused.value ? (
+                  <>
+                    <button
+                      class="btn primary block lg"
+                      onClick={() => setConfirming('resume')}
+                    >
+                      Resume at {toMph(settings.value.targetKmh).toFixed(1)} mph
+                    </button>
+                    <button class="btn ghost block" style="margin-top:.5rem" onClick={endWalk}>
+                      End walk
+                    </button>
+                    <p class="hint">
+                      Paused — the belt is stopped. The walk stays open for 15 minutes, so
+                      resuming keeps it as one session rather than two.
+                    </p>
+                  </>
+                ) : (
+                  <button class="btn primary block lg" onClick={() => setConfirming('start')}>
+                    Start
+                  </button>
+                ))}
 
               {d?.capabilities.mode && (
                 <div class="mode-row">
@@ -117,18 +140,21 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         </p>
       )}
 
-      {confirmStart && (
+      {confirming && (
         <ConfirmDialog
-          title="Start the belt?"
-          body={`The belt will start moving at ${toMph(settings.value.targetKmh).toFixed(
+          title={confirming === 'resume' ? 'Resume the belt?' : 'Start the belt?'}
+          body={`The belt will ${
+            confirming === 'resume' ? 'pick back up' : 'start moving'
+          } at ${toMph(settings.value.targetKmh).toFixed(
             1
           )} mph. Make sure it is clear and you are ready.`}
-          confirmLabel="Start"
+          confirmLabel={confirming === 'resume' ? 'Resume' : 'Start'}
           onConfirm={() => {
-            setConfirmStart(false);
-            void doStart();
+            const kind = confirming;
+            setConfirming(null);
+            void (kind === 'resume' ? doResume() : doStart());
           }}
-          onCancel={() => setConfirmStart(false)}
+          onCancel={() => setConfirming(null)}
         />
       )}
 
