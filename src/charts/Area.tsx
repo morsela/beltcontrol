@@ -6,14 +6,23 @@ import { toMph } from '../lib/format.js';
  * Speed across one session. A single series, so no legend box — the title names it.
  * Crosshair plus tooltip on hover, per the interaction default for line/area.
  */
-export function AreaChart({ samples, height = 120 }: { samples: Sample[]; height?: number }) {
+export function AreaChart({
+  samples,
+  width = 320,
+  height = 120,
+}: {
+  samples: Sample[];
+  /** viewBox width — see the note on ColumnChart. */
+  width?: number;
+  height?: number;
+}) {
   const [hover, setHover] = useState<number | null>(null);
 
   if (samples.length < 2) {
     return <p class="note">Not enough samples yet — the chart fills in as you walk.</p>;
   }
 
-  const W = 320;
+  const W = width;
   const H = height;
   const padB = 16;
   const padT = 6;
