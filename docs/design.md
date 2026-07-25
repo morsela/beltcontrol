@@ -9,6 +9,34 @@ session logic — most of what looks arbitrary here is load-bearing.
 - [Counter resets](#counter-resets)
 - [Field trust](#field-trust)
 
+## Reading storage back
+
+`localStorage` is untrusted input. Not because an attacker is assumed — same-origin
+storage is reachable only by this app — but because *this app* wrote it, across
+versions, possibly interrupted by a full disk or a crash mid-write.
+
+It used to be read back with a bare cast (`parsed as Session[]`), and one bad record was
+enough to take the app down on every load, permanently, with no way back in short of the
+devtools:
+
+| Stored record | What happened |
+|---|---|
+| missing `trust` | `TypeError` in the Today render path, which reads `s.trust.distKm` |
+| `distKm: "abc"` | every total `NaN`, for good |
+
+Both read paths — the session list and the in-flight session — now go through
+`sanitizeSession`, the same validator the backup import already used. A record that
+cannot be placed on the calendar at all (no usable `startedAt`) is dropped and logged;
+everything else is coerced into range. Under-trusting is the safe direction, so an
+unrecognised protocol yields an all-absent trust map, which keeps that session's numbers
+out of every aggregate rather than presenting raw counter values as kilometres.
+
+`App` also holds an error boundary. Validation closes the case that actually happened; the
+boundary closes the category, because any render that throws over stored data throws again
+on the next load. It offers a retry, a download of the raw stored strings — handed over
+without being parsed, so it works even when the data is what the app is choking on — and
+only then the option to clear.
+
 ## The three screens
 
 Three tiers, each on its own screen, reachable from the bottom tab bar:

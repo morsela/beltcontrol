@@ -1,6 +1,13 @@
 import { signal, computed, effect } from '@preact/signals';
 import type { DriverId } from '../lib/drivers.js';
-import { live, isMoving, trustFor, type TrustMap } from './telemetry.js';
+import {
+  live,
+  isMoving,
+  trustFor,
+  type Trust,
+  type TrustMap,
+  type TrustedField,
+} from './telemetry.js';
 import { dayKey, startOfDay } from '../lib/format.js';
 import { log } from './log.js';
 
@@ -37,6 +44,93 @@ export interface Session {
   deviceName: string | null;
   trust: TrustMap;
   samples: Sample[];
+}
+
+
+// --- validation ------------------------------------------------------------
+//
+// Everything in localStorage is untrusted input. Not because an attacker is assumed —
+// same-origin storage is only reachable by this app — but because *this app* wrote it,
+// across versions, possibly interrupted by a full disk or a crash mid-write. It was
+// being read back with a bare `as Session[]`, and one bad record was enough to take
+// the app down on every load with no way back in:
+//
+//   a session missing `trust`      -> TypeError in the Today render path
+//   a non-numeric `distKm`         -> every total NaN, permanently
+//
+// A malformed record is dropped rather than repaired where it cannot be placed on the
+// calendar at all; everything else is coerced into range. Under-trusting is the safe
+// direction — an unknown protocol yields an all-absent trust map, which excludes the
+// session's numbers from every aggregate instead of inventing kilometres.
+
+const TRUSTS: readonly Trust[] = ['ok', 'unverified', 'absent'];
+const DRIVER_IDS: readonly DriverId[] = ['classic', 'ftms', 'fitshow', 'ks1234'];
+const TRUSTED_FIELDS: readonly TrustedField[] = ['distKm', 'steps', 'kcal'];
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Finite numbers only, clamped at zero: a negative distance or a NaN duration would
+ *  poison every total it touches, and there is no honest way to recover the real value. */
+const num = (v: unknown, fallback = 0): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : fallback;
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+
+function sanitizeTrust(v: unknown, protocol: DriverId | null): TrustMap {
+  const fallback = trustFor(protocol);
+  if (!isObj(v)) return fallback;
+  const out = { ...fallback };
+  for (const f of TRUSTED_FIELDS) {
+    const t = v[f];
+    if (typeof t === 'string' && (TRUSTS as readonly string[]).includes(t)) out[f] = t as Trust;
+  }
+  return out;
+}
+
+function sanitizeSamples(v: unknown): Sample[] {
+  if (!Array.isArray(v)) return [];
+  const out: Sample[] = [];
+  for (const s of v) {
+    if (out.length >= MAX_SAMPLES) break;
+    if (!isObj(s)) continue;
+    if (typeof s.t !== 'number' || !Number.isFinite(s.t)) continue;
+    if (typeof s.kmh !== 'number' || !Number.isFinite(s.kmh)) continue;
+    out.push({ t: Math.max(0, s.t), kmh: Math.max(0, s.kmh) });
+  }
+  return out;
+}
+
+/** `null` when the entry cannot be placed on the calendar — a session with no usable
+ *  start time has nowhere to go in any chart, total or streak. */
+export function sanitizeSession(v: unknown): Session | null {
+  if (!isObj(v)) return null;
+  const startedAt =
+    typeof v.startedAt === 'number' && Number.isFinite(v.startedAt) ? v.startedAt : null;
+  if (startedAt == null || startedAt <= 0) return null;
+
+  const endedAt = typeof v.endedAt === 'number' && Number.isFinite(v.endedAt) ? v.endedAt : null;
+  const protocol =
+    typeof v.protocol === 'string' && (DRIVER_IDS as readonly string[]).includes(v.protocol)
+      ? (v.protocol as DriverId)
+      : null;
+
+  return {
+    id:
+      str(v.id) ??
+      `imported-${startedAt.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+    startedAt,
+    endedAt,
+    activeMs: num(v.activeMs),
+    distKm: num(v.distKm),
+    steps: num(v.steps),
+    kcal: num(v.kcal),
+    protocol,
+    protocolName: str(v.protocolName),
+    deviceName: str(v.deviceName),
+    trust: sanitizeTrust(v.trust, protocol),
+    samples: sanitizeSamples(v.samples),
+  };
 }
 
 // --- accumulators ----------------------------------------------------------
@@ -87,7 +181,17 @@ function loadSessions(): Session[] {
     const raw = localStorage.getItem(SESSIONS_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Session[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    const out: Session[] = [];
+    let dropped = 0;
+    for (const entry of parsed) {
+      const s = sanitizeSession(entry);
+      if (s) out.push(s);
+      else dropped++;
+    }
+    // Logged rather than silent: history quietly getting shorter is worth noticing.
+    if (dropped > 0) log(`dropped ${dropped} unreadable session record(s) from storage`, 'err');
+    return out;
   } catch {
     return [];
   }
@@ -118,7 +222,12 @@ export function restoreOpenSession() {
   try {
     const raw = localStorage.getItem(OPEN_KEY);
     if (!raw) return;
-    const s = JSON.parse(raw) as Session;
+    const s = sanitizeSession(JSON.parse(raw));
+    if (!s) {
+      localStorage.removeItem(OPEN_KEY);
+      log('discarded an unreadable in-flight session record', 'err');
+      return;
+    }
     // A stale open session from days ago should be filed, not resumed.
     if (Date.now() - s.startedAt > 12 * 3600_000) {
       finalise(s);
