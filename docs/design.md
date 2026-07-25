@@ -116,6 +116,21 @@ moment Escape has somewhere better to be.
   neither the classic nor the `0x1234` frame carries calories, so a fixed six-tile grid
   guaranteed permanent em dashes on every real device. Availability is resolved once, at
   connect time, from `capabilities` plus the trust map in `src/state/telemetry.ts`.
+- **The tread strip is a readout, not decoration.** A band of slats above the hero number
+  scrolls at the speed the pad reports, driven from the same telemetry the numbers come
+  from — so it holds still when the belt is stopped, holds still when the pad has not
+  reported a speed *at all*, and glides to a halt on its own as a belt coasting down
+  reports smaller numbers. It shares the `MOVING_KMH` floor with `isMoving` rather than
+  picking a threshold of its own, because a still belt under a moving strip and a moving
+  belt under a still one are the same bug. One animation re-timed by `playbackRate`, not
+  restarted per frame: a treadmill reports speed once or twice a second and a restart on
+  each report is visible as a stutter. It is squared off and ruled top and bottom, with
+  wide slats and narrow gaps, so it cannot be mistaken for the rounded goal meter a few
+  rems below — nothing about it reads as a proportion, because it has no end. Reduced
+  motion is honoured in `TreadStrip` rather than in `tokens.css`: that blanket rule
+  reaches declarative animations only, and this one is scripted. Timing constants live in
+  `src/lib/tread.ts`, including the pitch, which the component hands to CSS as
+  `--tread-pitch` so the gradient period and the travel cannot drift apart.
 - **Three speed presets.** The steppers move 0.2 mph per press to stay inside the
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.

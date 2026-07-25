@@ -4,6 +4,7 @@ import { live, isMoving } from '../state/telemetry.js';
 import { doStop, doPause, doResume, canPause, paused, beltMayBeMoving } from '../state/connection.js';
 import { settings } from '../state/settings.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { TreadStrip } from './TreadStrip.js';
 import { requestWakeLock, releaseWakeLock } from '../lib/wakelock.js';
 import { fmtDuration, fmtMph, fmtMiles, toMph } from '../lib/format.js';
 
@@ -41,6 +42,12 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
         <span>{fmtMph(live.value.speedKmh)} mph</span>
         {session && session.trust.distKm === 'ok' && <span>{fmtMiles(session.distKm)} mi</span>}
       </div>
+
+      {/* The mph figure above says what the belt is doing; this says it again in a form
+          that can be read from across the room without focusing on it, which is the
+          whole brief for this screen. It is still not a celebration: it does one thing
+          at one speed and stops when the belt does. */}
+      <TreadStrip variant="ambient" />
 
       <div class="a-actions">
         <button class="btn ghost" onClick={onExit}>

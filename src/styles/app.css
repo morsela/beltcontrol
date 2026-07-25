@@ -172,6 +172,57 @@
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .dot.pulsing { animation: pulse 1.6s ease-in-out infinite; }
 
+/* --- tread strip ---------------------------------------------------------- */
+
+/* The deck the number sits on. Squared off and ruled top and bottom on purpose:
+   the goal meter a few rems below is a rounded pill that fills left to right, and
+   two horizontal bars that look alike but mean different things is the one thing
+   this cannot be. Nothing here reads as a proportion — it has no end.
+
+   --tread-pitch is set inline by TreadStrip, from the same constant the animation
+   translates by (src/lib/tread.ts). It is not declared here, so the slats and the
+   travel cannot drift apart. */
+.tread {
+  height: 10px;
+  margin: 0 0 0.9rem;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-block: 1px solid var(--line);
+}
+.tread-belt {
+  height: 100%;
+  /* One pitch wider than the box, so the element can travel a full slat and land
+     back where it started with no gap ever reaching the right edge. */
+  width: calc(100% + var(--tread-pitch));
+  /* Wide slats with narrow gaps, not thin rules with wide gaps: the second reads as a
+     measuring scale, which on a screen showing distance is the wrong thing to suggest.
+     Held well under full --faint so the band is a texture behind the number rather than
+     a second thing competing with it. */
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--faint) 42%, transparent) 0 9px,
+    transparent 9px var(--tread-pitch)
+  );
+}
+
+/* Ambient sits in peripheral vision for hours, which is exactly where a slow-moving
+   texture belongs — it is the one surface where motion is the point rather than a
+   detail. Wider slats, the ambient palette, and no card rules around it. */
+.tread-ambient {
+  width: min(100%, 28rem);
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  border-block-color: color-mix(in srgb, var(--ambient-muted) 35%, transparent);
+}
+.tread-ambient .tread-belt {
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ambient-muted) 45%, transparent) 0 9px,
+    transparent 9px var(--tread-pitch)
+  );
+}
+
 /* --- hero ----------------------------------------------------------------- */
 
 .hero {
