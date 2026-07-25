@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
+import { Analytics } from '@vercel/analytics/react';
 import { Now } from './routes/Now.js';
 import { Today } from './routes/Today.js';
 import { History } from './routes/History.js';
@@ -53,6 +54,7 @@ export function App() {
 
       {showStop && <StopBar />}
       <TabBar route={r} />
+      <Analytics />
     </>
   );
 }
