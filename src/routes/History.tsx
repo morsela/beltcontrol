@@ -1,9 +1,79 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { dailySeries, streak, sessions, exportCsv } from '../state/session.js';
+import { exportJson, importBackup, BackupError } from '../state/backup.js';
 import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
 import { Heatmap } from '../charts/Heatmap.js';
 import { fmtDuration, fmt, fmtDayLabel, EM_DASH } from '../lib/format.js';
+import { download, stamped } from '../lib/download.js';
+import { log } from '../state/log.js';
+
+/**
+ * Export, and the import that makes an export worth having: a backup nothing can read
+ * back is a museum piece. Rendered on the empty screen too — restoring into a fresh
+ * browser is exactly the case where there is no history to show yet.
+ */
+function DataCard() {
+  const file = useRef<HTMLInputElement>(null);
+  const [msg, setMsg] = useState<{ text: string; err?: boolean } | null>(null);
+  const n = sessions.value.length;
+
+  async function onFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = ''; // so picking the same file twice still fires a change
+    if (!f) return;
+    try {
+      const r = importBackup(await f.text());
+      const parts = [`${r.added} session${r.added === 1 ? '' : 's'} imported`];
+      if (r.duplicate) parts.push(`${r.duplicate} already here`);
+      if (r.skipped) parts.push(`${r.skipped} unreadable`);
+      if (r.settingsRestored) parts.push('settings restored');
+      setMsg({ text: `${parts.join(', ')}.` });
+      log(`backup imported: ${parts.join(', ')}`, 'ok');
+    } catch (err) {
+      const text = err instanceof BackupError ? err.message : 'Could not read that file.';
+      setMsg({ text, err: true });
+      log(`backup import failed: ${text}`, 'err');
+    }
+  }
+
+  return (
+    <div class="card">
+      <div class="data-actions">
+        <button
+          class="btn"
+          disabled={n === 0}
+          onClick={() => download(stamped('backup', 'json'), exportJson(), 'application/json')}
+        >
+          Export backup
+        </button>
+        <button
+          class="btn"
+          disabled={n === 0}
+          onClick={() => download(stamped('sessions', 'csv'), exportCsv(), 'text/csv')}
+        >
+          Export CSV
+        </button>
+        <button class="btn" onClick={() => file.current?.click()}>
+          Import backup
+        </button>
+      </div>
+      <input ref={file} type="file" accept="application/json,.json" onChange={onFile} hidden />
+      {msg && (
+        <p class={msg.err ? 'hint err' : 'hint ok'} role="status">
+          {msg.text}
+        </p>
+      )}
+      <p class="note" style="margin-top:.6rem">
+        {n} session{n === 1 ? '' : 's'} stored in this browser. Nothing is ever uploaded.
+        The backup holds the complete record — every session, its speed samples and your
+        settings — and importing one merges into what is already here rather than
+        replacing it. The CSV is a flat summary for spreadsheets and cannot be read back.
+      </p>
+    </div>
+  );
+}
 
 export function History() {
   const [showTable, setShowTable] = useState(false);
@@ -27,6 +97,7 @@ export function History() {
             not have to press anything.
           </p>
         </div>
+        <DataCard />
       </>
     );
   }
@@ -106,26 +177,7 @@ export function History() {
         </p>
       )}
 
-      <div class="card">
-        <button
-          class="btn block"
-          onClick={() => {
-            const blob = new Blob([exportCsv()], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `belt-control-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-        >
-          Export CSV
-        </button>
-        <p class="note" style="margin-top:.6rem">
-          {sessions.value.length} session{sessions.value.length === 1 ? '' : 's'} stored in
-          this browser. Nothing is ever uploaded.
-        </p>
-      </div>
+      <DataCard />
     </>
   );
 }
