@@ -26,7 +26,7 @@ lives here instead.
 | `Content-Security-Policy` | The one header that is load bearing rather than ordinary hardening — see below. |
 | `X-Frame-Options: DENY` | Same intent as `frame-ancestors 'none'`, for browsers that predate it. |
 | `Permissions-Policy: bluetooth=(self)` | Keeps the radio available to this origin and nothing it embeds. |
-| `Strict-Transport-Security` | Web Bluetooth needs a secure context; this makes downgrade to plain HTTP a non-option. |
+| `Strict-Transport-Security` | Web Bluetooth needs a secure context; this makes downgrade to plain HTTP a non-option. `.com` is not HSTS-preloaded by the registry, so this header is the only thing enforcing it. |
 | `X-Content-Type-Options`, `Referrer-Policy` | Ordinary hardening. Nothing here is sensitive, but nothing here needs a referrer either. |
 | `rewrites` → `/index.html` | Hash routing means the server only ever needs to serve the shell; the negative lookahead keeps real files (assets, icons, the manifest) being served as themselves. |
 
@@ -76,6 +76,15 @@ bearing rather than cosmetic:
   free; `.com` is not, so `vercel.json` sends `Strict-Transport-Security` itself. Without it
   the first hit of a session goes out in plaintext and the page is briefly, silently
   non-functional before the redirect lands.
+
+  Vercel does send HSTS of its own accord on `*.vercel.app`, which is what made this easy
+  to believe was already handled — this file claimed the header for some time without
+  actually carrying it. Do not infer a custom apex from a preview URL: check the domain
+  you actually ship on.
+
+  ```sh
+  curl -sI https://beltcontrol.com/ | grep -i strict-transport-security
+  ```
 
 In Cloudflare's DNS panel the records must be **DNS-only (grey cloud), not proxied**. Proxying
 Cloudflare in front of Vercel interferes with certificate issuance and renewal, and with the
