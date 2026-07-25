@@ -10,8 +10,7 @@ import { AmbientView } from './components/AmbientView.js';
 import { DesktopOnlyNotice } from './components/DesktopOnlyNotice.js';
 import { Recovery } from './components/Recovery.js';
 import { Disclaimer } from './components/Disclaimer.js';
-import { isMoving } from './state/telemetry.js';
-import { connected, running } from './state/connection.js';
+import { beltMayBeMoving, connected } from './state/connection.js';
 import { isDesktop } from './lib/viewport.js';
 
 export type Route = 'now' | 'today' | 'history';
@@ -57,11 +56,7 @@ export function App() {
 
   if (ambient) return <AmbientView onExit={() => setAmbient(false)} />;
 
-  // `running` as well as `isMoving`: between the start write and the pad's first frame
-  // the belt is spinning up with nothing in telemetry yet, and Stop has to be reachable
-  // for that window. It used to be covered by faking a speed reading, which also kept
-  // Stop pinned forever when the pad ignored the start.
-  const showStop = connected.value && (isMoving.value || running.value);
+  const showStop = beltMayBeMoving.value;
 
   if (desktop) {
     return (

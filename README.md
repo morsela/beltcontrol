@@ -108,7 +108,8 @@ The belt can start under software control with nobody on it. The app therefore:
   the person who paused it standing on the belt now
 - clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default) — and
   clamps *that* to an envelope of its own, so a pad reporting a nonsense limit widens
-  nothing
+  nothing. The floor is 1.0 km/h (0.6 mph), where a walking pad moves off by itself,
+  and it is also where the target starts
 - limits each speed press to ≤0.5 km/h
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd> — Pause never takes its place,
   its key, or more than a third of the bar
@@ -119,6 +120,9 @@ The belt can start under software control with nobody on it. The app therefore:
 - pins Stop from the moment a start goes out until the belt reports zero — above the tab
   bar on mobile, at the top of the rail on desktop — and keeps it on screen in ambient
   mode and inside every dialog, so it can never be scrolled out of reach or covered
+- takes the belt's word for it when it stops itself — nobody stepped on inside its safety
+  window, the key was pulled, its own panel was used — so Stop goes away and Start comes
+  back rather than the app insisting on a walk that ended without it
 - never reports a pause to a belt that is still moving: a unit that rejects the pause command
   gets stopped instead, and says so
 - never auto-reconnects — silently reattaching to a possibly-moving belt with stale UI state

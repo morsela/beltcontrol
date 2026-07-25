@@ -8,6 +8,8 @@ import {
   isMoving,
   confirmedStopped,
   confirmedRunning,
+  beltReportsRest,
+  lastFrameAt,
 } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
@@ -73,6 +75,23 @@ const pauseAccepted = signal(true);
 
 export const connected = computed(() => phase.value === 'connected');
 export const targetKmh = computed(() => settings.value.targetKmh);
+
+/**
+ * Whether the belt may be moving, and so whether Stop belongs on screen.
+ *
+ * `running` as well as `isMoving`: between the start write and the pad's first frame the
+ * belt is spinning up with nothing in telemetry yet, and Stop has to be reachable for
+ * that window. It used to be covered by faking a speed reading, which also kept Stop
+ * pinned forever when the pad ignored the start. Both flags now fall when the belt says
+ * it is at rest — including when it stopped itself, which is the common case.
+ *
+ * One computed rather than the same expression written three ways, because a screen
+ * that shows Stop over a stopped belt and a screen that hides it over a moving one are
+ * the same bug.
+ */
+export const beltMayBeMoving = computed(
+  () => connected.value && (isMoving.value || running.value)
+);
 
 /** Only ever true where pause is a real, resumable pause on the wire. */
 export const canPause = computed(
@@ -313,6 +332,7 @@ async function begin(kind: 'start' | 'resume') {
   // A start supersedes any stop or pause still waiting to be confirmed.
   clearStopWatch();
   stopPending.value = false;
+  askedToMoveAt = Date.now();
 
   try {
     setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
@@ -550,6 +570,57 @@ export async function doStop() {
     stopPending.value = false; // nothing went out, so nothing is outstanding
     fail(e);
   }
+}
+
+/** How long the belt must sit at zero, with nothing outstanding, before a pad that
+ *  reports no state code at all is taken as stopped. Long enough not to trip on the gap
+ *  between a confirmed `runState 1` and the first frame carrying any speed. */
+const SELF_STOP_MS = 3_000;
+
+/** When the app last asked the belt to move. */
+let askedToMoveAt = 0;
+
+/**
+ * The belt stops itself more often than anyone stops it from here: nobody steps on
+ * inside its safety window, the key is pulled, its own panel is used. No command comes
+ * back to the app when that happens — the frames simply start reading zero — so nothing
+ * used to clear `running`, and Stop stayed pinned over a stationary belt for the rest of
+ * the connection with no way back to Start.
+ *
+ * Guarded on both pending flags rather than on telemetry alone. A start that has not
+ * been confirmed yet is a belt legitimately reporting zero, and an outstanding stop is
+ * `watchForStop`'s business — it clears `running` itself, and with the right words for
+ * a stop somebody asked for.
+ *
+ * And guarded on the age of the frame, which is the guard the other two cannot stand in
+ * for: a pad sitting idle reports `stopped` right up until the moment a start is written,
+ * and that last frame is still the newest one when `running` goes up. Read as evidence it
+ * would cancel every start on arrival. Only what the belt has said *since* being asked to
+ * move counts.
+ */
+effect(() => {
+  if (!running.value || startPending.value || stopPending.value) return;
+  if ((lastFrameAt.value ?? 0) <= askedToMoveAt) return;
+  if (!confirmedStopped.value) return;
+
+  // A named resting state is the pad saying it outright, so it is taken at once. Bare
+  // zero speed is the same claim from a protocol that cannot name states, and gets the
+  // grace period instead.
+  if (beltReportsRest.value) {
+    selfStopped();
+    return;
+  }
+  const t = setTimeout(selfStopped, SELF_STOP_MS);
+  return () => clearTimeout(t);
+});
+
+function selfStopped() {
+  if (!running.value) return;
+  running.value = false;
+  // Not a pause: nothing is coming back on its own, and `paused` would put a Resume
+  // button in front of a belt nobody paused.
+  setStatus('the belt stopped on its own', 'ok');
+  log('belt reports itself stopped — nobody sent a stop', 'ok');
 }
 
 /** File the paused walk now rather than waiting for the hold to lapse. */
