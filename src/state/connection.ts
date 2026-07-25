@@ -144,8 +144,16 @@ export async function connect({ filtered }: { filtered: boolean }) {
   } catch (e) {
     const err = e as DOMException;
     phase.value = 'idle';
-    setStatus(err?.name === 'NotFoundError' ? 'no device selected' : err.message, 'err');
-    log(err?.name === 'NotFoundError' ? 'device chooser cancelled or nothing matched' : err.message);
+    // Backing out of the chooser is not a failure — the chip returns to "Not
+    // connected" beside a Connect button, which says everything there is to say.
+    // Only a real chooser fault is worth putting on screen.
+    if (err?.name === 'NotFoundError') {
+      setStatus('');
+      log('device chooser cancelled or nothing matched');
+    } else {
+      setStatus(err.message, 'err');
+      log(err.message);
+    }
     return;
   }
 
@@ -391,10 +399,12 @@ function watchForStart(kind: 'start' | 'resume' = 'start') {
         paused.value = true;
         holdSession(true);
       }
+      // Phrased like the unconfirmed-stop message beside it: what was sent, what the
+      // belt did about it, what to do next. The chip carries this now, and wraps.
       setStatus(
-        `${capitalise(kind)} was sent but the belt never reported movement. ` +
-          "It may have handed control back to its own panel — use the treadmill's controls, " +
-          'or disconnect and reconnect.',
+        `${capitalise(kind)} was sent but the belt never reported movement — it may have ` +
+          "handed control back to its own panel. Use the treadmill's own controls, or " +
+          'disconnect and reconnect.',
         'err'
       );
       log(`${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`, 'err');
