@@ -89,6 +89,9 @@ export declare function ks1234Driver(): Driver;
  *  different things here: not sent, versus sent as the spec's "not available". */
 export interface TreadmillData extends Partial<Telemetry> {
   raw: string;
+  /** The flags word promised a field the frame did not carry. Fields that were fully
+   *  present are still returned; everything after the short read is absent. */
+  truncated?: true;
   avgSpeedKmh?: number;
   rampAngleDeg?: number;
   elevGainUpM?: number;

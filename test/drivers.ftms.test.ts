@@ -56,6 +56,37 @@ describe('parseTreadmillData', () => {
     expect(d.heartRate).toBe(128);
   });
 
+  it('does not read past a frame whose flags promise more than it carries', () => {
+    // Every optional field claimed present, four bytes of payload. This threw a
+    // RangeError out of the notification handler before, freezing the live readout.
+    const flags = 0x1ffe;
+    let d!: ReturnType<typeof parseTreadmillData>;
+    expect(() => {
+      d = parseTreadmillData(view([...u16(flags), 0x11, 0x22]));
+    }).not.toThrow();
+    expect(d.truncated).toBe(true);
+  });
+
+  it('keeps the fields that were fully present before the frame ran out', () => {
+    // Speed present (bit 0 clear) and distance claimed (bit 2), but distance is a u24
+    // and only two of its three bytes arrived.
+    const d = parseTreadmillData(view([...u16(1 << 2), ...u16(320), 0x11, 0x22]));
+    expect(d.speedKmh).toBeCloseTo(3.2, 6);
+    expect(d.distKm).toBeUndefined();
+    expect(d.truncated).toBe(true);
+  });
+
+  it('treats a frame too short to hold even the flags word as truncated', () => {
+    const d = parseTreadmillData(view([0x00]));
+    expect(d.truncated).toBe(true);
+    expect(d.speedKmh).toBeUndefined();
+  });
+
+  it('does not mark a complete frame as truncated', () => {
+    const d = parseTreadmillData(view([...u16(0x0000), ...u16(320)]));
+    expect(d.truncated).toBeUndefined();
+  });
+
   it('keeps the raw frame for the log', () => {
     const bytes = [...u16(0x0000), ...u16(100)];
     expect(parseTreadmillData(view(bytes)).raw).toBe(toHex(bytes));
@@ -100,6 +131,22 @@ describe('ftmsDriver', () => {
     const d = ftmsDriver();
     await d.attach(server as unknown as BluetoothRemoteGATTServer);
     expect(d.maxSpeedKmh).toBe(6);
+  });
+
+  it('keeps reporting telemetry after a truncated frame, and says so', async () => {
+    const { server, data } = padServer();
+    const d = ftmsDriver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    expect(() => data.emit([...u16(0x1ffe), 0x11, 0x22])).not.toThrow();
+    expect(logs.join('\n')).toMatch(/truncated treadmill frame/);
+
+    // The next good frame still lands — the listener is not wedged.
+    data.emit([...u16(0x0000), ...u16(250)]);
+    expect(seen[seen.length - 1]!.speedKmh).toBeCloseTo(2.5, 6);
   });
 
   it('takes control before doing anything else', async () => {
