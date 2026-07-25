@@ -1,7 +1,14 @@
 import { signal, computed, effect } from '@preact/signals';
 import { detectDriver, UUID } from '../lib/drivers.js';
 import type { Driver } from '../lib/drivers.js';
-import { ingest, resetTelemetry, live, isMoving, confirmedStopped } from './telemetry.js';
+import {
+  ingest,
+  resetTelemetry,
+  live,
+  isMoving,
+  confirmedStopped,
+  confirmedRunning,
+} from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
 import { openDialogs } from './ui.js';
@@ -40,10 +47,11 @@ const OPTIONAL_SERVICES = [
   UUID.battery,
 ];
 
-/** The belt moves off at this speed the instant `start` lands, regardless of the
- *  requested target — confirmed on real hardware. `setSpeed` only takes effect once
- *  the belt is already moving, hence the delay in `doStart`. */
-const START_SPEED_MPH = 0.6;
+/** The belt moves off at its own fixed low speed the instant `start` lands, whatever
+ *  target was asked for, and some units ignore a `setSpeed` sent before it is actually
+ *  moving — confirmed on real hardware. So `doStart` waits this long before setting the
+ *  speed the user chose. */
+const SPEED_SETTLE_MS = 600;
 
 export type Phase = 'idle' | 'choosing' | 'connecting' | 'connected' | 'error';
 
@@ -239,6 +247,7 @@ function stopPolling() {
 async function teardown() {
   stopPolling();
   clearStopWatch();
+  clearStartWatch();
   stopSessionTracking();
   closeSession('ended (disconnected)');
   try {
@@ -301,31 +310,110 @@ async function begin(kind: 'start' | 'resume') {
 
   const mph = toMph(settings.value.targetKmh).toFixed(1);
 
+  // A start supersedes any stop or pause still waiting to be confirmed.
+  clearStopWatch();
+  stopPending.value = false;
+
   try {
-    // A start supersedes any stop or pause still waiting to be confirmed.
-    clearStopWatch();
-    stopPending.value = false;
     setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
     await d.start();
-    running.value = true;
-    paused.value = false;
-    holdSession(false);
-    // A cold start moves off at the pad's own floor speed whatever we asked for, so the
-    // UI would show a stale reading for up to a second without this. A resume comes back
-    // at the speed it was paused at, so it needs no such guess.
-    if (kind === 'start') ingest({ speedKmh: toKmh(START_SPEED_MPH) });
-    // Some units ignore a speed set before the belt is actually moving.
-    await new Promise((r) => setTimeout(r, 600));
-    if (d.capabilities.speed) await d.setSpeed(settings.value.targetKmh);
-    setStatus('running', 'ok');
-    log(
-      `${kind === 'resume' ? 'resumed' : 'started'} at ${mph} mph ` +
-        `(${settings.value.targetKmh.toFixed(1)} km/h)`,
-      'ok'
-    );
   } catch (e) {
+    // The command never went out, so the belt is where it was — including still paused,
+    // if that is where it was.
+    clearStartWatch();
+    running.value = false;
+    fail(e);
+    return;
+  }
+
+  // `running` means "a start is outstanding, so the belt may be moving" from here on,
+  // which is what keeps Stop pinned and reachable. It is not a claim that the belt
+  // obeyed — `watchForStart` decides that. `paused` drops for the same reason in
+  // reverse: a Resume button in front of a belt that was just told to go is wrong even
+  // if it turns out not to have gone.
+  running.value = true;
+  paused.value = false;
+  holdSession(false);
+  log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
+  watchForStart(kind);
+
+  try {
+    // Some units ignore a speed set before the belt is actually moving.
+    await new Promise((r) => setTimeout(r, SPEED_SETTLE_MS));
+    if (d.capabilities.speed) await d.setSpeed(settings.value.targetKmh);
+  } catch (e) {
+    // A failed speed write says nothing about whether the belt started, so `running`
+    // and the confirmation watch both stand. Report it and let the watch play out.
     fail(e);
   }
+}
+
+/** How long to wait for the belt to report movement before saying it never confirmed.
+ *  A pad that accepts a start reports `runState 1` within a few seconds; one that has
+ *  quietly refused says nothing at all, ever. */
+const START_CONFIRM_MS = 10_000;
+
+/** A start has been written and the belt has not confirmed it yet. */
+export const startPending = signal(false);
+
+let startWatch: number | null = null;
+
+function clearStartWatch() {
+  if (startWatch != null) window.clearInterval(startWatch);
+  startWatch = null;
+  startPending.value = false;
+}
+
+/**
+ * The mirror of `watchForStop`, and it exists for the same reason: a resolved `start()`
+ * means the command was written, not that the belt obeyed it.
+ *
+ * This used to be papered over by injecting a fabricated `speedKmh` into telemetry the
+ * moment the write resolved. That made the app's own guess indistinguishable from the
+ * belt's report, so a pad that silently refused a start still drove the whole UI —
+ * Stop pinned over a stationary belt, no way back to Start, and a later stop that could
+ * never confirm because the "speed" it was waiting to see fall to zero was the app's
+ * invention. So: assert nothing, wait for the pad, and say so when it never answers.
+ */
+function watchForStart(kind: 'start' | 'resume' = 'start') {
+  clearStartWatch();
+  startPending.value = true;
+  const deadline = Date.now() + START_CONFIRM_MS;
+
+  const check = () => {
+    if (confirmedRunning.value) {
+      clearStartWatch();
+      setStatus('running', 'ok');
+      log('belt reports movement — running', 'ok');
+      return;
+    }
+    if (Date.now() >= deadline) {
+      clearStartWatch();
+      // Unlike an unconfirmed stop, this clears `running`: the evidence is that the
+      // belt never moved, so leaving the UI pinned to Stop strands the user on a
+      // control for a state the belt is not in.
+      running.value = false;
+      // A resume that the belt ignored leaves the walk exactly where it was — still
+      // paused, still held open — so put Resume back rather than quietly filing it.
+      if (kind === 'resume') {
+        paused.value = true;
+        holdSession(true);
+      }
+      // Phrased like the unconfirmed-stop message beside it: what was sent, what the
+      // belt did about it, what to do next. The chip carries this now, and wraps.
+      setStatus(
+        `${capitalise(kind)} was sent but the belt never reported movement — it may have ` +
+          "handed control back to its own panel. Use the treadmill's own controls, or " +
+          'disconnect and reconnect.',
+        'err'
+      );
+      log(`${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`, 'err');
+    }
+  };
+
+  check(); // a pad already reporting movement confirms immediately
+  if (startWatch != null || confirmedRunning.value) return;
+  startWatch = window.setInterval(check, 250);
 }
 
 /** How long to wait for the belt to report zero before saying it never confirmed.
@@ -421,6 +509,7 @@ export async function doPause() {
   const d = driver.value;
   if (!d) return;
   try {
+    clearStartWatch(); // a pause supersedes any start still waiting to be confirmed
     setStatus('pausing…');
     const outcome = await d.pause();
 
@@ -447,6 +536,7 @@ export async function doStop() {
   const d = driver.value;
   if (!d) return;
   try {
+    clearStartWatch(); // a stop supersedes any start still waiting to be confirmed
     setStatus('stopping…');
     await d.stop();
     // Stop ends the walk, so the pause hold goes with it — pausing and then stopping

@@ -18,6 +18,7 @@ import {
   running,
   paused,
   stopPending,
+  startPending,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
@@ -30,6 +31,12 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
   // the belt now.
   const [confirming, setConfirming] = useState<'start' | 'resume' | null>(null);
   const d = driver.value;
+
+  // `running` and not just telemetry: a start or resume that has been written but not
+  // yet confirmed is outstanding, and a second one stacked on top of it is not what
+  // pressing the button again means. When the belt never confirms, `running` goes back
+  // to false and the button returns.
+  const canStart = !isMoving.value && !running.value;
 
   return (
     <>
@@ -57,9 +64,9 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
 
           {/* Only wrap in a card when there is something to put in it — with no
               Start button and no mode row, an empty panel is just noise. */}
-          {(!isMoving.value || d?.capabilities.mode) && (
+          {(canStart || d?.capabilities.mode) && (
             <div class="card">
-              {!isMoving.value &&
+              {canStart &&
                 (paused.value ? (
                   <>
                     <button
@@ -119,17 +126,18 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         </p>
       )}
 
-      {/* `running` also stays true through a stop the belt has not confirmed, and a
-          silent pad makes that look exactly like a start telemetry has not caught up
-          with — so name the command that is actually outstanding. Both sit beside the
-          control they belong to; only the failure that follows goes to the chip. */}
+      {/* A silent pad makes an outstanding stop look exactly like a start telemetry has
+          not caught up with, so name the command that is actually outstanding. Both sit
+          beside the control they belong to; only the failure that follows goes to the
+          chip. `startPending` rather than `running && !isMoving`: a pad that reports
+          `runState 1` before it reports any speed has confirmed the start, and this
+          note is no longer true of it. */}
       {stopPending.value ? (
         <p class="note" style="margin-bottom:var(--gap)">
           Stop command sent — waiting for the belt to report zero.
         </p>
       ) : (
-        running.value &&
-        !isMoving.value && (
+        startPending.value && (
           <p class="note" style="margin-bottom:var(--gap)">
             Start command sent — waiting for the belt to report movement.
           </p>
