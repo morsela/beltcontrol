@@ -228,6 +228,18 @@ describe('ks1234Driver', () => {
     expect(d.minSpeedKmh).toBe(1);
   });
 
+  it('refuses limits outside the app’s own envelope', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props Max 99.0 StartSpeed 0.01');
+    expect(d.maxSpeedKmh).toBe(6); // defaults kept
+    expect(d.minSpeedKmh).toBe(0.5);
+    expect(logs.join('\n')).toMatch(/implausible max speed/);
+  });
+
   it('labels run state', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();

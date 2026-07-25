@@ -127,6 +127,35 @@ describe('ftmsDriver', () => {
     expect(d.speedStep).toBeCloseTo(0.1, 6);
   });
 
+  it('refuses a speed range outside the app’s own envelope', async () => {
+    // A stuck 0xFFFF in 0x2AD4 reads as 655.35 km/h. Adopting it would hand the
+    // device sole authority over how fast the belt may be driven.
+    const { server } = padServer({ speedRange: [...u16(50), ...u16(0xffff), ...u16(0xffff)] });
+    const d = ftmsDriver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    expect(d.maxSpeedKmh).toBe(6); // conservative default kept
+    expect(d.speedStep).toBe(0.5); // ...as is the documented per-press ceiling
+    expect(d.minSpeedKmh).toBeCloseTo(0.5, 6); // the one plausible field is still taken
+    expect(logs.join('\n')).toMatch(/implausible max speed/);
+  });
+
+  it('refuses a step larger than the per-press ceiling the UI promises', async () => {
+    const { server } = padServer({ speedRange: [...u16(50), ...u16(600), ...u16(300)] });
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    expect(d.speedStep).toBe(0.5); // 3.0 km/h per press refused
+  });
+
+  it('never lets an adopted max fall below the min it is paired with', async () => {
+    const { server } = padServer({ speedRange: [...u16(400), ...u16(100), ...u16(10)] });
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    expect(d.minSpeedKmh).toBeCloseTo(4.0, 6);
+    expect(d.maxSpeedKmh).toBe(6); // 1.0 km/h max under a 4.0 min describes no range
+  });
+
   it('falls back to defaults when 0x2AD4 is missing', async () => {
     const { server } = padServer();
     const d = ftmsDriver();

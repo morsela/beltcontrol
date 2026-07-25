@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "web-bluetooth"],
+    "types": ["vite/client", "web-bluetooth", "node"],
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
 

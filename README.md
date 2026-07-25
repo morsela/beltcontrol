@@ -106,7 +106,9 @@ The belt can start under software control with nobody on it. The app therefore:
 
 - confirms before starting **and before resuming**, showing the target speed — it may not be
   the person who paused it standing on the belt now
-- clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default)
+- clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default) — and
+  clamps *that* to an envelope of its own, so a pad reporting a nonsense limit widens
+  nothing
 - limits each speed press to ≤0.5 km/h
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd> — Pause never takes its place,
   its key, or more than a third of the bar
