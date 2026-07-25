@@ -432,6 +432,54 @@ function foldDay(key: string, date: number, all: Session[]): DayTotal {
   return out;
 }
 
+export interface LifetimeTotals {
+  /** Wall-clock minutes with the belt moving, across every session ever stored. */
+  minutes: number;
+  /** Only summed across sessions whose protocol reports distance in real units. */
+  distKm: number;
+  /** How many sessions are stored, the one in progress included. */
+  walks: number;
+  /** Distinct calendar days with at least one session on them. */
+  days: number;
+  /** Sessions carrying a distance on a scale that was never established. */
+  excluded: number;
+  /** Start of the earliest session, or null when nothing is stored. */
+  since: number | null;
+}
+
+/**
+ * Everything, ever — the running total the odometer on History counts.
+ *
+ * Same exclusion rule as every other aggregate: an unverified distance is not
+ * kilometres and never enters `distKm`. Unlike the day and range totals it also
+ * carries the count of what was left out, because a lifetime figure is the one
+ * number people quote and it has to be able to say what it does not include.
+ *
+ * The session in progress is included, so the odometer moves while you walk. That is
+ * the whole reason it is a rolling counter rather than a printed number.
+ */
+export const lifetimeTotals = computed<LifetimeTotals>(() => {
+  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
+  const out: LifetimeTotals = {
+    minutes: 0,
+    distKm: 0,
+    walks: all.length,
+    days: 0,
+    excluded: 0,
+    since: null,
+  };
+  const days = new Set<string>();
+  for (const s of all) {
+    out.minutes += s.activeMs / 60_000;
+    if (s.trust.distKm === 'ok') out.distKm += s.distKm;
+    else if (s.distKm > 0) out.excluded++;
+    days.add(dayKey(s.startedAt));
+    if (out.since == null || s.startedAt < out.since) out.since = s.startedAt;
+  }
+  out.days = days.size;
+  return out;
+});
+
 /** The last `days` days, oldest first, with empty days present as zeroes. */
 export function dailySeries(days: number): DayTotal[] {
   const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];

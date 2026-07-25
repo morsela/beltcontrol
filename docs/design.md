@@ -131,6 +131,18 @@ moment Escape has somewhere better to be.
   reaches declarative animations only, and this one is scripted. Timing constants live in
   `src/lib/tread.ts`, including the pitch, which the component hands to CSS as
   `--tread-pitch` so the gradient period and the travel cannot drift apart.
+- **The lifetime odometer counts what it can vouch for.** History leads with one number on
+  mechanical wheels — every session ever stored, the one in progress included, so the last
+  wheel turns over while you are still on the belt. It obeys the same exclusion rule as
+  every other total: an unverified distance never enters it. When *nothing* in the history
+  carries a distance the app can place on a scale, it counts hours instead of miles rather
+  than reading `0.0 mi` over hundreds of walks, and says why. Time is measured here from
+  the wall clock and needs no cooperation from any pad, which makes it the one total that
+  is always honest. The wheels are `aria-hidden` with the value given once as text — ten
+  digits per wheel is ninety characters of noise for a number a screen reader can state in
+  four — and the roll has a timer behind its `requestAnimationFrame`, because rAF does not
+  fire in a background tab and wheels stuck on their seed value would contradict the text
+  beside them.
 - **Three speed presets.** The steppers move 0.2 mph per press to stay inside the
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.

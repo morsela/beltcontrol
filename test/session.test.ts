@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
+import { Counter, sessions, currentSession, todayTotals, lifetimeTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
 import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
 import type { DriverId } from '../src/lib/drivers.js';
 import { dayKey } from '../src/lib/format.js';
@@ -138,6 +138,84 @@ describe('todayTotals', () => {
     sessions.value = [session({ protocol: 'ftms', steps: 4_000, kcal: 90 })];
     expect(todayTotals.value.steps).toBe(0);
     expect(todayTotals.value.kcal).toBe(90);
+  });
+});
+
+describe('lifetimeTotals', () => {
+  const DAY = 24 * HOUR;
+
+  it('is all zeroes and dateless with no history', () => {
+    expect(lifetimeTotals.value).toEqual({
+      minutes: 0,
+      distKm: 0,
+      walks: 0,
+      days: 0,
+      excluded: 0,
+      since: null,
+    });
+  });
+
+  it('spans everything stored, however old — no window', () => {
+    // The one total on the History screen that is not clipped to 30 days.
+    sessions.value = [
+      session({ protocol: 'classic', startedAt: Date.now() - 400 * DAY }),
+      session({ protocol: 'classic', startedAt: Date.now() - 40 * DAY }),
+      session({ protocol: 'classic', startedAt: Date.now() - HOUR }),
+    ];
+    expect(lifetimeTotals.value.walks).toBe(3);
+    expect(lifetimeTotals.value.minutes).toBe(90);
+    expect(lifetimeTotals.value.distKm).toBe(6);
+  });
+
+  it('counts calendar days, not sessions', () => {
+    sessions.value = [
+      session({ protocol: 'classic', startedAt: Date.now() - HOUR }),
+      session({ protocol: 'classic', startedAt: Date.now() - 2 * HOUR }), // same day
+      session({ protocol: 'classic', startedAt: Date.now() - 3 * DAY }),
+    ];
+    expect(lifetimeTotals.value.walks).toBe(3);
+    expect(lifetimeTotals.value.days).toBe(2);
+  });
+
+  it('includes the walk in progress, so the odometer moves while you are on the belt', () => {
+    sessions.value = [session({ protocol: 'classic', distKm: 2, activeMs: 30 * 60_000 })];
+    currentSession.value = session({ protocol: 'classic', distKm: 0.5, activeMs: 6 * 60_000 });
+    expect(lifetimeTotals.value.walks).toBe(2);
+    expect(lifetimeTotals.value.distKm).toBeCloseTo(2.5, 6);
+    expect(lifetimeTotals.value.minutes).toBe(36);
+  });
+
+  it('keeps an unverified distance out of the total and counts what it dropped', () => {
+    sessions.value = [
+      session({ protocol: 'classic', distKm: 2 }),
+      session({ protocol: 'ks1234', distKm: 999 }),
+      session({ protocol: 'ks1234', distKm: 500 }),
+    ];
+    expect(lifetimeTotals.value.distKm).toBe(2);
+    expect(lifetimeTotals.value.excluded).toBe(2);
+    // Time is measured here rather than taken from the pad, so it is never excluded.
+    expect(lifetimeTotals.value.minutes).toBe(90);
+  });
+
+  it('does not count a session that reported no distance as one it dropped', () => {
+    // `excluded` means "there was a number and it could not be trusted", not "there
+    // was no number" — the note on the screen would otherwise accuse a pad of
+    // reporting something it never sent.
+    sessions.value = [
+      session({ protocol: 'ks1234', distKm: 0 }),
+      session({ protocol: 'fitshow', distKm: 0 }),
+    ];
+    expect(lifetimeTotals.value.excluded).toBe(0);
+  });
+
+  it('dates the record from the earliest session, whatever order they arrive in', () => {
+    const oldest = Date.now() - 300 * DAY;
+    sessions.value = [
+      session({ protocol: 'classic', startedAt: Date.now() - HOUR }),
+      session({ protocol: 'classic', startedAt: oldest }),
+      session({ protocol: 'classic', startedAt: Date.now() - 10 * DAY }),
+    ];
+    expect(lifetimeTotals.value.since).toBe(oldest);
   });
 });
 
