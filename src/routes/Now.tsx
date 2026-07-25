@@ -6,6 +6,7 @@ import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
+import { TreadStrip } from '../components/TreadStrip.js';
 import { Brand } from '../components/Logo.js';
 import {
   connected,
@@ -60,6 +61,9 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
       </div>
 
       <div class="card">
+        {/* Only once something is connected: with no pad there is no speed to report,
+            and a still strip over "Not connected" would be a readout of nothing. */}
+        {connected.value && <TreadStrip />}
         <Hero onLongPress={onAmbient} />
         <GoalMeter />
         <Tiles />
