@@ -11,18 +11,15 @@
  * in localStorage and then in the charts. So the import path validates field by field
  * and drops what it cannot vouch for, rather than casting and hoping.
  */
-import {
-  sessions,
-  mergeSessions,
-  MAX_SAMPLES,
-  type Sample,
-  type Session,
-} from './session.js';
+import { sessions, mergeSessions, sanitizeSession, type Session } from './session.js';
 import { settings, updateSettings, type Settings } from './settings.js';
-import { trustFor, type Trust, type TrustMap, type TrustedField } from './telemetry.js';
-import type { DriverId } from '../lib/drivers.js';
 
 export const BACKUP_SCHEMA = 'walkingpad.backup.v1';
+
+// sanitizeSession moved next to the store it guards — every read of session state now
+// goes through it, not just the import path. Re-exported because a backup file is the
+// other thing it validates, and callers here expect to find it.
+export { sanitizeSession } from './session.js';
 
 export interface Backup {
   schema: typeof BACKUP_SCHEMA;
@@ -63,77 +60,10 @@ export function exportJson(at = Date.now()): string {
 
 // --- validation ------------------------------------------------------------
 
-const TRUSTS: readonly Trust[] = ['ok', 'unverified', 'absent'];
-const DRIVER_IDS: readonly DriverId[] = ['classic', 'ftms', 'fitshow', 'ks1234'];
-const TRUSTED_FIELDS: readonly TrustedField[] = ['distKm', 'steps', 'kcal'];
 const HERO_METRICS: readonly Settings['heroMetric'][] = ['time', 'distance', 'steps', 'kcal'];
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
-
-/** Finite numbers only, clamped at zero: a negative distance or a NaN duration would
- *  poison every total it touches, and there is no honest way to recover the real value. */
-const num = (v: unknown, fallback = 0): number =>
-  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : fallback;
-
-const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
-
-function sanitizeTrust(v: unknown, protocol: DriverId | null): TrustMap {
-  // No usable trust map means falling back to the protocol's known one; if the
-  // protocol is unknown too, trustFor() returns all-absent, which excludes the
-  // session's numbers from every aggregate. Under-trusting is the safe direction.
-  const fallback = trustFor(protocol);
-  if (!isObj(v)) return fallback;
-  const out = { ...fallback };
-  for (const f of TRUSTED_FIELDS) {
-    const t = v[f];
-    if (typeof t === 'string' && (TRUSTS as readonly string[]).includes(t)) out[f] = t as Trust;
-  }
-  return out;
-}
-
-function sanitizeSamples(v: unknown): Sample[] {
-  if (!Array.isArray(v)) return [];
-  const out: Sample[] = [];
-  for (const s of v) {
-    if (out.length >= MAX_SAMPLES) break;
-    if (!isObj(s)) continue;
-    if (typeof s.t !== 'number' || !Number.isFinite(s.t)) continue;
-    if (typeof s.kmh !== 'number' || !Number.isFinite(s.kmh)) continue;
-    out.push({ t: Math.max(0, s.t), kmh: Math.max(0, s.kmh) });
-  }
-  return out;
-}
-
-/** `null` when the entry cannot be placed on the calendar — a session with no usable
- *  start time has nowhere to go in any chart, total or streak. */
-export function sanitizeSession(v: unknown): Session | null {
-  if (!isObj(v)) return null;
-  const startedAt = typeof v.startedAt === 'number' && Number.isFinite(v.startedAt) ? v.startedAt : null;
-  if (startedAt == null || startedAt <= 0) return null;
-
-  const endedAt =
-    typeof v.endedAt === 'number' && Number.isFinite(v.endedAt) ? v.endedAt : null;
-  const protocol =
-    typeof v.protocol === 'string' && (DRIVER_IDS as readonly string[]).includes(v.protocol)
-      ? (v.protocol as DriverId)
-      : null;
-
-  return {
-    id: str(v.id) ?? `imported-${startedAt.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
-    startedAt,
-    endedAt,
-    activeMs: num(v.activeMs),
-    distKm: num(v.distKm),
-    steps: num(v.steps),
-    kcal: num(v.kcal),
-    protocol,
-    protocolName: str(v.protocolName),
-    deviceName: str(v.deviceName),
-    trust: sanitizeTrust(v.trust, protocol),
-    samples: sanitizeSamples(v.samples),
-  };
-}
 
 /** Only the keys that survive validation are applied, so a backup missing half its
  *  settings leaves the rest of the current ones alone. */
