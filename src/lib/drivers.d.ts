@@ -92,6 +92,24 @@ export declare const UUID: {
 
 export declare const CLASSIC_MODE: { auto: 0; manual: 1; standby: 2 };
 
+/** The starting limits a driver carries before a device says otherwise. */
+export type SpeedLimits = Pick<Driver, 'minSpeedKmh' | 'maxSpeedKmh' | 'speedStep'>;
+
+/**
+ * What each protocol can do, and where its driver starts. The single source for both
+ * the real drivers and the simulator — keeping a second copy by hand is how the
+ * simulated classic pad ended up offering a step its driver never had.
+ */
+export declare const PROTOCOLS: Record<
+  DriverId,
+  { capabilities: Capabilities; limits: SpeedLimits }
+>;
+
+/** A driver's share of the table above, as fresh objects it owns and may rewrite. */
+export declare function protocolDefaults(
+  id: DriverId
+): { capabilities: Capabilities } & SpeedLimits;
+
 /** The app's own speed envelope, applied on top of whatever a device reports about
  *  itself — see `adoptSpeedLimits`. */
 export declare const HARD_MAX_KMH: number;

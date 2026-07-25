@@ -105,6 +105,80 @@ export const HARD_MAX_STEP_KMH = 0.5;
 
 const inRange = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : null);
 
+// ---------------------------------------------------------------------------
+// What each protocol can do
+// ---------------------------------------------------------------------------
+//
+// The limits here are where a driver starts, not where it stays: FTMS and 0x1234 both
+// rewrite them from what the device reports (see `adoptSpeedLimits`). They are
+// deliberately conservative, because a pad that says nothing is a pad we know nothing
+// about.
+//
+// One table rather than one per driver because there are two readers. The simulator
+// describes these same four pads so the UI can be exercised without hardware, and it
+// used to do that from its own copy — which had already drifted: every simulated pad
+// offered a 0.1 km/h step, including the classic one, whose step is 0.5. A fake pad
+// that answers differently from the real one is worse than no fake pad at all.
+
+export const PROTOCOLS = {
+  classic: {
+    capabilities: {
+      speed: true,
+      mode: true,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: true,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+  ftms: {
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: true,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+  ks1234: {
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.1 },
+  },
+  fitshow: {
+    capabilities: {
+      speed: false,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: false,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+};
+
+/**
+ * A driver's starting capabilities and limits, as fresh objects it owns outright.
+ *
+ * Copied rather than shared: the limits are rewritten per connection from what the
+ * device says about itself, and two drivers built from the same table must not be able
+ * to write over each other — or over the table.
+ */
+export const protocolDefaults = (id) => ({
+  capabilities: { ...PROTOCOLS[id].capabilities },
+  ...PROTOCOLS[id].limits,
+});
+
 /**
  * Fold device-reported limits into the driver, holding them to the envelope above.
  *
@@ -227,17 +301,7 @@ export function classicDriver() {
   const self = {
     id: 'classic',
     name: 'WalkingPad (classic fe00)',
-    capabilities: {
-      speed: true,
-      mode: true,
-      incline: false,
-      steps: true,
-      pause: false,
-      needsPolling: true,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('classic'),
     onData: null,
     onLog: null,
 
@@ -479,17 +543,7 @@ export function ftmsDriver() {
   const self = {
     id: 'ftms',
     name: 'FTMS (standard 1826)',
-    capabilities: {
-      speed: true,
-      mode: false,
-      incline: false,
-      steps: false,
-      pause: true,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('ftms'),
     onData: null,
     onLog: null,
 
@@ -769,17 +823,7 @@ export function fitshowDriver() {
   const self = {
     id: 'fitshow',
     name: 'FitShow (fff0) — read-only',
-    capabilities: {
-      speed: false,
-      mode: false,
-      incline: false,
-      steps: false,
-      pause: false,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('fitshow'),
     onData: null,
     onLog: null,
 
@@ -921,17 +965,7 @@ export function ks1234Driver() {
   const self = {
     id: 'ks1234',
     name: 'KingSmith 0x1234 (chip:3)',
-    capabilities: {
-      speed: true,
-      mode: false,
-      incline: false,
-      steps: true,
-      pause: false,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.1,
+    ...protocolDefaults('ks1234'),
     onData: null,
     onLog: null,
 
