@@ -1,0 +1,148 @@
+/* ---------------------------------------------------------------------------
+   Design tokens — the single source of truth.
+   Every colour, size and radius in the app resolves to something declared here.
+   --------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- surfaces (light) ------------------------------------------------- */
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f0f2f5;
+  --line: #e2e5ea;
+  --ink: #101418;
+  --muted: #67707d;
+  --faint: #9aa3af;
+
+  /* --- identity --------------------------------------------------------- */
+  --accent: #1f7a4d;
+  --accent-ink: #ffffff; /* text drawn on top of --accent */
+  --accent-dim: #8cc4aa;
+
+  /* --- status: reserved, never reused as a series colour ---------------- */
+  /* Measured: warn (#e0a33a) and bad (#ff6b5e) separate by only dE 5.7 under
+     deuteranopia, so every status indicator ships a dot AND a text label. */
+  --good: #1f7a4d;
+  --warn: #a86b00;
+  --bad: #b3261e;
+  --idle: #67707d;
+
+  /* --- sequential ramp (magnitude), one hue -----------------------------
+     Solved numerically, not chosen by eye, then checked with the dataviz
+     skill's ordinal validator: lightness monotone, every adjacent gap
+     ΔL ≥ 0.06, lightest data step ≥ 2:1 against the card surface, hue
+     spread ≤ 3°. --seq-empty is the no-activity cell and is deliberately
+     near the surface — it carries no magnitude, so the 2:1 floor that
+     applies to data steps does not apply to it. */
+  --seq-empty: #eef1f4;
+  --seq-1: #80c49d;
+  --seq-2: #53af7e;
+  --seq-3: #239863;
+  --seq-4: #00814b;
+  --seq-5: #00663a;
+  --seq-track: #eceff3;
+
+  /* --- type ------------------------------------------------------------- */
+  --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --t-hero: 4.5rem;   /* 72px — "readable from arm's length" */
+  --t-xl: 2.75rem;
+  --t-lg: 1.75rem;
+  --t-md: 1.375rem;
+  --t-body: 1rem;     /* 16px, up from the old 15px */
+  --t-sm: 0.875rem;
+  --t-label: 0.75rem; /* up from 0.7rem */
+
+  /* --- geometry --------------------------------------------------------- */
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+  --tap: 48px;        /* minimum touch target */
+  --gap: 0.75rem;
+  --pad: 1rem;
+  --maxw: 30rem;
+
+  --shadow: 0 1px 2px rgb(16 20 24 / 6%), 0 8px 24px rgb(16 20 24 / 4%);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Near-black so the accent and the numbers carry all the emphasis. */
+    --bg: #0b0e11;
+    --panel: #14181d;
+    --panel-2: #1b2027;
+    --line: #232a33;
+    --ink: #e8ecf1;
+    --muted: #8e99a8;
+    --faint: #626d7c;
+
+    --accent: #3ddc91;
+    --accent-ink: #04150c;
+    --accent-dim: #1e6b48;
+
+    --good: #3ddc91;
+    --warn: #e0a33a;
+    --bad: #ff6b5e;
+    --idle: #8e99a8;
+
+    /* Dark steps are solved against the dark surface, not flipped. */
+    --seq-empty: #191e24;
+    --seq-1: #23593d;
+    --seq-2: #237950;
+    --seq-3: #269a64;
+    --seq-4: #30bb7b;
+    --seq-5: #44dd94;
+    --seq-track: #1b2027;
+
+    --shadow: none;
+  }
+}
+
+/* --- reset ---------------------------------------------------------------- */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--t-body) / 1.5 var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* The pad is used standing; stop iOS/Android rubber-banding the whole shell. */
+  overscroll-behavior-y: none;
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Focus was invisible before — only :hover was styled. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Numbers must never jitter as they tick. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}

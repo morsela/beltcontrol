@@ -1,0 +1,101 @@
+import { useState } from 'preact/hooks';
+import { Hero } from '../components/Hero.js';
+import { GoalMeter } from '../components/GoalMeter.js';
+import { Tiles } from '../components/Tiles.js';
+import { SpeedControl } from '../components/SpeedControl.js';
+import { ConnectionSheet } from '../components/ConnectionSheet.js';
+import { StatusChip } from '../components/StatusChip.js';
+import {
+  connected,
+  connect,
+  supported,
+  driver,
+  doStart,
+  setMode,
+  running,
+} from '../state/connection.js';
+import { isMoving } from '../state/telemetry.js';
+import { status } from '../state/log.js';
+
+export function Now({ onAmbient }: { onAmbient: () => void }) {
+  const [sheet, setSheet] = useState(false);
+  const d = driver.value;
+
+  return (
+    <>
+      <div class="topbar">
+        <StatusChip onOpen={() => setSheet(true)} />
+      </div>
+
+      <div class="card">
+        <Hero onLongPress={onAmbient} />
+        <GoalMeter />
+        <Tiles />
+      </div>
+
+      {connected.value ? (
+        <>
+          <SpeedControl />
+
+          {/* Only wrap in a card when there is something to put in it — with no
+              Start button and no mode row, an empty panel is just noise. */}
+          {(!isMoving.value || d?.capabilities.mode) && (
+            <div class="card">
+              {!isMoving.value && (
+                <button class="btn primary block lg" onClick={() => void doStart()}>
+                  Start
+                </button>
+              )}
+
+              {d?.capabilities.mode && (
+                <div class="mode-row">
+                  <span class="note">Mode</span>
+                  <button class="btn" onClick={() => void setMode(0)}>Auto</button>
+                  <button class="btn" onClick={() => void setMode(1)}>Manual</button>
+                  <button class="btn" onClick={() => void setMode(2)}>Standby</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <p class="hint" style="margin-bottom:var(--gap)">
+            Esc stops the belt. Closing this page does not.
+          </p>
+        </>
+      ) : (
+        <div class="card">
+          <button
+            class="btn primary block lg"
+            disabled={!supported.value}
+            onClick={() => void connect({ filtered: true })}
+          >
+            Connect to pad
+          </button>
+          <button
+            class="btn block"
+            style="margin-top:.5rem"
+            disabled={!supported.value}
+            onClick={() => void connect({ filtered: false })}
+          >
+            Show all devices
+          </button>
+          {/* aria-live so a connection failure is announced, not just recoloured. */}
+          <p class={`hint ${status.value.kind}`} aria-live="polite">
+            {status.value.text}
+          </p>
+        </div>
+      )}
+
+      {running.value && !isMoving.value && (
+        <p class="note" style="margin-bottom:var(--gap)">
+          Start command sent — waiting for the belt to report movement.
+        </p>
+      )}
+
+      {/* The protocol log lives in the connection sheet, not here. It is a
+          diagnostic — most people never need it, and it has no place on the
+          screen you glance at while walking. */}
+      {sheet && <ConnectionSheet onClose={() => setSheet(false)} />}
+    </>
+  );
+}

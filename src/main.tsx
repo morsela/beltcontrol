@@ -1,0 +1,35 @@
+import { render } from 'preact';
+import './styles/tokens.css';
+import './styles/app.css';
+import { App } from './app.js';
+import { installGuards } from './state/connection.js';
+import { restoreOpenSession, startSessionTracking } from './state/session.js';
+
+installGuards();
+
+// A session may have been in flight when the tab was reloaded; recover it so a walk
+// is not silently split in two. Tracking runs even while disconnected so a recovered
+// session can still be closed out by the idle rule.
+restoreOpenSession();
+startSessionTracking();
+
+const root = document.getElementById('app');
+if (root) render(<App />, root);
+
+if (import.meta.env.DEV) {
+  // Hook for driving the UI without a treadmill in reach:
+  //   __wp.connectSimulated('ftms')   __wp.connectSimulated('ks1234')
+  void Promise.all([import('./state/connection.js'), import('./state/session.js')]).then(
+    ([conn, sess]) => {
+      (window as unknown as Record<string, unknown>).__wp = { ...conn, ...sess };
+    }
+  );
+}
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* offline shell is a bonus, not a requirement */
+    });
+  });
+}

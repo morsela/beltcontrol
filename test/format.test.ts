@@ -1,0 +1,132 @@
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import {
+  KM_PER_MILE,
+  toMph,
+  toKmh,
+  MPH_STEP,
+  EM_DASH,
+  fmtTime,
+  fmtDuration,
+  fmt,
+  fmtInt,
+  fmtMph,
+  dayKey,
+  startOfDay,
+  fmtDayLabel,
+} from '../src/lib/format.js';
+
+afterEach(() => vi.useRealTimers());
+
+describe('units', () => {
+  it('round-trips mph and km/h', () => {
+    expect(toKmh(toMph(4.8))).toBeCloseTo(4.8, 10);
+  });
+
+  it('converts using the exact statute mile', () => {
+    expect(toMph(KM_PER_MILE)).toBeCloseTo(1, 10);
+    expect(toKmh(3)).toBeCloseTo(4.828032, 6);
+  });
+
+  it('keeps one press inside the 0.5 km/h safety limit', () => {
+    // The steppers move in mph but the wire is metric; a press that exceeded
+    // 0.5 km/h would be rejected by the pad.
+    expect(toKmh(MPH_STEP)).toBeLessThan(0.5);
+  });
+});
+
+describe('fmtTime', () => {
+  it('renders hh:mm:ss', () => {
+    expect(fmtTime(0)).toBe('00:00:00');
+    expect(fmtTime(59)).toBe('00:00:59');
+    expect(fmtTime(3661)).toBe('01:01:01');
+    expect(fmtTime(86_399)).toBe('23:59:59');
+  });
+
+  it('does not wrap past a day', () => {
+    expect(fmtTime(90_000)).toBe('25:00:00');
+  });
+
+  it('renders an em dash rather than a fabricated zero', () => {
+    expect(fmtTime(null)).toBe(EM_DASH);
+    expect(fmtTime(undefined)).toBe(EM_DASH);
+  });
+});
+
+describe('fmtDuration', () => {
+  it('drops to the coarsest useful unit', () => {
+    expect(fmtDuration(48)).toBe('48s');
+    expect(fmtDuration(1_080)).toBe('18m');
+    expect(fmtDuration(5_040)).toBe('1h 24m');
+  });
+
+  it('zero-pads minutes only once hours are shown', () => {
+    expect(fmtDuration(3_660)).toBe('1h 01m');
+    expect(fmtDuration(300)).toBe('5m');
+  });
+
+  it('renders an em dash for null', () => {
+    expect(fmtDuration(null)).toBe(EM_DASH);
+  });
+});
+
+describe('numeric formatters', () => {
+  it('fmt honours digits and suffix', () => {
+    expect(fmt(1.006, 2)).toBe('1.01');
+    expect(fmt(3, 1, ' km')).toBe('3.0 km');
+    expect(fmt(null, 2)).toBe(EM_DASH);
+  });
+
+  it('fmtInt rounds and groups', () => {
+    expect(fmtInt(1234.6)).toBe((1235).toLocaleString());
+    expect(fmtInt(null)).toBe(EM_DASH);
+  });
+
+  it('fmtMph converts on the way to the screen', () => {
+    expect(fmtMph(4.828032)).toBe('3.0');
+    expect(fmtMph(0)).toBe('0.0');
+    expect(fmtMph(null)).toBe(EM_DASH);
+  });
+});
+
+describe('day boundaries', () => {
+  it('files a late-evening walk under the local day, not UTC tomorrow', () => {
+    // 23:30 local. toISOString() would roll this into the next day for any
+    // timezone east of UTC, splitting a single evening walk across two days.
+    const late = new Date(2026, 2, 14, 23, 30, 0);
+    expect(dayKey(late.getTime())).toBe('2026-03-14');
+  });
+
+  it('zero-pads month and day', () => {
+    expect(dayKey(new Date(2026, 0, 5, 12).getTime())).toBe('2026-01-05');
+  });
+
+  it('startOfDay lands on local midnight', () => {
+    const d = new Date(2026, 5, 9, 17, 42, 13, 500);
+    const start = new Date(startOfDay(d.getTime()));
+    expect([start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds()]).toEqual([0, 0, 0, 0]);
+    expect(start.getDate()).toBe(9);
+  });
+
+  it('is stable across a day for the same date', () => {
+    const morning = new Date(2026, 5, 9, 6).getTime();
+    const evening = new Date(2026, 5, 9, 22).getTime();
+    expect(startOfDay(morning)).toBe(startOfDay(evening));
+    expect(dayKey(morning)).toBe(dayKey(evening));
+  });
+});
+
+describe('fmtDayLabel', () => {
+  it('names the two most recent days', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 9, 12));
+    expect(fmtDayLabel(new Date(2026, 5, 9, 8).getTime())).toBe('Today');
+    expect(fmtDayLabel(new Date(2026, 5, 8, 21).getTime())).toBe('Yesterday');
+    expect(fmtDayLabel(new Date(2026, 5, 7, 21).getTime())).not.toBe('Yesterday');
+  });
+
+  it('survives a DST shift, where the days are not 24 h apart', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 2, 9, 12)); // day after US spring-forward
+    expect(fmtDayLabel(new Date(2026, 2, 8, 12).getTime())).toBe('Yesterday');
+  });
+});

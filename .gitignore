@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.vercel/
+.DS_Store
+*.local
+
+# Per-machine Claude Code permissions, not project config.
+.claude/settings.local.json

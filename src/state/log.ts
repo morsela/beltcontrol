@@ -1,0 +1,42 @@
+import { signal } from '@preact/signals';
+
+export type LogKind = '' | 'ok' | 'err';
+export interface LogLine {
+  id: number;
+  t: string;
+  msg: string;
+  kind: LogKind;
+}
+
+const MAX_LINES = 400;
+
+export const logLines = signal<LogLine[]>([]);
+
+/** Status text under the connection chip. Rendered into an aria-live region. */
+export const status = signal<{ text: string; kind: LogKind }>({
+  text: 'ready',
+  kind: '',
+});
+
+let seq = 0;
+
+export function log(msg: string, kind: LogKind = '') {
+  const t = new Date().toTimeString().slice(0, 8);
+  const next = [...logLines.value, { id: seq++, t, msg, kind }];
+  logLines.value = next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+}
+
+export function setStatus(text: string, kind: LogKind = '') {
+  status.value = { text, kind };
+}
+
+/** Log and surface the same message — the original app.js `fail()`. */
+export function fail(e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  log(msg, 'err');
+  setStatus(msg, 'err');
+}
+
+export function clearLog() {
+  logLines.value = [];
+}
