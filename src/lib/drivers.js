@@ -782,7 +782,18 @@ export function ks1234Driver() {
       self.onLog?.('handshake complete');
     },
 
+    // _send returns quietly when the link is gone, which is right for the handshake —
+    // a teardown mid-handshake is not an error. It is wrong for a command: doStop()
+    // treats a resolved stop() as the belt having been told to stop, so a silent no-op
+    // reports a stop that was never sent. Commands say so instead.
+    _requireOpen() {
+      if (closed || !writeCh) throw new Error('not connected to the pad — command not sent');
+    },
+
+    // async, so a refusal arrives as a rejected promise like every other failure on this
+    // interface rather than as a synchronous throw past a caller's .catch().
     async start() {
+      self._requireOpen();
       // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
       // is accepted and ignored — the belt simply does not move. The connect handshake sets
       // ControlMode 1, which is why the first start of a session worked and no later one
@@ -790,8 +801,14 @@ export function ks1234Driver() {
       await self._send('props ControlMode 1');
       await self._send('props runState 1');
     },
-    stop: () => self._send('props runState 0'),
-    setSpeed: (kmh) => self._send(`props CurrentSpeed ${kmh.toFixed(1)}`),
+    async stop() {
+      self._requireOpen();
+      await self._send('props runState 0');
+    },
+    async setSpeed(kmh) {
+      self._requireOpen();
+      await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
+    },
     async setMode() {
       throw new Error('this protocol has no mode switch');
     },
