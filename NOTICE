@@ -1,0 +1,33 @@
+Belt Control
+Copyright 2026 Belt Control contributors
+
+This product includes software developed by the Belt Control contributors.
+
+--------------------------------------------------------------------------------
+Independence and trademarks
+--------------------------------------------------------------------------------
+
+Belt Control is not affiliated with, endorsed by, or sponsored by Beijing
+KingSmith Technology Co., Ltd.
+
+WalkingPad(R) and KingSmith(R) are trademarks of Beijing KingSmith Technology
+Co., Ltd. They appear in this software and its documentation only where they are
+the accurate name of a thing being described -- the treadmills the app connects
+to, the manufacturer's own app whose behaviour was analysed, and the names of the
+Bluetooth protocol families. That is nominative use. No licence to use those
+marks is granted by the Apache License covering this software; see section 6 of
+that licence.
+
+Section 4(d) of the Apache License, Version 2.0 requires that this notice be
+reproduced in derivative works. If you fork Belt Control, keep the equivalent
+disclaimer rendered in the user interface -- see src/components/Disclaimer.tsx
+and docs/trademarks.md.
+
+--------------------------------------------------------------------------------
+Safety
+--------------------------------------------------------------------------------
+
+This software commands motorised treadmill hardware over Bluetooth. It is
+provided without warranty of any kind, and it is not a safety device. See
+sections 7 and 8 of the Apache License, and the safety terms shown in the
+application itself.

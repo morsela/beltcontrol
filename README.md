@@ -135,6 +135,12 @@ The belt can start under software control with nobody on it. The app therefore:
 Closing the page does **not** stop the belt. Use the treadmill's own controls or remote as the
 real safety stop.
 
+Those are engineering mitigations, and they reduce the risk rather than removing it — none of
+them can help once the Bluetooth link drops with the belt still moving. The safety terms a user
+actually sees are the footer line on every screen and the in-app **Safety, terms & privacy**
+page (`#/legal`, [`src/routes/Legal.tsx`](src/routes/Legal.tsx)), which also covers privacy and
+what is and is not collected.
+
 ## Documentation
 
 | Doc | What's in it |
@@ -152,7 +158,7 @@ real safety stop.
 index.html              Vite entry
 src/main.tsx            bootstrap, guards, service-worker registration
 src/app.tsx             shell (one column on mobile, rail + content on desktop), hash router
-src/routes/             Now · Today · History
+src/routes/             Now · Today · History · Legal (safety, terms, privacy)
 src/components/         hero, speed control, tiles, stop bar, ambient mode, sheets
 src/charts/             hand-rolled inline SVG: column, area, heatmap
 src/state/              connection · telemetry · session · settings · backup · log
@@ -160,6 +166,7 @@ src/lib/drivers.js      the protocol drivers — plain JS, deliberately untouche
 src/lib/drivers.d.ts    hand-written types for the above
 src/lib/simulator.ts    fake pad for development (dropped from production builds)
 src/lib/viewport.ts     the 64rem desktop breakpoint, shared by the shell and app.css
+src/lib/links.ts        outbound URLs used in more than one place
 src/styles/tokens.css   the single source of truth for colour, type and spacing
 public/                 manifest, icons, service worker
 test/                   unit tests, plus a fake GATT surface in ble-mock.ts
@@ -169,7 +176,23 @@ tools/screenshots/      the month of fake walking they are taken against
 docs/                   the documentation linked above
 serve.sh                local dev server
 vercel.json             hosting config
+LICENSE                 Apache-2.0
+NOTICE                  attribution, independence and safety notice carried by forks
 ```
 
 Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
 km/h — so miles are a display concern only.
+
+## Licence
+
+[Apache-2.0](LICENSE). Chosen over MIT for two things this project specifically wants: an
+explicit patent grant, and sections 7 and 8 — the "AS IS" warranty disclaimer and the
+limitation of liability — spelled out rather than compressed into one sentence. Software that
+commands a motorised belt should say plainly that it comes with no warranty.
+
+Section 4(d) makes the [`NOTICE`](NOTICE) file a condition rather than a request, which is what
+carries the independence statement into forks. If you fork this, keep it, and keep
+[`src/components/Disclaimer.tsx`](src/components/Disclaimer.tsx) rendered — see
+[Trademarks and independence](docs/trademarks.md).
+
+Nothing here is legal advice.

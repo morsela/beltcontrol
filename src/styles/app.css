@@ -628,8 +628,56 @@ a { color: var(--accent); }
   color: var(--muted);
   text-wrap: pretty;
 }
-.disclaimer p { margin: 0; }
+.disclaimer p { margin: 0 0 0.5rem; }
+.disclaimer p:last-child { margin-bottom: 0; }
 .disclaimer sup { font-size: 0.7em; vertical-align: super; line-height: 0; }
+/* The safety sentence leads, so its emphasis carries full ink against the muted
+   block around it rather than inheriting --muted like the trademark text. */
+.disclaimer strong { color: var(--ink); }
+
+/* --- legal page ------------------------------------------------------------
+   Long-form prose, which exists nowhere else in this app — every other screen is
+   numbers and controls. Measure is capped well under the desktop content width:
+   a 76rem line of body text is unreadable regardless of how much room there is. */
+
+.legal { max-width: 42rem; }
+.legal h2 {
+  font-size: var(--t-md);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+.legal h3 {
+  font-size: var(--t-body);
+  margin: 1.25rem 0 0.35rem;
+}
+.legal p { margin: 0 0 0.75rem; text-wrap: pretty; }
+.legal p:last-child { margin-bottom: 0; }
+.legal ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.legal li { text-wrap: pretty; }
+.legal code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.legal .note { margin-top: 0.75rem; }
+.legal-foot { margin-top: 1.5rem; text-align: center; }
+
+/* The one block on the page describing a way to get hurt. Warn-toned, matching the
+   existing warn callout: bad/red is reserved for Stop and for failures that already
+   happened, and this is neither. The left rule does the work in both themes, where
+   a tinted fill alone would wash out against --panel in dark. */
+.callout-safety {
+  border-left: 3px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 6%, var(--panel));
+}
+.callout-safety h2 { color: var(--warn); }
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .stat { text-align: center; }

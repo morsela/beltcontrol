@@ -24,4 +24,12 @@ author wrote. Nothing from KS+Fit is redistributed here — see
 [Reproducing the analysis](protocols.md#reproducing-the-analysis), which tells you how to
 obtain the APK yourself rather than shipping it.
 
-If you fork this, keep the disclaimer in `src/components/Disclaimer.tsx` rendered.
+If you fork this, keep the disclaimer in `src/components/Disclaimer.tsx` rendered, and keep the
+`NOTICE` file. Under section 4(d) of the Apache-2.0 licence the project ships under, reproducing
+`NOTICE` in a derivative work is a licence condition, not a courtesy — which is the one part of
+this page that survives a fork whether or not the forker reads it.
+
+The same statement is repeated at length on the in-app legal page
+(`#/legal`, `src/routes/Legal.tsx`), alongside the safety, warranty and privacy terms. Three
+places, deliberately: the footer is what a user passes, the legal page is what a user is sent to,
+and `NOTICE` is what a fork is obliged to carry.
