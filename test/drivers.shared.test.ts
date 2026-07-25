@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { hex, adoptSpeedLimits, detectDriver, HARD_MIN_KMH, UUID } from '../src/lib/drivers.js';
+import {
+  hex,
+  adoptSpeedLimits,
+  detectDriver,
+  classicDriver,
+  ftmsDriver,
+  ks1234Driver,
+  fitshowDriver,
+  HARD_MIN_KMH,
+  PROTOCOLS,
+  UUID,
+} from '../src/lib/drivers.js';
+import type { Driver, DriverId } from '../src/lib/drivers.js';
+import { simulatedDriver } from '../src/lib/simulator.js';
 import { FakeServer, FakeCharacteristic } from './ble-mock.js';
 
 describe('hex', () => {
@@ -71,6 +84,43 @@ describe('adoptSpeedLimits', () => {
     expect(d.minSpeedKmh).toBe(7);
     expect(d.maxSpeedKmh).toBe(10);
   });
+});
+
+describe('protocol defaults', () => {
+  const factories: [DriverId, () => Driver][] = [
+    ['classic', classicDriver],
+    ['ftms', ftmsDriver],
+    ['ks1234', ks1234Driver],
+    ['fitshow', fitshowDriver],
+  ];
+
+  for (const [id, factory] of factories) {
+    // A fake pad that answers differently from the real one is worse than no fake pad:
+    // it makes the UI look right against behaviour no hardware will reproduce. The
+    // simulator kept its own copy of this and had already drifted — every simulated pad
+    // offered a 0.1 km/h step, including classic, whose real step is 0.5.
+    it(`describes a simulated ${id} pad the same way the driver does`, () => {
+      const real = factory();
+      const fake = simulatedDriver({ id });
+      expect(fake.capabilities).toEqual(real.capabilities);
+      expect({
+        min: fake.minSpeedKmh,
+        max: fake.maxSpeedKmh,
+        step: fake.speedStep,
+      }).toEqual({ min: real.minSpeedKmh, max: real.maxSpeedKmh, step: real.speedStep });
+    });
+
+    it(`gives each ${id} driver limits of its own to rewrite`, () => {
+      // They are rewritten per connection from what the device reports, so two drivers
+      // built from the same table must not be able to write over each other.
+      const a = factory();
+      const b = factory();
+      a.maxSpeedKmh = 3;
+      a.capabilities.pause = !a.capabilities.pause;
+      expect(b.maxSpeedKmh).toBe(PROTOCOLS[id].limits.maxSpeedKmh);
+      expect(b.capabilities.pause).toBe(PROTOCOLS[id].capabilities.pause);
+    });
+  }
 });
 
 describe('detectDriver', () => {
