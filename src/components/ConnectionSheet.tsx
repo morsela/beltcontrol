@@ -4,6 +4,7 @@ import { LogPanel } from './LogPanel.js';
 import {
   connect,
   disconnect,
+  doStop,
   driver,
   deviceName,
   connected,
@@ -11,7 +12,7 @@ import {
   beltLabel,
   beltTone,
 } from '../state/connection.js';
-import { live } from '../state/telemetry.js';
+import { live, isMoving } from '../state/telemetry.js';
 import { status, logLines } from '../state/log.js';
 import { toMph } from '../lib/format.js';
 
@@ -30,6 +31,17 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="Connection" onClose={onClose}>
+      {/* The sheet sits above the pinned stop bar and would otherwise hide the one
+          control that must always be reachable — leaving Disconnect as the only red
+          button on screen, which does not stop the belt. So Stop comes with it. */}
+      {connected.value && isMoving.value && (
+        <div class="sheet-stop">
+          <button class="btn danger block" onClick={() => void doStop()}>
+            Stop
+          </button>
+        </div>
+      )}
+
       <dl class="meta">
         <dt>State</dt>
         <dd>
@@ -64,8 +76,10 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
       )}
 
       {connected.value ? (
+        // Not `danger`: dropping the link is the least destructive thing on this
+        // sheet — it leaves the belt exactly as it is. Red is reserved for Stop.
         <button
-          class="btn danger block"
+          class="btn block"
           onClick={() => {
             void disconnect();
             onClose();

@@ -33,12 +33,22 @@ km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.
 - **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar and cannot be
-  scrolled away. `Esc` still works everywhere.
+  scrolled away. `Esc` still works everywhere. The connection sheet is the one surface that
+  covers the stop bar, so it renders its own Stop at the top while the belt is moving —
+  otherwise the only red button on screen would be Disconnect, which does *not* stop the
+  belt. For the same reason Disconnect is not styled `danger`: red is reserved for Stop.
 - **Ambient mode.** Hold the hero number: full-screen giant readout holding a
   `navigator.wakeLock`, with Stop always visible. Wake Lock is supported in exactly the same
   browsers as Web Bluetooth, so it adds no new requirement. It is deliberately *not* a
   celebration screen — it sits in peripheral vision for hours, so its job is to be legible
-  and then ignorable.
+  and then ignorable. It is a dark surface under *both* themes — a full-screen white panel
+  is the wrong thing to park beside someone working — which makes it the one place that
+  cannot draw from `--ink`, near-black in the light theme. It has its own
+  `--ambient-bg/-ink/-muted` tokens instead, measured at 17:1 and 7:1 in both themes.
+- **A failure is never only in the log.** Every status, including one raised while
+  connected, renders in a single always-mounted `aria-live` region on Now. A speed write
+  that the belt rejects also puts the readout back where it was: the target on screen is
+  the target the belt accepted, or it is an error, never a number nobody received.
 - **Status is never colour-alone.** Every belt-state dot ships a text label. Measured reason:
   the warn (`#e0a33a`) and bad (`#ff6b5e`) tokens separate by only ΔE 5.7 under deuteranopia.
 - **Charts are single-hue and hand-rolled.** No chart library. The sequential ramp in

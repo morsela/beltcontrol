@@ -43,6 +43,17 @@
   --seq-5: #00663a;
   --seq-track: #eceff3;
 
+  /* --- ambient mode -----------------------------------------------------
+     Ambient is a dark surface in both themes on purpose: it sits in peripheral
+     vision for hours, and a full-screen white panel is the wrong thing to park
+     beside someone working. That makes it the one surface whose ink cannot come
+     from --ink, which is near-black under the light theme — so it gets its own
+     three tokens rather than a hardcoded #000 the light palette never answers.
+     Measured against the ambient surface: ink 17:1, muted 7:1, both themes. */
+  --ambient-bg: #101418;
+  --ambient-ink: #f6f7f9;
+  --ambient-muted: #9aa3af;
+
   /* --- type ------------------------------------------------------------- */
   --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -96,6 +107,11 @@
     --seq-4: #30bb7b;
     --seq-5: #44dd94;
     --seq-track: #1b2027;
+
+    /* Darker than the light theme's ambient surface: the room is already dark. */
+    --ambient-bg: #000000;
+    --ambient-ink: #e8ecf1;
+    --ambient-muted: #8e99a8;
 
     --shadow: none;
   }

@@ -298,13 +298,23 @@ export async function setTarget(kmh: number) {
   const d = driver.value;
   if (!d) return;
   const next = Math.min(Math.max(Math.round(kmh * 10) / 10, d.minSpeedKmh), d.maxSpeedKmh);
-  if (next === settings.value.targetKmh) return;
+  const prev = settings.value.targetKmh;
+  if (next === prev) return;
+
+  // Move the readout first so a stepper press never feels dead, then put it back if
+  // the write does not land. The alternative — waiting for the device before showing
+  // anything — loses presses when someone taps + three times in a row. What is not
+  // acceptable is the middle ground the app used to sit in: a target left on screen
+  // that the belt never received, with the failure only in the protocol log.
   updateSettings({ targetKmh: next });
   if (!running.value) return; // just move the setpoint while stopped
   try {
     await d.setSpeed(next);
     log(`speed → ${toMph(next).toFixed(1)} mph (${next.toFixed(1)} km/h)`);
+    // Clears any error still showing from an earlier failed write.
+    setStatus(`speed ${toMph(next).toFixed(1)} mph`, 'ok');
   } catch (e) {
+    updateSettings({ targetKmh: prev });
     fail(e);
   }
 }
