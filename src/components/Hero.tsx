@@ -4,7 +4,7 @@ import { driver } from '../state/connection.js';
 import { trustFor } from '../state/telemetry.js';
 import { todayTotals, currentSession } from '../state/session.js';
 import { availableMetrics, cycleMetric, metricValue, METRIC_UNIT } from '../lib/metrics.js';
-import { fmtDuration, fmt } from '../lib/format.js';
+import { fmtDuration, fmtMiles } from '../lib/format.js';
 
 /**
  * The one number the screen leads with, at ~72px so it reads from arm's length
@@ -64,7 +64,7 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
           <span class="sub tnum">
             This session {fmtDuration(Math.round(session.activeMs / 1000))}
             {session.trust.distKm === 'ok' && session.distKm > 0
-              ? ` · ${fmt(session.distKm, 2)} km`
+              ? ` · ${fmtMiles(session.distKm)} mi`
               : ''}
           </span>
         )}

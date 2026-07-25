@@ -10,7 +10,7 @@ import { settings } from '../state/settings.js';
 import { AreaChart } from '../charts/Area.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { isDesktop } from '../lib/viewport.js';
-import { dayKey, fmtDuration, fmt, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
+import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
 
 export function Today() {
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
@@ -37,8 +37,8 @@ export function Today() {
             <span class="k">walked</span>
           </div>
           <div class="stat">
-            <span class="v tnum">{day.distKm > 0 ? fmt(day.distKm, 2) : EM_DASH}</span>
-            <span class="k">km</span>
+            <span class="v tnum">{day.distKm > 0 ? fmtMiles(day.distKm) : EM_DASH}</span>
+            <span class="k">mi</span>
           </div>
           <div class="stat">
             <span class="v tnum">{day.steps > 0 ? fmtInt(day.steps) : EM_DASH}</span>
@@ -120,7 +120,7 @@ function SessionRow({
         <div class="when tnum">
           {fmtClock(s.startedAt)}
           {s.endedAt ? ` – ${fmtClock(s.endedAt)}` : ''}
-          {s.trust.distKm === 'ok' && s.distKm > 0 ? ` · ${fmt(s.distKm, 2)} km` : ''}
+          {s.trust.distKm === 'ok' && s.distKm > 0 ? ` · ${fmtMiles(s.distKm)} mi` : ''}
           {s.trust.steps === 'ok' && s.steps > 0 ? ` · ${fmtInt(s.steps)} steps` : ''}
         </div>
       </div>

@@ -5,6 +5,7 @@
 export const KM_PER_MILE = 1.609344;
 export const toMph = (kmh: number) => kmh / KM_PER_MILE;
 export const toKmh = (mph: number) => mph * KM_PER_MILE;
+export const toMiles = (km: number) => km / KM_PER_MILE;
 
 /** 0.2 mph is 0.32 km/h — comfortably inside the 0.5 km/h-per-press safety limit. */
 export const MPH_STEP = 0.2;
@@ -38,6 +39,18 @@ export const fmtInt = (v: number | null | undefined): string =>
 
 export const fmtMph = (kmh: number | null | undefined): string =>
   kmh == null ? EM_DASH : toMph(kmh).toFixed(1);
+
+/**
+ * Distance for display, in miles. The same split fmtMph makes for speed: distance
+ * is stored and carried in kilometres because that is what the wire speaks, and
+ * converted only on the way to the screen.
+ *
+ * Only for a distance the protocol reports in real units. A value whose scaling was
+ * never established (trust 'unverified') is not in kilometres, so multiplying it by
+ * a conversion factor would dress an unknown number up as miles — show those raw.
+ */
+export const fmtMiles = (km: number | null | undefined, digits = 2): string =>
+  km == null ? EM_DASH : toMiles(km).toFixed(digits);
 
 /** Local YYYY-MM-DD. Deliberately not toISOString(), which is UTC and would file a
  *  late-evening walk under tomorrow. */
