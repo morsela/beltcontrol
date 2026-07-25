@@ -28,6 +28,8 @@ lives here instead.
 | `Permissions-Policy: bluetooth=(self)` | Keeps the radio available to this origin and nothing it embeds. |
 | `Strict-Transport-Security` | Web Bluetooth needs a secure context; this makes downgrade to plain HTTP a non-option. `.com` is not HSTS-preloaded by the registry, so this header is the only thing enforcing it. |
 | `X-Content-Type-Options`, `Referrer-Policy` | Ordinary hardening. Nothing here is sensitive, but nothing here needs a referrer either. |
+| `robots.txt`, `sitemap.xml` → `max-age=3600` | Crawlers re-read them often; an hour is short enough to fix a mistake and long enough to matter. |
+| icons and `og.png` → `max-age=604800` | Unfingerprinted but near-immutable. A week means a redesign lands within a week rather than never. |
 | `rewrites` → `/index.html` | Hash routing means the server only ever needs to serve the shell; the negative lookahead keeps real files (assets, icons, the manifest) being served as themselves. |
 
 ## The Content-Security-Policy
@@ -62,6 +64,29 @@ Verified against a production build served with these exact headers: the bundle,
 manifest, icons and service worker all load, the blob-URL downloads behind Export CSV and
 Export backup still work, and inline script, cross-origin script, styles, images, `fetch` and
 frames are all refused.
+
+The policy also decides what `index.html` may carry in its head, which the next section
+leans on: the inline `<style>` behind the `<noscript>` fallback is covered by
+`style-src 'unsafe-inline'`, and the `application/ld+json` block is a data block rather than
+a script — the HTML parser never prepares it for execution, so `script-src 'self'` does not
+reject it. Verified with the production headers in place: no violation is reported for
+either.
+
+## Search and link previews
+
+`index.html` carries the canonical URL, Open Graph and Twitter card tags, and a
+`SoftwareApplication` block of structured data. Three things there are deliberate:
+
+- **The canonical is absolute and apex** (`https://beltcontrol.com/`). Every Vercel preview
+  deployment is a public URL serving identical HTML, so without it the previews compete with
+  production for the same query.
+- **`og:image` is an absolute URL.** Slack, Discord and X do not resolve relative ones.
+  The image is `public/og.png`, generated from `tools/og-image.html` — that file carries the
+  headless-Chrome command to re-render it after a change to the mark or the tagline. Without
+  it a shared link previews the app's own dark, empty shell.
+- **`<noscript>` holds a real page**, not a one-line apology. Firefox and Safari users cannot
+  run this app at all, and they arrive anyway; the fallback tells them why, and gives a
+  crawler prose to index on a page that is otherwise an empty `<div>`.
 
 ## The domain
 

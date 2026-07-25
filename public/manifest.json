@@ -1,7 +1,10 @@
 {
+  "id": "/",
   "name": "Belt Control — for KingSmith / WalkingPad treadmills",
   "short_name": "Belt Control",
   "description": "An independent web app for treadmills that speak the KingSmith / WalkingPad Bluetooth protocols. Not affiliated with Beijing KingSmith Technology Co., Ltd.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

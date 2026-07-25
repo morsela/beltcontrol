@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WalkingPad">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Belt Control">
+  <!-- The belt seen from above: deck, then slats. Three filled shapes, no strokes, and
+       nothing narrower than 24px in a 512px box — a favicon is 16px, where a 24px feature
+       is one and a half pixels and anything finer is gone. The walker this replaced was
+       eight strokes and a dashed centre line, none of which survived that reduction. -->
   <rect width="512" height="512" rx="112" fill="#101418"/>
-  <!-- belt deck -->
-  <rect x="76" y="300" width="360" height="84" rx="42" fill="none" stroke="#3ddc91" stroke-width="22"/>
-  <line x1="150" y1="342" x2="362" y2="342" stroke="#3ddc91" stroke-width="14" stroke-linecap="round" stroke-dasharray="6 40"/>
-  <!-- walker -->
-  <circle cx="286" cy="132" r="30" fill="#3ddc91"/>
-  <path d="M286 170 L286 246" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-  <path d="M286 246 L232 300" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-  <path d="M286 246 L336 296" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-  <path d="M286 196 L226 176" stroke="#3ddc91" stroke-width="20" stroke-linecap="round"/>
-  <path d="M286 196 L344 222" stroke="#3ddc91" stroke-width="20" stroke-linecap="round"/>
+  <rect x="60" y="192" width="392" height="128" rx="64" fill="#3ddc91"/>
+  <g fill="#101418">
+    <rect x="126" y="244" width="68" height="24" rx="12"/>
+    <rect x="222" y="244" width="68" height="24" rx="12"/>
+    <rect x="318" y="244" width="68" height="24" rx="12"/>
+  </g>
 </svg>
