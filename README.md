@@ -98,7 +98,9 @@ Details in [Testing](docs/testing.md) and [Deploying](docs/deploying.md).
 The belt can start under software control with nobody on it. The app therefore:
 
 - confirms before starting, showing the target speed
-- clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default)
+- clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default) — and
+  clamps *that* to an envelope of its own, so a pad reporting a nonsense limit widens
+  nothing
 - limits each speed press to ≤0.5 km/h
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd>
 - reports a stop only once the belt itself reports zero, and says plainly when it never
