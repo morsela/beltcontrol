@@ -106,6 +106,8 @@ describe('doStart', () => {
 
   // A pad spinning up sends `runState 1` with `CurrentSpeed 0.0` for a second or two
   // before the belt has any speed to report. That is a confirmed start, not a failed one.
+  // The label is what carries it: `state` is a raw per-protocol code, 1 meaning running
+  // on this pad and *starting* on a classic one. Drivers always emit the pair.
   it('accepts a reported run state as confirmation before any speed arrives', async () => {
     driver.value = fakePad();
 
@@ -113,7 +115,7 @@ describe('doStart', () => {
     await settle();
     await p;
 
-    ingest({ speedKmh: 0, state: 1 });
+    ingest({ speedKmh: 0, state: 1, stateLabel: 'running' });
     await vi.advanceTimersByTimeAsync(300);
 
     expect(status.value.text).toBe('running');

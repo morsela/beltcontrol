@@ -128,6 +128,22 @@ describe('command frames', () => {
     expect(only.hexWrites()).toContain(frame(4, 1));
   });
 
+  // Same contract the 0x1234 driver already keeps: a resolved stop() is read upstream as
+  // the belt having been told to stop, so a command with nowhere to go has to say so —
+  // and say it the same legible way, not as a TypeError from dereferencing a dead handle.
+  it('refuses a command once the link is gone, and names the reason', async () => {
+    await d.detach();
+    await expect(d.stop()).rejects.toThrow(/not connected/);
+    expect(write.writes).toHaveLength(0);
+  });
+
+  it('rejects rather than throwing synchronously, so the poll timer can catch it', async () => {
+    await d.detach();
+    const polling = d.poll(); // startPolling() attaches .catch() to exactly this
+    expect(polling).toBeInstanceOf(Promise);
+    await expect(polling).rejects.toThrow(/not connected/);
+  });
+
   it('carries a checksum over every command byte', async () => {
     await d.setSpeed(4.5);
     const [f] = write.writes;

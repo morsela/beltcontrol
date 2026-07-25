@@ -50,7 +50,7 @@ export interface Driver {
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
   /** Throws if the write channel is gone, so a command can never resolve without
-   *  having been sent. Present on the 0x1234 driver; harmless elsewhere. */
+   *  having been sent. Present on the drivers that can write at all. */
   _requireOpen?(): void;
   detach(): Promise<void>;
   /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
@@ -143,7 +143,9 @@ export interface TreadmillData extends Partial<Telemetry> {
 }
 
 export declare function parseTreadmillData(view: DataView): TreadmillData;
-export declare function hex(buf: ArrayBuffer | ArrayBufferView): string;
+/** Space-separated hex. A view is formatted as the bytes it covers, not as the whole
+ *  buffer behind it. */
+export declare function hex(buf: ArrayBuffer | ArrayBufferView | ArrayLike<number>): string;
 
 /** Text in, permuted-base64 text out. The alphabet is a KingSmith permutation of
  *  the standard one, so this is not interchangeable with btoa/atob. */
