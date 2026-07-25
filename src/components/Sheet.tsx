@@ -1,8 +1,8 @@
 import type { ComponentChildren } from 'preact';
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef } from 'preact/hooks';
 import { openDialogs } from '../state/ui.js';
-import { connected, doStop } from '../state/connection.js';
-import { isMoving } from '../state/telemetry.js';
+import { beltMayBeMoving, doStop } from '../state/connection.js';
 
 const FOCUSABLE = [
   'a[href]',
@@ -28,6 +28,13 @@ const focusables = (root: HTMLElement) =>
  * moves in on open, Tab cycles inside, Esc closes, and focus returns to whatever
  * opened it. It also owes the user a way out that is visible — Esc alone is not a
  * discoverable affordance, hence the close button.
+ *
+ * Rendered into <body> rather than where it is written. On desktop the two columns
+ * both open dialogs and both sit in stacking contexts of their own (the rail is
+ * `position: sticky`, which makes one whatever its z-index), so whichever column
+ * loses the ordering paints its dialogs behind the other — the delete confirmation
+ * in the content column used to come up underneath the rail. From <body> a dialog
+ * is ordered against the page rather than against the column that opened it.
  */
 export function Sheet({
   title,
@@ -92,7 +99,7 @@ export function Sheet({
     };
   }, []);
 
-  return (
+  return createPortal(
     <div
       class="sheet-backdrop"
       onClick={(e) => {
@@ -110,7 +117,7 @@ export function Sheet({
         {/* No modal is allowed to hide Stop. The backdrop covers the pinned stop bar,
             and Esc now belongs to the dialog rather than to the belt, so the control
             has to travel with the thing that obscured it. */}
-        {connected.value && isMoving.value && (
+        {beltMayBeMoving.value && (
           <div class="sheet-stop">
             <button class="btn danger block" onClick={() => void doStop()}>
               Stop
@@ -122,6 +129,7 @@ export function Sheet({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

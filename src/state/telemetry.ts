@@ -84,6 +84,28 @@ export const confirmedStopped = computed(() => {
 });
 
 /**
+ * Belt-state words that mean the pad itself says it is at rest.
+ *
+ * `stopping` is deliberately not one of them: a belt still coasting down has not
+ * finished stopping, and the caller that cares gives bare zero speed its own grace
+ * period anyway.
+ */
+const RESTING_LABELS = new Set(['stopped', 'standby', 'idle']);
+
+/**
+ * The belt's own account of being at rest — a resting state code *and* no speed.
+ *
+ * This is how a pad that stops itself says so. Nothing is sent to the app when it
+ * happens (nobody steps on inside the safety window, the key is pulled, its own panel
+ * is used); the frames simply start reading `stopped`. Protocols that carry no state
+ * code at all — FTMS — never satisfy this, so callers cannot rely on it alone.
+ */
+export const beltReportsRest = computed(() => {
+  const t = live.value;
+  return t.stateLabel != null && RESTING_LABELS.has(t.stateLabel) && confirmedStopped.value;
+});
+
+/**
  * Positive evidence that the belt is running.
  *
  * Speed alone is not enough: a pad spinning up reports `runState 1` with

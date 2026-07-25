@@ -17,7 +17,10 @@ const DEFAULTS: Settings = {
   goalMinutes: 60,
   presetsMph: [1.2, 2.0, 3.0],
   heroMetric: 'time',
-  targetKmh: 2.0,
+  // 1.0 km/h is 0.6 mph: the speed a walking pad moves off at by itself, and the
+  // slowest the app will drive one. Starting anywhere else means the first press of
+  // Start is a speed change nobody asked for.
+  targetKmh: 1.0,
 };
 
 function load(): Settings {

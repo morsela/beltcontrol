@@ -7,7 +7,7 @@
 // not re-guessed per render from whether a value happens to be null right now.
 
 import type { TrustMap } from '../state/telemetry.js';
-import { fmtDuration, fmt, fmtInt, EM_DASH } from './format.js';
+import { fmtDuration, fmtMiles, fmtInt, EM_DASH } from './format.js';
 import type { DayTotal } from '../state/session.js';
 
 export type MetricKey = 'time' | 'distance' | 'steps' | 'kcal';
@@ -16,7 +16,7 @@ export const METRIC_ORDER: MetricKey[] = ['time', 'distance', 'steps', 'kcal'];
 
 export const METRIC_UNIT: Record<MetricKey, string> = {
   time: 'walked today',
-  distance: 'km today',
+  distance: 'mi today',
   steps: 'steps today',
   kcal: 'kcal today',
 };
@@ -48,7 +48,9 @@ export function metricValue(key: MetricKey, day: DayTotal): string {
       return secs > 0 ? fmtDuration(secs) : '0m';
     }
     case 'distance':
-      return fmt(day.distKm, 2);
+      // Day totals only ever accumulate a distance the protocol reports in real
+      // units — session.ts leaves unverified ones out — so this is safe to convert.
+      return fmtMiles(day.distKm);
     case 'steps':
       return fmtInt(day.steps);
     case 'kcal':

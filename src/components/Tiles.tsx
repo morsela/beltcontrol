@@ -1,7 +1,7 @@
 import { driver, connected } from '../state/connection.js';
 import { live, trustFor } from '../state/telemetry.js';
 import { currentSession } from '../state/session.js';
-import { fmtMph, fmtDuration, fmt, fmtInt, EM_DASH } from '../lib/format.js';
+import { fmtMph, fmtDuration, fmt, fmtMiles, fmtInt, EM_DASH } from '../lib/format.js';
 
 interface Tile {
   k: string;
@@ -31,10 +31,14 @@ export function Tiles() {
   });
 
   if (trust && trust.distKm !== 'absent') {
+    // An unverified distance is on a scale nobody has pinned down, so it is neither
+    // miles nor kilometres — labelling it with either would be a claim the app cannot
+    // back. It keeps the pad's own number under a bare "distance".
+    const raw = trust.distKm === 'unverified';
     tiles.push({
-      k: 'km',
-      v: session ? fmt(session.distKm, 2) : EM_DASH,
-      unverified: trust.distKm === 'unverified',
+      k: raw ? 'distance' : 'mi',
+      v: session ? (raw ? fmt(session.distKm, 2) : fmtMiles(session.distKm)) : EM_DASH,
+      unverified: raw,
     });
   } else if (trust && trust.steps !== 'absent') {
     tiles.push({

@@ -5,6 +5,7 @@ import {
   driver,
   running,
   stopPending,
+  startPending,
   paused,
   canPause,
   phase,
@@ -263,5 +264,93 @@ describe('doPause', () => {
 
     ingest({ speedKmh: 2.4 }); // somebody used the pad's own remote
     expect(paused.value).toBe(false);
+  });
+});
+
+/**
+ * The other way a belt stops: by itself. Start one with nobody on it and it gives up
+ * after a few seconds; the key gets pulled; somebody uses its own panel. No command
+ * comes back to the app, so `running` used to stay true for the rest of the connection
+ * — Stop pinned over a belt the pad itself was reporting as stopped, and no way back to
+ * Start without pressing a Stop that did nothing.
+ */
+describe('a belt that stops itself', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetTelemetry();
+    running.value = true;
+    stopPending.value = false;
+    startPending.value = false;
+  });
+
+  afterEach(() => {
+    driver.value = null;
+    running.value = false;
+    vi.useRealTimers();
+  });
+
+  it('takes a reported resting state at once', () => {
+    ingest({ speedKmh: 3.2, state: 2, stateLabel: 'running' });
+    expect(running.value).toBe(true);
+
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+
+    expect(running.value).toBe(false);
+    expect(status.value.text).toMatch(/stopped on its own/);
+    expect(status.value.kind).toBe('ok');
+  });
+
+  it('treats standby and idle the same way', () => {
+    ingest({ speedKmh: 0, state: 0, stateLabel: 'standby' });
+    expect(running.value).toBe(false);
+  });
+
+  it('waits out a coast-down rather than calling it stopped', () => {
+    // `stopping` is the pad still decelerating, and it reports it alongside a speed
+    // that has not reached zero yet.
+    ingest({ speedKmh: 1.4, state: 3, stateLabel: 'stopping' });
+    vi.advanceTimersByTime(5_000);
+    expect(running.value).toBe(true);
+  });
+
+  it('gives a protocol that reports no state at all a grace period', () => {
+    // FTMS carries no belt-state code, so bare zero speed is all there is to go on —
+    // and a pad that has confirmed a start reports exactly that for a moment before
+    // the belt has any speed to report.
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(2_000);
+    expect(running.value).toBe(true);
+
+    vi.advanceTimersByTime(1_500);
+    expect(running.value).toBe(false);
+  });
+
+  it('lets the belt pick back up inside that grace period', () => {
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(2_000);
+    ingest({ speedKmh: 1.2 }); // the belt was only spinning up
+    vi.advanceTimersByTime(5_000);
+    expect(running.value).toBe(true);
+  });
+
+  it('leaves an unconfirmed start alone', () => {
+    // A start that has been written and not yet answered is a belt legitimately
+    // reporting zero. `watchForStart` owns that window and its ten-second deadline.
+    startPending.value = true;
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+    vi.advanceTimersByTime(5_000);
+    expect(running.value).toBe(true);
+  });
+
+  it('does not describe a stop somebody asked for as the belt stopping itself', async () => {
+    driver.value = fakePad(async () => {});
+    ingest({ speedKmh: 3.2 });
+
+    await doStop();
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+    vi.advanceTimersByTime(300);
+
+    expect(running.value).toBe(false);
+    expect(status.value.text).toBe('stopped');
   });
 });

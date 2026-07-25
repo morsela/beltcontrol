@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { availableMetrics, cycleMetric, metricValue, METRIC_ORDER } from '../src/lib/metrics.js';
+import {
+  availableMetrics,
+  cycleMetric,
+  metricValue,
+  METRIC_ORDER,
+  METRIC_UNIT,
+} from '../src/lib/metrics.js';
 import { trustFor } from '../src/state/telemetry.js';
 import type { DayTotal } from '../src/state/session.js';
 
@@ -75,9 +81,16 @@ describe('metricValue', () => {
   it('formats each metric to its own precision', () => {
     const d = day({ minutes: 84, distKm: 6.3421, steps: 9123.4, kcal: 271.6 });
     expect(metricValue('time', d)).toBe('1h 24m');
-    expect(metricValue('distance', d)).toBe('6.34');
+    expect(metricValue('distance', d)).toBe('3.94'); // 6.3421 km
     expect(metricValue('steps', d)).toBe((9123).toLocaleString());
     expect(metricValue('kcal', d)).toBe((272).toLocaleString());
+  });
+
+  it('shows distance in the same units as the rest of the screen', () => {
+    // Totals are stored in km because the wire is metric, but the hero reads mph
+    // beside them — a km label here was the one mixed-unit hold-out.
+    expect(METRIC_UNIT.distance).toBe('mi today');
+    expect(metricValue('distance', day({ distKm: 1.609344 }))).toBe('1.00');
   });
 
   it('shows sub-minute walks in seconds', () => {

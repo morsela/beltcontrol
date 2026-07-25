@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hex, adoptSpeedLimits, detectDriver, UUID } from '../src/lib/drivers.js';
+import { hex, adoptSpeedLimits, detectDriver, HARD_MIN_KMH, UUID } from '../src/lib/drivers.js';
 import { FakeServer, FakeCharacteristic } from './ble-mock.js';
 
 describe('hex', () => {
@@ -23,11 +23,21 @@ describe('hex', () => {
 });
 
 describe('adoptSpeedLimits', () => {
-  const pad = () => ({ minSpeedKmh: 0.5, maxSpeedKmh: 6, speedStep: 0.5 });
+  /** The conservative limits every driver starts from. */
+  const pad = () => ({ minSpeedKmh: 1.0, maxSpeedKmh: 6, speedStep: 0.5 });
 
   it('takes limits inside the envelope', () => {
-    const d = adoptSpeedLimits(pad(), { min: 1, max: 5, step: 0.2 });
-    expect([d.minSpeedKmh, d.maxSpeedKmh, d.speedStep]).toEqual([1, 5, 0.2]);
+    const d = adoptSpeedLimits(pad(), { min: 1.5, max: 5, step: 0.2 });
+    expect([d.minSpeedKmh, d.maxSpeedKmh, d.speedStep]).toEqual([1.5, 5, 0.2]);
+  });
+
+  it('raises a minimum below the floor rather than refusing it', () => {
+    // A pad wanting to crawl slower than the app will drive is not talking nonsense,
+    // and refusing it would keep a default the device just said is wrong for it.
+    const logs: string[] = [];
+    const d = adoptSpeedLimits(pad(), { min: 0.2 }, (m) => logs.push(m));
+    expect(d.minSpeedKmh).toBe(HARD_MIN_KMH);
+    expect(logs.join('\n')).toMatch(/below the .* floor/);
   });
 
   it('keeps the conservative default for a field outside the envelope', () => {
@@ -44,7 +54,7 @@ describe('adoptSpeedLimits', () => {
   it('refuses a minimum that would sit above the maximum', () => {
     const logs: string[] = [];
     const d = adoptSpeedLimits(pad(), { min: 7 }, (m) => logs.push(m));
-    expect(d.minSpeedKmh).toBe(0.5);
+    expect(d.minSpeedKmh).toBe(1.0);
     expect(logs.join('\n')).toMatch(/implausible min speed/);
   });
 

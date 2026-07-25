@@ -96,19 +96,26 @@ function serialiser() {
 
 /** Fast enough for any treadmill this app claims to support, and well under a sprint. */
 export const HARD_MAX_KMH = 12;
-/** Below this a "moving" belt is indistinguishable from a stopped one. */
-export const HARD_MIN_KMH = 0.1;
+/** The slowest the app will drive a belt: 1.0 km/h is 0.6 mph, which is where a walking
+ *  pad moves off by itself and the lowest speed the ones this app talks to accept. Below
+ *  it a "moving" belt is barely distinguishable from a stopped one anyway. */
+export const HARD_MIN_KMH = 1.0;
 /** The per-press ceiling the UI promises. `speedStep` feeds a stepper, not a slider. */
 export const HARD_MAX_STEP_KMH = 0.5;
 
 const inRange = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : null);
 
 /**
- * Fold device-reported limits into the driver, refusing anything outside the envelope.
+ * Fold device-reported limits into the driver, holding them to the envelope above.
  *
- * A rejected field keeps the driver's existing (conservative) default and is logged —
- * silently substituting a default would hide a pad that is talking nonsense, and the
- * log is where protocol surprises are meant to surface.
+ * Two different things can be wrong with a limit, and they get different answers. A
+ * value outside the envelope is a pad talking nonsense: it is refused, the driver keeps
+ * its existing conservative default, and the refusal is logged — silently substituting
+ * a default would hide the pad that said it. A minimum merely *below the floor* is not
+ * nonsense, only slower than this app will drive, so it is raised to the floor instead.
+ *
+ * Either way the pair has to describe a real range at the end of it, so a bound that
+ * would invert the other one is refused however plausible it looked alone.
  */
 export function adoptSpeedLimits(self, { min, max, step }, onLog) {
   const note = (what, got, keeping) =>
@@ -117,9 +124,17 @@ export function adoptSpeedLimits(self, { min, max, step }, onLog) {
   const wasMin = self.minSpeedKmh;
 
   if (min !== undefined) {
-    const v = inRange(min, HARD_MIN_KMH, HARD_MAX_KMH);
+    // A pad asking to crawl below the floor is not talking nonsense, it just wants a
+    // speed this app will not drive, so that one is raised rather than refused — a
+    // refusal would keep a default the device has just told us is wrong for it.
+    const v = inRange(min, 0, HARD_MAX_KMH);
     if (v == null) note('min speed', min, self.minSpeedKmh);
-    else self.minSpeedKmh = v;
+    else if (v < HARD_MIN_KMH) {
+      onLog?.(
+        `device min speed ${min} km/h is below the ${HARD_MIN_KMH} km/h floor — using the floor`
+      );
+      self.minSpeedKmh = HARD_MIN_KMH;
+    } else self.minSpeedKmh = v;
   }
   if (max !== undefined) {
     // A max below the min it is paired with describes no usable range at all.
@@ -221,7 +236,7 @@ export function classicDriver() {
       needsPolling: true,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -473,7 +488,7 @@ export function ftmsDriver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -763,7 +778,7 @@ export function fitshowDriver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -915,7 +930,7 @@ export function ks1234Driver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.1,
     onData: null,
     onLog: null,

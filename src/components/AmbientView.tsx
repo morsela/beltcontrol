@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'preact/hooks';
 import { currentSession, todayTotals } from '../state/session.js';
 import { live, isMoving } from '../state/telemetry.js';
-import { doStop, doPause, doResume, canPause, paused } from '../state/connection.js';
+import { doStop, doPause, doResume, canPause, paused, beltMayBeMoving } from '../state/connection.js';
 import { settings } from '../state/settings.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { requestWakeLock, releaseWakeLock } from '../lib/wakelock.js';
-import { fmtDuration, fmtMph, fmt, toMph } from '../lib/format.js';
+import { fmtDuration, fmtMph, fmtMiles, toMph } from '../lib/format.js';
 
 /**
  * What you leave on the tablet propped on the treadmill for three hours.
  *
  * Deliberately not a celebration screen: no rings filling, no streak nag, no
  * confetti. This sits in peripheral vision while you work, so its whole job is to
- * be legible and then be ignorable. Stop stays visible the entire time.
+ * be legible and then be ignorable. Stop stays visible for as long as the belt may
+ * be moving, and never moves while it is there.
  */
 export function AmbientView({ onExit }: { onExit: () => void }) {
   // Resuming from here gets the same dialog it gets on the Now screen. Pausing and
@@ -38,7 +39,7 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
 
       <div class="a-secondary tnum">
         <span>{fmtMph(live.value.speedKmh)} mph</span>
-        {session && session.trust.distKm === 'ok' && <span>{fmt(session.distKm, 2)} km</span>}
+        {session && session.trust.distKm === 'ok' && <span>{fmtMiles(session.distKm)} mi</span>}
       </div>
 
       <div class="a-actions">
@@ -59,9 +60,15 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
             </button>
           )
         )}
-        <button class="btn danger" onClick={() => void doStop()}>
-          Stop
-        </button>
+        {/* Held to the same rule as every other Stop in the app: present for as long
+            as the belt may be moving, gone once it says it is not. A belt that stopped
+            itself — nobody stepped on, key pulled — leaves this screen with Exit, which
+            is the only thing left to do from here. */}
+        {beltMayBeMoving.value && (
+          <button class="btn danger" onClick={() => void doStop()}>
+            Stop
+          </button>
+        )}
       </div>
 
       {confirmResume && (

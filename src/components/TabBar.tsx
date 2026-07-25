@@ -1,4 +1,5 @@
 import type { Route } from '../app.js';
+import { Brand } from './Logo.js';
 
 const TABS: { route: Route; label: string; icon: preact.JSX.Element }[] = [
   {
@@ -45,7 +46,7 @@ export function TabBar({ route, variant = 'bottom' }: { route: Route; variant?: 
   return (
     <nav class={`tabbar ${variant}`} aria-label="Sections">
       <div class="tabbar-inner">
-        {variant === 'top' && <span class="wordmark">Belt Control</span>}
+        {variant === 'top' && <Brand class="wordmark" />}
         {tabs.map((t) => (
           <a
             key={t.route}
