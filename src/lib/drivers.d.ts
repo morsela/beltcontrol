@@ -75,6 +75,25 @@ export declare const UUID: {
 
 export declare const CLASSIC_MODE: { auto: 0; manual: 1; standby: 2 };
 
+/** The app's own speed envelope, applied on top of whatever a device reports about
+ *  itself — see `adoptSpeedLimits`. */
+export declare const HARD_MAX_KMH: number;
+export declare const HARD_MIN_KMH: number;
+export declare const HARD_MAX_STEP_KMH: number;
+
+/**
+ * Fold device-reported speed limits into a driver, rejecting any that fall outside the
+ * envelope above. A rejected field keeps the driver's conservative default and is
+ * reported through `onLog`.
+ */
+export declare function adoptSpeedLimits<
+  T extends Pick<Driver, 'minSpeedKmh' | 'maxSpeedKmh' | 'speedStep'>,
+>(
+  self: T,
+  limits: { min?: number; max?: number; step?: number },
+  onLog?: ((msg: string) => void) | null
+): T;
+
 export declare function detectDriver(
   server: BluetoothRemoteGATTServer
 ): Promise<Driver | null>;

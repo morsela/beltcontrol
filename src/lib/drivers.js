@@ -64,6 +64,61 @@ function serialiser() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Speed-limit envelope
+// ---------------------------------------------------------------------------
+//
+// FTMS and the 0x1234 family both report their own limits, and the app clamps every
+// speed it sends to whatever they say. That makes the device the sole authority on how
+// fast the belt may be driven — so a unit that misreports (or a peripheral that lies)
+// removes the cap rather than tightening it. A stuck 0xFFFF in 0x2AD4 reads as
+// 655.35 km/h, and the app would forward it.
+//
+// These bounds are the app's own opinion, applied on top of whatever the device claims.
+// Nothing sold as a walking or running pad exceeds them, and no belt needs a per-press
+// step larger than the 0.5 km/h the UI documents.
+
+/** Fast enough for any treadmill this app claims to support, and well under a sprint. */
+export const HARD_MAX_KMH = 12;
+/** Below this a "moving" belt is indistinguishable from a stopped one. */
+export const HARD_MIN_KMH = 0.1;
+/** The per-press ceiling the UI promises. `speedStep` feeds a stepper, not a slider. */
+export const HARD_MAX_STEP_KMH = 0.5;
+
+const inRange = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+
+/**
+ * Fold device-reported limits into the driver, refusing anything outside the envelope.
+ *
+ * A rejected field keeps the driver's existing (conservative) default and is logged —
+ * silently substituting a default would hide a pad that is talking nonsense, and the
+ * log is where protocol surprises are meant to surface.
+ */
+export function adoptSpeedLimits(self, { min, max, step }, onLog) {
+  const note = (what, got) =>
+    onLog?.(`ignoring implausible ${what} from device: ${got} km/h (keeping ${
+      what === 'step' ? self.speedStep : what === 'min' ? self.minSpeedKmh : self.maxSpeedKmh
+    })`);
+
+  if (min !== undefined) {
+    const v = inRange(min, HARD_MIN_KMH, HARD_MAX_KMH);
+    if (v == null) note('min speed', min);
+    else self.minSpeedKmh = v;
+  }
+  if (max !== undefined) {
+    // A max below the min it is paired with describes no usable range at all.
+    const v = inRange(max, Math.max(HARD_MIN_KMH, self.minSpeedKmh), HARD_MAX_KMH);
+    if (v == null) note('max speed', max);
+    else self.maxSpeedKmh = v;
+  }
+  if (step !== undefined) {
+    const v = inRange(step, 0.01, HARD_MAX_STEP_KMH);
+    if (v == null) note('step', step);
+    else self.speedStep = v;
+  }
+  return self;
+}
+
 // Some stacks reject writeValueWithoutResponse; fall back to the with-response form.
 async function writeChar(ch, bytes) {
   const data = new Uint8Array(bytes);
@@ -358,9 +413,15 @@ export function ftmsDriver() {
       try {
         const rangeCh = await svc.getCharacteristic(UUID.ftmsSpeedRange);
         const r = await rangeCh.readValue();
-        self.minSpeedKmh = r.getUint16(0, true) / 100;
-        self.maxSpeedKmh = r.getUint16(2, true) / 100;
-        self.speedStep = r.getUint16(4, true) / 100 || 0.1;
+        adoptSpeedLimits(
+          self,
+          {
+            min: r.getUint16(0, true) / 100,
+            max: r.getUint16(2, true) / 100,
+            step: r.getUint16(4, true) / 100 || 0.1,
+          },
+          self.onLog
+        );
         self.onLog?.(
           `speed range ${self.minSpeedKmh}–${self.maxSpeedKmh} km/h step ${self.speedStep}`
         );
@@ -769,8 +830,16 @@ export function ks1234Driver() {
       const p = parseProps(line);
       if (!p) return;
 
-      if (p.Max != null) self.maxSpeedKmh = Number(p.Max) || self.maxSpeedKmh;
-      if (p.StartSpeed != null) self.minSpeedKmh = Number(p.StartSpeed) || self.minSpeedKmh;
+      if (p.StartSpeed != null || p.Max != null) {
+        adoptSpeedLimits(
+          self,
+          {
+            ...(p.StartSpeed != null ? { min: Number(p.StartSpeed) } : {}),
+            ...(p.Max != null ? { max: Number(p.Max) } : {}),
+          },
+          self.onLog
+        );
+      }
 
       const state = p.runState != null ? Number(p.runState) : null;
       const out = {
