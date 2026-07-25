@@ -426,7 +426,10 @@
   position: fixed;
   inset: 0;
   background: rgb(0 0 0 / 45%);
-  z-index: 60;
+  /* Above the desktop rail's 61: the sheet is portalled to <body>, so it is ordered
+     against the page and has to clear everything pinned to it. Below ambient's 100,
+     which is the one thing that legitimately covers the whole app. */
+  z-index: 80;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -764,12 +767,9 @@ table.data th { color: var(--muted); font-weight: 500; }
     align-self: start;
     max-height: calc(100dvh - 3rem);
     overflow-y: auto;
-    /* `position: sticky` creates a stacking context whatever its z-index, and every
-       dialog in the app is born inside this rail (Start, the goal editor, the
-       connection sheet). Without a z-index of its own the rail — and therefore the
-       modal backdrop inside it — paints below any positioned element in the content
-       column, and the chart shows straight through the dialog. Must outrank
-       .sheet-backdrop's own 60 in the content column's context. */
+    /* The rail overlaps the content column's positioned bits (chart tooltips) as the
+       page scrolls under it, and must win — it is the pinned surface. Dialogs are no
+       longer part of this fight: they render into <body> and sit above both. */
     z-index: 61;
     /* The focus ring on a control at the very edge would otherwise be clipped. */
     padding: 2px;
