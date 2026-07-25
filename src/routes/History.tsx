@@ -4,6 +4,7 @@ import { exportJson, importBackup, BackupError } from '../state/backup.js';
 import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
 import { Heatmap } from '../charts/Heatmap.js';
+import { isDesktop } from '../lib/viewport.js';
 import { fmtDuration, fmt, fmtDayLabel, EM_DASH } from '../lib/format.js';
 import { download, stamped } from '../lib/download.js';
 import { log } from '../state/log.js';
@@ -77,9 +78,13 @@ function DataCard() {
 
 export function History() {
   const [showTable, setShowTable] = useState(false);
+  const desktop = isDesktop.value;
   const goal = settings.value.goalMinutes;
   const last30 = dailySeries(30);
-  const last98 = dailySeries(98); // 14 weeks, so the heatmap grid is full columns
+  // Whole weeks, so the heatmap grid is full columns. Twice as many of them on
+  // desktop: the column is twice as wide, and filling it with more history beats
+  // filling it with bigger squares.
+  const heatDays = dailySeries(desktop ? 182 : 98);
   const days = streak(goal);
 
   const totalMin = last30.reduce((a, d) => a + d.minutes, 0);
@@ -126,7 +131,12 @@ export function History() {
 
       <p class="section-title">Minutes per day</p>
       <div class="card">
-        <ColumnChart data={last30} goalMinutes={goal} />
+        <ColumnChart
+          data={last30}
+          goalMinutes={goal}
+          width={desktop ? 720 : 320}
+          height={desktop ? 180 : 140}
+        />
         <p class="note" style="margin-top:.5rem">
           Dashed line is the {goal}-minute goal. Filled bars met it.
         </p>
@@ -160,7 +170,7 @@ export function History() {
 
       <p class="section-title">Consistency</p>
       <div class="card">
-        <Heatmap data={last98} goalMinutes={goal} />
+        <Heatmap data={heatDays} goalMinutes={goal} />
         <p class="note" style="margin-top:.75rem">
           {days > 0
             ? `${days}-day streak at ${goal} min or more.`

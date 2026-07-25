@@ -81,14 +81,51 @@ describe('command frames', () => {
     expect(write.hexWrites()).toEqual([frame(1, 32)]);
   });
 
-  it('switches to manual before starting the belt', async () => {
+  it('wakes the pad and switches to manual before starting the belt', async () => {
     await d.start();
-    expect(write.hexWrites()).toEqual([frame(2, CLASSIC_MODE.manual), frame(4, 1)]);
+    expect(write.hexWrites()).toEqual([
+      frame(0, 0), // wake — standby parks the app-control path
+      frame(2, CLASSIC_MODE.manual),
+      frame(4, 1),
+    ]);
   });
 
   it('stops by zeroing speed and dropping to standby', async () => {
     await d.stop();
     expect(write.hexWrites()).toEqual([frame(1, 0), frame(2, CLASSIC_MODE.standby)]);
+  });
+
+  // The bug this guards: a stop leaves the pad in standby, and a start that does not wake
+  // it first is dropped, so every start after the first one was a no-op.
+  it('sends the same wake-and-start sequence on a restart as on the first start', async () => {
+    await d.start();
+    const first = write.hexWrites();
+    await d.stop();
+    write.writes.length = 0;
+    await d.start();
+    expect(write.hexWrites()).toEqual(first);
+  });
+
+  it('does not collide with the 1 Hz poll that runs while the user presses Start', async () => {
+    // Chrome rejects a GATT write that starts while another is in flight, and the caller
+    // polls once a second for the whole of the start sequence. Unserialised, one of the two
+    // is lost — and a lost start byte is indistinguishable from a pad that ignored you.
+    // No fallback to writeValue here, so a collision surfaces instead of being retried.
+    const only = new FakeCharacteristic(UUID.classicWrite, {
+      properties: { writeWithoutResponse: true, write: false },
+    });
+    const notifyCh = new FakeCharacteristic(UUID.classicNotify);
+    const solo = classicDriver();
+    await solo.attach(
+      new FakeServer().addService(UUID.classicService, [
+        notifyCh,
+        only,
+      ]) as unknown as BluetoothRemoteGATTServer
+    );
+    only.writes.length = 0;
+
+    await Promise.all([solo.start(), solo.poll(), solo.poll(), solo.setSpeed(3)]);
+    expect(only.hexWrites()).toContain(frame(4, 1));
   });
 
   it('carries a checksum over every command byte', async () => {

@@ -4,6 +4,8 @@ Why the app looks and behaves the way it does. Read this before changing the UI 
 session logic — most of what looks arbitrary here is load-bearing.
 
 - [The three screens](#the-three-screens)
+- [Two layouts](#two-layouts)
+- [Dialogs and the Escape key](#dialogs-and-the-escape-key)
 - [Design decisions](#design-decisions)
 - [Sessions](#sessions)
 - [Counter resets](#counter-resets)
@@ -11,7 +13,7 @@ session logic — most of what looks arbitrary here is load-bearing.
 
 ## The three screens
 
-Three tiers, each on its own screen, reachable from the bottom tab bar:
+Three tiers, each answering one question:
 
 | Screen | Question it answers |
 |---|---|
@@ -21,6 +23,63 @@ Three tiers, each on its own screen, reachable from the bottom tab bar:
 
 Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
 km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
+
+## Two layouts
+
+Desktop is the primary target: Web Bluetooth exists in desktop Chromium and nowhere on
+iOS at all. The breakpoint is **64rem**, declared once in `src/lib/viewport.ts` and read
+from both sides — the shell branches on it in JS and `app.css` branches on it in CSS. If
+the two ever disagree the page renders half in each mode, so the media query names the
+file above it and a test pins the constant.
+
+**Below 64rem** the layout is unchanged: one column, bottom tab bar, Stop pinned above it.
+
+**At 64rem and up**, Now stops being a destination and becomes a rail:
+
+| Region | Holds |
+|---|---|
+| Top bar | Wordmark, Today, History — *not* Now |
+| Left rail (sticky, own scroll) | Stop, connection, hero, speed, mode |
+| Content column | Today or History, and the disclaimer |
+
+Now is not in the nav because it is never absent — a nav entry for something already on
+screen is a control that cannot report a state. `#/now` is rewritten to `#/today` rather
+than rendered as a page nothing in the nav is current for.
+
+The rail exists so the live numbers hold still while History scrolls, which is the entire
+argument for two columns. It is its own scroll container so a short window cannot strand
+Stop below the fold. Note that `position: sticky` creates a stacking context whatever its
+z-index, and every dialog in the app is born inside the rail — hence the explicit
+`z-index` there, without which the content column paints straight through them.
+
+The charts take a `width` prop rather than one fixed viewBox. An SVG scales everything,
+so a phone-sized viewBox in a desktop column magnifies the axis text and the goal dashes
+along with the bars; callers pass roughly the rendered width to hold 1 unit ≈ 1 px. The
+consistency heatmap shows 26 weeks on desktop against 14 on a phone — twice the column
+deserves more history, not bigger squares.
+
+## Dialogs and the Escape key
+
+`Esc` does double duty: it stops the belt from anywhere, and it is the universal dismiss
+key. Those collided — closing the connection sheet also halted the walk. The rule is now
+that **Esc belongs to the topmost dialog when one is open, and to the belt otherwise**,
+arbitrated by a counter in `src/state/ui.ts`.
+
+That is only safe because of a second rule: **no dialog may hide Stop**. `Sheet` renders
+its own Stop whenever the belt is moving, so the control is on screen for the entire time
+the key points elsewhere. It is enforced in the primitive rather than per-dialog, so a
+future sheet cannot forget.
+
+`Sheet` declares `aria-modal`, so it owes the keyboard what that implies: focus moves in
+on open, Tab cycles inside, focus returns to the opener on close. It focuses the first
+control *in the body* — never its own Stop, which would make Enter a way to halt the belt
+by accident. Stop must be reachable, not preselected. There is also a visible close
+button, because a key is not an affordance.
+
+`window.confirm` and `window.prompt` are gone (`ConfirmDialog`, and the goal editor in
+`GoalMeter`). They cannot be styled or validated, they block the event loop, and — the
+reason they had to go — they take focus and Escape out of the app's hands at exactly the
+moment Escape has somewhere better to be.
 
 ## Design decisions
 
@@ -32,13 +91,27 @@ km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
 - **Three speed presets.** The steppers move 0.2 mph per press to stay inside the
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.
-- **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar and cannot be
-  scrolled away. `Esc` still works everywhere.
+- **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar on mobile and
+  at the top of the rail on desktop, and cannot be scrolled away. `Esc` still works
+  everywhere. Dialogs cover it, so dialogs carry their own — see
+  [Dialogs and the Escape key](#dialogs-and-the-escape-key). For the same reason
+  Disconnect is not styled `danger`: red is reserved for Stop.
+- **Ambient mode is a button, not only a gesture.** Holding the hero number still works,
+  but a long press is no gesture at all on a keyboard, and the hint that it exists is
+  hidden on protocols with a single available metric. The `Ambient` button beside the
+  connection chip is the discoverable and keyboard-reachable path to the same screen.
 - **Ambient mode.** Hold the hero number: full-screen giant readout holding a
   `navigator.wakeLock`, with Stop always visible. Wake Lock is supported in exactly the same
   browsers as Web Bluetooth, so it adds no new requirement. It is deliberately *not* a
   celebration screen — it sits in peripheral vision for hours, so its job is to be legible
-  and then ignorable.
+  and then ignorable. It is a dark surface under *both* themes — a full-screen white panel
+  is the wrong thing to park beside someone working — which makes it the one place that
+  cannot draw from `--ink`, near-black in the light theme. It has its own
+  `--ambient-bg/-ink/-muted` tokens instead, measured at 17:1 and 7:1 in both themes.
+- **A failure is never only in the log.** Every status, including one raised while
+  connected, renders in a single always-mounted `aria-live` region on Now. A speed write
+  that the belt rejects also puts the readout back where it was: the target on screen is
+  the target the belt accepted, or it is an error, never a number nobody received.
 - **Status is never colour-alone.** Every belt-state dot ships a text label. Measured reason:
   the warn (`#e0a33a`) and bad (`#ff6b5e`) tokens separate by only ΔE 5.7 under deuteranopia.
 - **Charts are single-hue and hand-rolled.** No chart library. The sequential ramp in

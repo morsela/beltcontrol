@@ -91,6 +91,7 @@
   gap: 0.5rem;
   padding: 0.25rem 0 0.75rem;
 }
+.topbar-btn { min-height: 40px; padding: 0.3rem 0.7rem; font-size: var(--t-sm); flex: none; }
 
 .chip {
   display: inline-flex;
@@ -325,6 +326,9 @@
 .mode-row .btn { flex: 1; min-height: 44px; padding: 0.4rem 0.6rem; }
 
 .hint { font-size: var(--t-sm); color: var(--muted); margin: 0.75rem 0 0; }
+/* The status line stays mounted so its aria-live region is never re-inserted;
+   with nothing to say it must take up no room. */
+.hint:empty { margin: 0; }
 .hint.err { color: var(--bad); }
 .hint.ok { color: var(--accent); }
 
@@ -364,6 +368,14 @@
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
+}
+/* The bar spans the window; its contents track the content column, so the nav is
+   never stranded hundreds of pixels from the thing it navigates. */
+.tabbar-inner {
+  display: flex;
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
 }
 .tabbar a {
   flex: 1;
@@ -408,7 +420,83 @@
 }
 @keyframes sheet-in { from { transform: translateY(16px); opacity: 0; } }
 
-.sheet h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.sheet h2 { font-size: 1.05rem; margin: 0; }
+/* Esc closes the dialog, but a key is not an affordance — this is the visible one. */
+.sheet-close {
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  margin: -0.5rem -0.5rem 0 0;
+}
+
+/* Every dialog covers the pinned stop bar, so every dialog carries its own Stop
+   while the belt is moving. Same size and weight as the bar's, so it reads as the
+   same control rather than a second, lesser one. */
+.sheet-stop { margin-bottom: 1rem; }
+.sheet-stop .btn { min-height: 64px; font-size: 1.1rem; }
+
+/* --- dialogs and fields --------------------------------------------------- */
+
+.dialog-body { margin: 0 0 1.25rem; text-wrap: pretty; }
+.dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+.dialog-actions .btn { min-width: 7rem; flex: 1; }
+
+.field { display: block; }
+.field-label {
+  display: block;
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.field-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+.field-input:focus-visible { border-color: var(--accent); }
+
+/* --- skip link ------------------------------------------------------------ */
+
+/* Off-screen until focused: the desktop rail is a dozen controls deep, and the
+   content column sits behind all of them in tab order. */
+.skip {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -120%);
+  z-index: 70;
+  min-height: var(--tap);
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 550;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease);
+}
+.skip:focus-visible { transform: translate(-50%, 0); }
 
 dl.meta {
   margin: 0 0 1rem;
@@ -524,8 +612,8 @@ a { color: var(--accent); }
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #000;
-  color: var(--ink);
+  background: var(--ambient-bg);
+  color: var(--ambient-ink);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -542,12 +630,12 @@ a { color: var(--accent); }
   font-size: var(--t-label);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--muted);
+  color: var(--ambient-muted);
 }
 .ambient .a-secondary {
   display: flex;
   gap: 2rem;
-  color: var(--muted);
+  color: var(--ambient-muted);
   font-size: 1.1rem;
 }
 .ambient .a-actions {
@@ -559,6 +647,14 @@ a { color: var(--accent); }
   gap: 0.75rem;
 }
 .ambient .a-actions .btn { flex: 1; }
+/* The buttons sit on the ambient surface, not on a card, so they take the
+   ambient ink too — .btn's default border and --muted text are tuned for the
+   light panel and vanish here. */
+.ambient .a-actions .btn.ghost { color: var(--ambient-muted); }
+.ambient .a-actions .btn.ghost:hover:not(:disabled) {
+  color: var(--ambient-ink);
+  border-color: var(--ambient-muted);
+}
 
 /* --- charts --------------------------------------------------------------- */
 
@@ -618,3 +714,110 @@ table.data th, table.data td { text-align: right; padding: 0.35rem 0.5rem; borde
 table.data th:first-child, table.data td:first-child { text-align: left; }
 table.data th { color: var(--muted); font-weight: 500; }
 .scroll-x { overflow-x: auto; }
+
+/* --- desktop -------------------------------------------------------------- */
+
+/* 64rem must match DESKTOP_MIN_PX in src/lib/viewport.ts: the shell branches on it
+   in JS (Now is a pane here, a route below) and this block branches on it in CSS.
+   If the two ever drift, the page renders half in each mode. */
+@media (min-width: 64rem) {
+  .shell-desktop {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: 1.75rem;
+    max-width: var(--maxw-desktop);
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
+  }
+
+  /* Its own scroll container, so the live numbers stay put while History scrolls —
+     the entire reason for a two-column layout. */
+  .rail {
+    position: sticky;
+    top: 1.5rem;
+    align-self: start;
+    max-height: calc(100dvh - 3rem);
+    overflow-y: auto;
+    /* `position: sticky` creates a stacking context whatever its z-index, and every
+       dialog in the app is born inside this rail (Start, the goal editor, the
+       connection sheet). Without a z-index of its own the rail — and therefore the
+       modal backdrop inside it — paints below any positioned element in the content
+       column, and the chart shows straight through the dialog. Must outrank
+       .sheet-backdrop's own 60 in the content column's context. */
+    z-index: 61;
+    /* The focus ring on a control at the very edge would otherwise be clipped. */
+    padding: 2px;
+    margin: -2px;
+  }
+
+  /* Not a fixed bar here: it belongs to the rail, pinned to the top of it. */
+  .rail .stopbar {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    padding: 0;
+    margin-bottom: var(--gap);
+  }
+  .rail .stopbar .btn { box-shadow: var(--shadow); }
+
+  .content:focus { outline: none; }
+  .content:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 4px; }
+
+  /* Nav moves to the top and stops being a thumb target. */
+  .tabbar.top {
+    position: static;
+    display: block;
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 0;
+    backdrop-filter: none;
+    background: var(--panel);
+  }
+  .tabbar.top .tabbar-inner {
+    max-width: var(--maxw-desktop);
+    padding: 0 var(--pad);
+    gap: 0.25rem;
+    align-items: center;
+  }
+  .tabbar.top .wordmark {
+    flex: 1;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .tabbar.top a {
+    flex: none;
+    flex-direction: row;
+    gap: 0.5rem;
+    min-height: 3.25rem;
+    padding: 0 0.9rem;
+    font-size: var(--t-sm);
+    text-transform: none;
+    letter-spacing: 0;
+    border-bottom: 2px solid transparent;
+  }
+  .tabbar.top a:hover { color: var(--ink); }
+  .tabbar.top a[aria-current='page'] { border-bottom-color: var(--accent); }
+  .tabbar.top svg { width: 18px; height: 18px; }
+
+  /* A bottom sheet is a phone gesture. With a pointer, this is a dialog. */
+  .sheet-backdrop { align-items: center; }
+  .sheet {
+    max-width: var(--maxw-sheet);
+    max-height: 82dvh;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding-bottom: var(--pad);
+  }
+  @keyframes sheet-in { from { transform: translateY(8px); opacity: 0; } }
+
+  .dialog-actions .btn { flex: none; }
+
+  /* Two columns of room: let the day's sessions breathe rather than stacking. */
+  .content .stat .v { font-size: 2rem; }
+
+  /* The charts are handed a wider viewBox up here (see Today/History), so their
+     text is drawn near 1:1 and can afford the extra unit. */
+  .content .chart .axis-text { font-size: 12px; }
+}
