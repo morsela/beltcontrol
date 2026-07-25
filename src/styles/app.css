@@ -325,6 +325,9 @@
 .mode-row .btn { flex: 1; min-height: 44px; padding: 0.4rem 0.6rem; }
 
 .hint { font-size: var(--t-sm); color: var(--muted); margin: 0.75rem 0 0; }
+/* The status line stays mounted so its aria-live region is never re-inserted;
+   with nothing to say it must take up no room. */
+.hint:empty { margin: 0; }
 .hint.err { color: var(--bad); }
 .hint.ok { color: var(--accent); }
 
@@ -409,6 +412,11 @@
 @keyframes sheet-in { from { transform: translateY(16px); opacity: 0; } }
 
 .sheet h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
+
+/* The sheet covers the pinned stop bar, so it carries its own Stop while the belt
+   is moving. Same size and weight as the bar's, so it reads as the same control. */
+.sheet-stop { margin-bottom: 1rem; }
+.sheet-stop .btn { min-height: 64px; font-size: 1.1rem; }
 
 dl.meta {
   margin: 0 0 1rem;
@@ -524,8 +532,8 @@ a { color: var(--accent); }
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #000;
-  color: var(--ink);
+  background: var(--ambient-bg);
+  color: var(--ambient-ink);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -542,12 +550,12 @@ a { color: var(--accent); }
   font-size: var(--t-label);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--muted);
+  color: var(--ambient-muted);
 }
 .ambient .a-secondary {
   display: flex;
   gap: 2rem;
-  color: var(--muted);
+  color: var(--ambient-muted);
   font-size: 1.1rem;
 }
 .ambient .a-actions {
@@ -559,6 +567,14 @@ a { color: var(--accent); }
   gap: 0.75rem;
 }
 .ambient .a-actions .btn { flex: 1; }
+/* The buttons sit on the ambient surface, not on a card, so they take the
+   ambient ink too — .btn's default border and --muted text are tuned for the
+   light panel and vanish here. */
+.ambient .a-actions .btn.ghost { color: var(--ambient-muted); }
+.ambient .a-actions .btn.ghost:hover:not(:disabled) {
+  color: var(--ambient-ink);
+  border-color: var(--ambient-muted);
+}
 
 /* --- charts --------------------------------------------------------------- */
 
