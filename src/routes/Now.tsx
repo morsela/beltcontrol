@@ -21,7 +21,6 @@ import {
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
-import { status } from '../state/log.js';
 import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
@@ -114,17 +113,6 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         </div>
       )}
 
-      {/* One live region, rendered in both states and never unmounted — a region
-          inserted at the moment it gains text is not reliably announced.
-          While connected it carries errors only: the chip already names the belt
-          state, but a failed Start or speed write used to leave this screen
-          completely silent, with the reason buried in the connection sheet. */}
-      <p class={`hint ${status.value.kind}`} aria-live="polite">
-        {!connected.value || status.value.kind === 'err' ? status.value.text : ''}
-      </p>
-
-      {/* Below the live region, so a failure lands directly under the control that
-          failed rather than under a standing piece of advice. */}
       {connected.value && (
         <p class="hint" style="margin-bottom:var(--gap)">
           Esc stops the belt. Closing this page does not.
@@ -133,11 +121,19 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
 
       {/* `running` also stays true through a stop the belt has not confirmed, and a
           silent pad makes that look exactly like a start telemetry has not caught up
-          with — so name the command that is actually outstanding. */}
-      {running.value && !isMoving.value && !stopPending.value && (
+          with — so name the command that is actually outstanding. Both sit beside the
+          control they belong to; only the failure that follows goes to the chip. */}
+      {stopPending.value ? (
         <p class="note" style="margin-bottom:var(--gap)">
-          Start command sent — waiting for the belt to report movement.
+          Stop command sent — waiting for the belt to report zero.
         </p>
+      ) : (
+        running.value &&
+        !isMoving.value && (
+          <p class="note" style="margin-bottom:var(--gap)">
+            Start command sent — waiting for the belt to report movement.
+          </p>
+        )
       )}
 
       {confirming && (
