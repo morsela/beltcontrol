@@ -6,6 +6,7 @@ import { FakeServer, FakeCharacteristic, toHex } from './ble-mock.js';
 const view = (bytes: number[]) => new DataView(Uint8Array.from(bytes).buffer);
 const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff];
 const u24 = (v: number) => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff];
+const FTMS_STOP = 0x08;
 
 describe('parseTreadmillData', () => {
   it('reads instantaneous speed when "More Data" is CLEAR', () => {
@@ -147,6 +148,47 @@ describe('ftmsDriver', () => {
     // The next good frame still lands — the listener is not wedged.
     data.emit([...u16(0x0000), ...u16(250)]);
     expect(seen[seen.length - 1]!.speedKmh).toBeCloseTo(2.5, 6);
+  });
+
+  it('ignores an ack that answers a different opcode', async () => {
+    // The pad acks 0x02 (set target speed) while a stop (0x08) is in flight. Treating
+    // that as the stop's ack would report a stop the pad never confirmed.
+    const data = new FakeCharacteristic(UUID.ftmsTreadmillData);
+    const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+      onWrite: (bytes, ch) =>
+        queueMicrotask(() => ch.emit([0x80, bytes[0] === FTMS_STOP ? 0x02 : bytes[0]!, 0x01])),
+    });
+    const server = new FakeServer().addService(UUID.ftmsService, [data, cp]);
+    const d = ftmsDriver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer); // 0x00 is acked correctly
+    await expect(d.stop()).rejects.toThrow(/timeout/);
+    expect(logs.join('\n')).toMatch(/does not answer the pending 0x08/);
+  });
+
+  it('ignores an unsolicited ack arriving with nothing in flight', async () => {
+    const { server, cp } = padServer();
+    const d = ftmsDriver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    cp.emit([0x80, 0x08, 0x01]); // "stop succeeded", unprompted
+    expect(logs.join('\n')).toMatch(/unsolicited cp ack 0x08 ignored/);
+  });
+
+  it('still accepts an ack that does answer the request', async () => {
+    const { server } = padServer();
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await expect(d.stop()).resolves.toBeUndefined();
+  });
+
+  it('ignores a truncated indication instead of reading past it', async () => {
+    const { server, cp } = padServer();
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    expect(() => cp.emit([0x80, 0x08])).not.toThrow();
   });
 
   it('takes control before doing anything else', async () => {
