@@ -361,6 +361,29 @@ export function mergeSessions(incoming: Session[]): { added: number; duplicate: 
   return { added, duplicate };
 }
 
+/**
+ * One CSV field, quoted the way RFC 4180 actually specifies and defanged for
+ * spreadsheets.
+ *
+ * The device name is the reason this needs care: it arrives over the air from whatever
+ * the pad advertises, and "Show all devices" will happily connect to anything. Two
+ * separate problems come with that.
+ *
+ * `JSON.stringify` was doing the quoting, which escapes an embedded quote as \" —
+ * valid JSON, invalid CSV, where the escape is a doubled quote. A name containing one
+ * corrupted the row.
+ *
+ * And a leading =, +, -, @, tab or CR makes Excel, Sheets and LibreOffice treat the
+ * cell as a formula rather than text, quoting notwithstanding: a device advertising
+ * itself as `=cmd|' /C calc'!A0` lands as a live formula in the exported file. The
+ * usual fix is to prefix a single quote, which those apps read as "this is text".
+ */
+export function csvField(value: unknown): string {
+  const s = String(value ?? '');
+  const defanged = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return `"${defanged.replace(/"/g, '""')}"`;
+}
+
 export function exportCsv(): string {
   const rows = [
     'started,ended,active_minutes,distance_km,steps,kcal,protocol,device,distance_trust,steps_trust',
@@ -375,7 +398,7 @@ export function exportCsv(): string {
         Math.round(s.steps),
         Math.round(s.kcal),
         s.protocol ?? '',
-        JSON.stringify(s.deviceName ?? ''),
+        csvField(s.deviceName ?? ''),
         s.trust.distKm,
         s.trust.steps,
       ].join(',')

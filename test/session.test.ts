@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, type Session } from '../src/state/session.js';
+import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, type Session } from '../src/state/session.js';
 import { trustFor } from '../src/state/telemetry.js';
 import type { DriverId } from '../src/lib/drivers.js';
 import { dayKey } from '../src/lib/format.js';
@@ -218,6 +218,20 @@ describe('deleteSession', () => {
   });
 });
 
+/** Counts fields the way a CSV reader would: commas inside quotes do not separate. */
+function countCsvFields(row: string): number {
+  let fields = 1;
+  let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    const c = row[i];
+    if (c === '"') {
+      if (inQuotes && row[i + 1] === '"') i++; // an escaped quote, not a delimiter
+      else inQuotes = !inQuotes;
+    } else if (c === ',' && !inQuotes) fields++;
+  }
+  return fields;
+}
+
 describe('exportCsv', () => {
   it('carries the trust columns, so a raw number is never mistaken for a real one', () => {
     sessions.value = [session({ protocol: 'ks1234', distKm: 12.5, steps: 3_000 })];
@@ -230,10 +244,69 @@ describe('exportCsv', () => {
     expect(exportCsv().split('\n')).toHaveLength(1);
   });
 
+  it('neutralises a device name a spreadsheet would run as a formula', () => {
+    // Device names come off the air, and "Show all devices" connects to anything.
+    sessions.value = [session({ protocol: 'classic', deviceName: "=cmd|' /C calc'!A0" })];
+    const row = exportCsv().split('\n')[1]!;
+    expect(row).toContain(`"'=cmd|' /C calc'!A0"`);
+    // The cell no longer begins with = once unquoted, so it is text, not a formula.
+    expect(row).not.toContain('"=cmd');
+  });
+
+  it('escapes an embedded quote the way CSV requires, not the way JSON does', () => {
+    sessions.value = [session({ protocol: 'classic', deviceName: 'Pad "Pro"' })];
+    const row = exportCsv().split('\n')[1]!;
+    expect(row).toContain('"Pad ""Pro"""'); // doubled, not backslashed
+    expect(row).not.toContain('\\"');
+  });
+
+  it('keeps the column count stable whatever the device is called', () => {
+    const names = [
+      'KS-C2',
+      'Pad, the second',
+      'Pad "Pro"',
+      "=cmd|' /C calc'!A0",
+      '+41 555',
+      '-lead',
+      '@here',
+      'KS-C2,9999,9999,9999',
+    ];
+    for (const deviceName of names) {
+      sessions.value = [session({ protocol: 'classic', deviceName })];
+      const row = exportCsv().split('\n')[1]!;
+      expect(countCsvFields(row)).toBe(10);
+    }
+  });
+
   it('quotes the device name so a comma in it cannot shift the columns', () => {
     sessions.value = [session({ protocol: 'classic', deviceName: 'Pad, the second' })];
     const row = exportCsv().split('\n')[1]!;
     expect(row).toContain('"Pad, the second"');
     expect(row.split('","')).toHaveLength(1);
+  });
+});
+
+describe('csvField', () => {
+  it('always quotes, so an empty field is still a field', () => {
+    expect(csvField('')).toBe('""');
+    expect(csvField(null)).toBe('""');
+    expect(csvField(undefined)).toBe('""');
+  });
+
+  it('doubles quotes rather than backslashing them', () => {
+    expect(csvField('a"b')).toBe('"a""b"');
+  });
+
+  it('prefixes the characters spreadsheets treat as formula starters', () => {
+    expect(csvField('=1+1')).toBe(`"'=1+1"`);
+    expect(csvField('+1')).toBe(`"'+1"`);
+    expect(csvField('-1')).toBe(`"'-1"`);
+    expect(csvField('@x')).toBe(`"'@x"`);
+    expect(csvField('\tx')).toBe(`"'\tx"`);
+  });
+
+  it('leaves an ordinary name alone', () => {
+    expect(csvField('KS-C2')).toBe('"KS-C2"');
+    expect(csvField('Pad, the second')).toBe('"Pad, the second"');
   });
 });
