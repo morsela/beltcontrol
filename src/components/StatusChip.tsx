@@ -1,5 +1,6 @@
 import { beltTone, beltLabel, deviceName, phase } from '../state/connection.js';
 import { status } from '../state/log.js';
+import { LinkDot } from './LinkDot.js';
 
 /**
  * Ambient connection indicator, replacing the old connect panel once connected.
@@ -30,10 +31,7 @@ export function StatusChip({ onOpen }: { onOpen: () => void }) {
           : `Connection: ${beltLabel.value}. Open connection details.`
       }
     >
-      <span
-        class={`dot ${err ? 'bad' : beltTone.value}${busy ? ' pulsing' : ''}`}
-        aria-hidden="true"
-      />
+      <LinkDot tone={err ? 'bad' : beltTone.value} busy={busy} />
       {/* The live region is the inner text, not the button: re-announcing the
           accessible name of a focusable control on every state change fights with
           whatever the user is doing. */}
