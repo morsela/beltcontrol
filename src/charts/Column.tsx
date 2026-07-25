@@ -12,15 +12,20 @@ import type { DayTotal } from '../state/session.js';
 export function ColumnChart({
   data,
   goalMinutes,
+  width = 320,
   height = 140,
 }: {
   data: DayTotal[];
   goalMinutes: number;
+  /** viewBox width. The SVG scales to its container, so a phone-sized viewBox in a
+   *  desktop column magnifies the axis text and the goal dashes along with the bars.
+   *  Callers pass roughly the rendered width to keep 1 unit ≈ 1 px. */
+  width?: number;
   height?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
 
-  const W = 320;
+  const W = width;
   const H = height;
   const padB = 18;
   const padT = 8;

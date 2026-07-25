@@ -30,6 +30,8 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="Connection" onClose={onClose}>
+      {/* Stop is not rendered here: `Sheet` carries it for every dialog, so no modal
+          in the app can hide the one control that must always be reachable. */}
       <dl class="meta">
         <dt>State</dt>
         <dd>
@@ -64,8 +66,10 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
       )}
 
       {connected.value ? (
+        // Not `danger`: dropping the link is the least destructive thing on this
+        // sheet — it leaves the belt exactly as it is. Red is reserved for Stop.
         <button
-          class="btn danger block"
+          class="btn block"
           onClick={() => {
             void disconnect();
             onClose();

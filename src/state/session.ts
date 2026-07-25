@@ -18,7 +18,7 @@ const MIN_SESSION_MS = 30_000;
 /** One sample per this interval feeds the session speed chart. */
 const SAMPLE_EVERY_MS = 10_000;
 /** ~2 hours of samples. Beyond that we stop growing the array. */
-const MAX_SAMPLES = 720;
+export const MAX_SAMPLES = 720;
 
 export interface Sample {
   /** ms offset from session start */
@@ -358,6 +358,32 @@ export function sessionsOn(key: string): Session[] {
 export function deleteSession(id: string) {
   sessions.value = sessions.value.filter((s) => s.id !== id);
   persistSessions();
+}
+
+/**
+ * Fold sessions from a backup into the stored history.
+ *
+ * Merge, never replace: restoring onto a browser that already has walks in it must
+ * not throw them away. An id already present wins over the incoming copy, so
+ * importing the same file twice is a no-op rather than a doubled history.
+ */
+export function mergeSessions(incoming: Session[]): { added: number; duplicate: number } {
+  const byId = new Map(sessions.value.map((s) => [s.id, s]));
+  let added = 0;
+  let duplicate = 0;
+  for (const s of incoming) {
+    if (byId.has(s.id)) {
+      duplicate++;
+      continue;
+    }
+    byId.set(s.id, s);
+    added++;
+  }
+  if (added > 0) {
+    sessions.value = [...byId.values()].sort((a, b) => a.startedAt - b.startedAt);
+    persistSessions();
+  }
+  return { added, duplicate };
 }
 
 export function exportCsv(): string {

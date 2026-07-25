@@ -4,6 +4,7 @@ import type { Driver } from '../lib/drivers.js';
 import { ingest, resetTelemetry, live, isMoving } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
+import { openDialogs } from './ui.js';
 import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
 import {
   setSessionMeta,
@@ -277,20 +278,18 @@ export const doResume = () => begin('resume');
  * Set the belt going, from a standstill or from a pause.
  *
  * One function because it is one command on the wire — FTMS spends a single op code on
- * "Start or Resume" — and because resuming deserves the same confirmation as starting:
- * either way a belt is about to move, and it may not be the person who paused it
- * standing on it now.
+ * "Start or Resume".
+ *
+ * Confirmation lives in the UI (see `Now`), not here: a `window.confirm` in the middle of
+ * the control path blocks the event loop and takes Escape away from the app at the one
+ * moment Escape has somewhere better to be. Both callers owe the user that dialog — a
+ * resume moves a belt exactly as much as a start does.
  */
 async function begin(kind: 'start' | 'resume') {
   const d = driver.value;
   if (!d) return;
 
   const mph = toMph(settings.value.targetKmh).toFixed(1);
-  const ok = confirm(
-    `${kind === 'resume' ? 'Resume' : 'Start'} the belt at ${mph} mph?\n\n` +
-      'Make sure the belt is clear and you are ready.'
-  );
-  if (!ok) return;
 
   try {
     setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
@@ -397,13 +396,23 @@ export async function setTarget(kmh: number) {
   const d = driver.value;
   if (!d) return;
   const next = Math.min(Math.max(Math.round(kmh * 10) / 10, d.minSpeedKmh), d.maxSpeedKmh);
-  if (next === settings.value.targetKmh) return;
+  const prev = settings.value.targetKmh;
+  if (next === prev) return;
+
+  // Move the readout first so a stepper press never feels dead, then put it back if
+  // the write does not land. The alternative — waiting for the device before showing
+  // anything — loses presses when someone taps + three times in a row. What is not
+  // acceptable is the middle ground the app used to sit in: a target left on screen
+  // that the belt never received, with the failure only in the protocol log.
   updateSettings({ targetKmh: next });
   if (!running.value) return; // just move the setpoint while stopped
   try {
     await d.setSpeed(next);
     log(`speed → ${toMph(next).toFixed(1)} mph (${next.toFixed(1)} km/h)`);
+    // Clears any error still showing from an earlier failed write.
+    setStatus(`speed ${toMph(next).toFixed(1)} mph`, 'ok');
   } catch (e) {
+    updateSettings({ targetKmh: prev });
     fail(e);
   }
 }
@@ -438,7 +447,12 @@ export async function setMode(mode: number) {
 export function installGuards() {
   // Stop is the one control that must always be reachable.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && driver.value) void doStop();
+    if (e.key !== 'Escape' || !driver.value) return;
+    // While a dialog is open Escape belongs to it — dismissing a sheet should not
+    // also halt the walk. Safe because every dialog renders its own Stop while the
+    // belt is moving, so the control never leaves the screen. See state/ui.ts.
+    if (openDialogs.value > 0) return;
+    void doStop();
   });
 
   // Leaving the page does not stop the belt — say so rather than let it surprise anyone.
