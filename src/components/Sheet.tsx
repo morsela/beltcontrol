@@ -2,8 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef } from 'preact/hooks';
 import { openDialogs } from '../state/ui.js';
-import { connected, doStop } from '../state/connection.js';
-import { isMoving } from '../state/telemetry.js';
+import { beltMayBeMoving, doStop } from '../state/connection.js';
 
 const FOCUSABLE = [
   'a[href]',
@@ -118,7 +117,7 @@ export function Sheet({
         {/* No modal is allowed to hide Stop. The backdrop covers the pinned stop bar,
             and Esc now belongs to the dialog rather than to the belt, so the control
             has to travel with the thing that obscured it. */}
-        {connected.value && isMoving.value && (
+        {beltMayBeMoving.value && (
           <div class="sheet-stop">
             <button class="btn danger block" onClick={() => void doStop()}>
               Stop

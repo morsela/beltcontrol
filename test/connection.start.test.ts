@@ -139,6 +139,41 @@ describe('doStart', () => {
     expect(status.value.text).toMatch(/never reported movement/);
   });
 
+  // A pad sitting there reports `stopped` right up to the moment Start is pressed, and
+  // that frame is still the newest one when the app raises `running`. Taken as evidence
+  // of a belt that stopped itself — which is what the self-stop watcher is looking for —
+  // it cancels the start on the spot, before the belt has had a chance to answer.
+  it('does not read the zero from before the press as a belt that stopped itself', async () => {
+    driver.value = fakePad();
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+
+    const p = doStart();
+    await settle();
+    await p;
+
+    expect(running.value).toBe(true);
+    expect(startPending.value).toBe(true);
+  });
+
+  it('lets the belt say it stopped itself once the start has been confirmed', async () => {
+    driver.value = fakePad();
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+
+    const p = doStart();
+    await settle();
+    await p;
+
+    ingest({ speedKmh: 2.0, state: 2, stateLabel: 'running' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(running.value).toBe(true);
+
+    // Nobody stepped on, so the pad gives up on its own a few seconds later.
+    ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+
+    expect(running.value).toBe(false);
+    expect(status.value.text).toMatch(/stopped on its own/);
+  });
+
   it('keeps treating the belt as running when the speed write fails after a good start', async () => {
     driver.value = fakePad({
       setSpeed: async () => {

@@ -223,9 +223,9 @@ describe('ks1234Driver', () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();
     await d.attach(server as unknown as BluetoothRemoteGATTServer);
-    push(notify, 'props Max 6.0 StartSpeed 1.0');
+    push(notify, 'props Max 6.0 StartSpeed 1.5');
     expect(d.maxSpeedKmh).toBe(6);
-    expect(d.minSpeedKmh).toBe(1);
+    expect(d.minSpeedKmh).toBe(1.5);
   });
 
   it('refuses limits outside the app’s own envelope', async () => {
@@ -235,9 +235,10 @@ describe('ks1234Driver', () => {
     d.onLog = (m) => logs.push(m);
     await d.attach(server as unknown as BluetoothRemoteGATTServer);
     push(notify, 'props Max 99.0 StartSpeed 0.01');
-    expect(d.maxSpeedKmh).toBe(6); // defaults kept
-    expect(d.minSpeedKmh).toBe(0.5);
+    expect(d.maxSpeedKmh).toBe(6); // default kept
+    expect(d.minSpeedKmh).toBe(1); // a start speed under the floor is raised to it
     expect(logs.join('\n')).toMatch(/implausible max speed/);
+    expect(logs.join('\n')).toMatch(/below the 1 km\/h floor/);
   });
 
   it('labels run state', async () => {

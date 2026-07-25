@@ -31,7 +31,7 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
     name: `SIMULATED (${id})`,
     capabilities: caps[id],
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.1,
     onData: null,
     onLog: null,

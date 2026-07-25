@@ -80,8 +80,10 @@ function serialiser() {
 
 /** Fast enough for any treadmill this app claims to support, and well under a sprint. */
 export const HARD_MAX_KMH = 12;
-/** Below this a "moving" belt is indistinguishable from a stopped one. */
-export const HARD_MIN_KMH = 0.1;
+/** The slowest the app will drive a belt: 1.0 km/h is 0.6 mph, which is where a walking
+ *  pad moves off by itself and the lowest speed the ones this app talks to accept. Below
+ *  it a "moving" belt is barely distinguishable from a stopped one anyway. */
+export const HARD_MIN_KMH = 1.0;
 /** The per-press ceiling the UI promises. `speedStep` feeds a stepper, not a slider. */
 export const HARD_MAX_STEP_KMH = 0.5;
 
@@ -101,9 +103,15 @@ export function adoptSpeedLimits(self, { min, max, step }, onLog) {
     })`);
 
   if (min !== undefined) {
-    const v = inRange(min, HARD_MIN_KMH, HARD_MAX_KMH);
+    // A pad asking to crawl below the floor is not talking nonsense, it just wants a
+    // speed this app will not drive, so that one is raised rather than refused — a
+    // refusal would keep a default the device has just told us is wrong for it.
+    const v = inRange(min, 0, HARD_MAX_KMH);
     if (v == null) note('min speed', min);
-    else self.minSpeedKmh = v;
+    else if (v < HARD_MIN_KMH) {
+      onLog?.(`device min speed ${min} km/h is below the ${HARD_MIN_KMH} km/h floor — using the floor`);
+      self.minSpeedKmh = HARD_MIN_KMH;
+    } else self.minSpeedKmh = v;
   }
   if (max !== undefined) {
     // A max below the min it is paired with describes no usable range at all.
@@ -190,7 +198,7 @@ export function classicDriver() {
       needsPolling: true,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -430,7 +438,7 @@ export function ftmsDriver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -706,7 +714,7 @@ export function fitshowDriver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.5,
     onData: null,
     onLog: null,
@@ -847,7 +855,7 @@ export function ks1234Driver() {
       needsPolling: false,
     },
     maxSpeedKmh: 6,
-    minSpeedKmh: 0.5,
+    minSpeedKmh: 1.0,
     speedStep: 0.1,
     onData: null,
     onLog: null,
