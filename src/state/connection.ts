@@ -1,7 +1,7 @@
-import { signal, computed } from '@preact/signals';
+import { signal, computed, effect } from '@preact/signals';
 import { detectDriver, UUID } from '../lib/drivers.js';
 import type { Driver } from '../lib/drivers.js';
-import { ingest, resetTelemetry, live } from './telemetry.js';
+import { ingest, resetTelemetry, live, isMoving } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
 import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
@@ -10,6 +10,7 @@ import {
   startSessionTracking,
   stopSessionTracking,
   closeSession,
+  holdSession,
   restoreOpenSession,
 } from './session.js';
 
@@ -50,12 +51,24 @@ export const driver = signal<Driver | null>(null);
 export const deviceName = signal<string | null>(null);
 export const running = signal(false);
 export const supported = signal(true);
+/** The belt is stopped, but the walk is not over: `start()` picks it back up. */
+export const paused = signal(false);
 
 let device: BluetoothDevice | null = null;
 let pollTimer: number | null = null;
 
+/** Cleared the first time a unit answers a pause with "op code not supported". The
+ *  protocol carries the command; this particular treadmill does not, and there is no
+ *  feature bit to ask beforehand, so the button goes away once we know. */
+const pauseAccepted = signal(true);
+
 export const connected = computed(() => phase.value === 'connected');
 export const targetKmh = computed(() => settings.value.targetKmh);
+
+/** Only ever true where pause is a real, resumable pause on the wire. */
+export const canPause = computed(
+  () => connected.value && (driver.value?.capabilities.pause ?? false) && pauseAccepted.value
+);
 
 /** Belt state for the status chip. Always paired with a text label in the UI —
  *  warn and bad are only dE 5.7 apart under deuteranopia, so colour alone would
@@ -66,7 +79,9 @@ export const beltTone = computed<BeltTone>(() => {
   if (phase.value === 'error') return 'bad';
   if (phase.value === 'choosing' || phase.value === 'connecting') return 'warn';
   if (phase.value !== 'connected') return 'idle';
-  return (live.value.speedKmh ?? 0) > 0.05 ? 'good' : 'idle';
+  if ((live.value.speedKmh ?? 0) > 0.05) return 'good';
+  // Paused is held, not idle: something is still owed a decision.
+  return paused.value ? 'warn' : 'idle';
 });
 
 export const beltLabel = computed(() => {
@@ -84,6 +99,7 @@ export const beltLabel = computed(() => {
   }
   const d = live.value;
   if ((d.speedKmh ?? 0) > 0.05) return 'Running';
+  if (paused.value) return 'Paused';
   return d.stateLabel ? capitalise(d.stateLabel) : 'Connected';
 });
 
@@ -161,6 +177,8 @@ async function wireDriver(
   d.onLog = (m) => log(m);
   d.onData = (patch) => ingest(patch);
 
+  paused.value = false;
+  pauseAccepted.value = true; // a rejection belongs to the unit, not to the next one
   driver.value = d;
   deviceName.value = name ?? '(unnamed)';
   log(`protocol: ${d.name}`, 'ok');
@@ -188,10 +206,13 @@ async function wireDriver(
  * `import.meta.env.DEV` is statically false in a production build, so both this and
  * the simulator module are dropped by the bundler.
  */
-export async function connectSimulated(id?: 'classic' | 'ftms' | 'ks1234' | 'fitshow') {
+export async function connectSimulated(
+  id?: 'classic' | 'ftms' | 'ks1234' | 'fitshow',
+  opts: { rejectPause?: boolean } = {}
+) {
   if (!import.meta.env.DEV) return;
   const { simulatedDriver } = await import('../lib/simulator.js');
-  await wireDriver(simulatedDriver({ id }), null, `Simulated ${id ?? 'classic'}`);
+  await wireDriver(simulatedDriver({ id, ...opts }), null, `Simulated ${id ?? 'classic'}`);
 }
 
 function startPolling() {
@@ -217,6 +238,7 @@ async function teardown() {
   }
   driver.value = null;
   running.value = false;
+  paused.value = false;
   resetTelemetry();
   if (phase.value !== 'error') phase.value = 'idle';
 }
@@ -248,32 +270,81 @@ export async function disconnect() {
 
 // --- controls --------------------------------------------------------------
 
-export async function doStart() {
+export const doStart = () => begin('start');
+export const doResume = () => begin('resume');
+
+/**
+ * Set the belt going, from a standstill or from a pause.
+ *
+ * One function because it is one command on the wire — FTMS spends a single op code on
+ * "Start or Resume" — and because resuming deserves the same confirmation as starting:
+ * either way a belt is about to move, and it may not be the person who paused it
+ * standing on it now.
+ */
+async function begin(kind: 'start' | 'resume') {
   const d = driver.value;
   if (!d) return;
 
+  const mph = toMph(settings.value.targetKmh).toFixed(1);
   const ok = confirm(
-    `Start the belt at ${toMph(settings.value.targetKmh).toFixed(1)} mph?\n\n` +
+    `${kind === 'resume' ? 'Resume' : 'Start'} the belt at ${mph} mph?\n\n` +
       'Make sure the belt is clear and you are ready.'
   );
   if (!ok) return;
 
   try {
-    setStatus('starting…');
+    setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
     await d.start();
     running.value = true;
-    // Reflect the belt's real default start speed until telemetry reports the actual
-    // value — otherwise the UI shows a stale/empty reading for up to a second.
-    ingest({ speedKmh: toKmh(START_SPEED_MPH) });
+    paused.value = false;
+    holdSession(false);
+    // A cold start moves off at the pad's own floor speed whatever we asked for, so the
+    // UI would show a stale reading for up to a second without this. A resume comes back
+    // at the speed it was paused at, so it needs no such guess.
+    if (kind === 'start') ingest({ speedKmh: toKmh(START_SPEED_MPH) });
     // Some units ignore a speed set before the belt is actually moving.
     await new Promise((r) => setTimeout(r, 600));
     if (d.capabilities.speed) await d.setSpeed(settings.value.targetKmh);
     setStatus('running', 'ok');
     log(
-      `started at ${toMph(settings.value.targetKmh).toFixed(1)} mph ` +
+      `${kind === 'resume' ? 'resumed' : 'started'} at ${mph} mph ` +
         `(${settings.value.targetKmh.toFixed(1)} km/h)`,
       'ok'
     );
+  } catch (e) {
+    fail(e);
+  }
+}
+
+/**
+ * Pause the belt, keeping the walk and the speed setpoint.
+ *
+ * The driver reports back what the unit actually did. A treadmill that cannot pause gets
+ * stopped instead and loses the button for the rest of the connection — the one thing
+ * this must never do is report a pause to a belt that is still moving.
+ */
+export async function doPause() {
+  const d = driver.value;
+  if (!d) return;
+  try {
+    setStatus('pausing…');
+    const outcome = await d.pause();
+    running.value = false;
+
+    if (outcome === 'paused') {
+      settled = false; // the belt is still coasting down; see the effect below
+      paused.value = true;
+      holdSession(true);
+      setStatus('paused', 'ok');
+      log(`paused at ${toMph(settings.value.targetKmh).toFixed(1)} mph`, 'ok');
+      return;
+    }
+
+    pauseAccepted.value = false;
+    paused.value = false;
+    holdSession(false);
+    setStatus('this treadmill has no pause — belt stopped instead', 'err');
+    log('unit rejected pause; stopped instead — hiding the button', 'err');
   } catch (e) {
     fail(e);
   }
@@ -286,12 +357,40 @@ export async function doStop() {
     setStatus('stopping…');
     await d.stop();
     running.value = false;
+    paused.value = false;
+    holdSession(false);
     setStatus('stopped', 'ok');
     log('stopped', 'ok');
   } catch (e) {
     fail(e);
   }
 }
+
+/** File the paused walk now rather than waiting for the hold to lapse. */
+export function endWalk() {
+  paused.value = false;
+  holdSession(false);
+  closeSession('ended');
+}
+
+/** Has the belt actually come to rest since the pause was issued? */
+let settled = false;
+
+// The belt can also be restarted from its own remote or handrail, and then the app is not
+// paused whatever the button last said. But a belt does not stop dead when told to pause —
+// it coasts down over several seconds — so "still moving" during that ramp is not somebody
+// restarting it. Only movement *after* the belt has settled ends the pause.
+effect(() => {
+  if (!paused.value) return;
+  if (!isMoving.value) {
+    settled = true;
+    return;
+  }
+  if (settled) {
+    paused.value = false;
+    holdSession(false);
+  }
+});
 
 /** Set an absolute target, clamped to the unit's real range. */
 export async function setTarget(kmh: number) {

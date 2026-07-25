@@ -26,12 +26,18 @@ A real pad reports its own name there.</sub>
 The app probes the GATT table on connect and picks a driver itself; it does not go by model
 name. What you get depends on which protocol your unit speaks:
 
-| Your pad speaks | Control | Distance | Steps | Calories |
-|---|---|---|---|---|
-| Classic `fe00` — A1, C1, C2, P1, R1/R2, K12, T1, … | full | yes | yes | — |
-| FTMS `1826` — Z1, Z3, P1E, MT1, W1, X21, G2, … | full | yes | — | yes |
-| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | unverified | yes | unverified |
-| FitShow `fff0` — some OEM units | detect only | — | — | — |
+| Your pad speaks | Control | Pause | Distance | Steps | Calories |
+|---|---|---|---|---|---|
+| Classic `fe00` — A1, C1, C2, P1, R1/R2, K12, T1, … | full | — | yes | yes | — |
+| FTMS `1826` — Z1, Z3, P1E, MT1, W1, X21, G2, … | full | yes | yes | — | yes |
+| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | not yet | unverified | yes | unverified |
+| FitShow `fff0` — some OEM units | detect only | — | — | — | — |
+
+**Pause** is a resumable stop, and FTMS is the only protocol that has one — `08 02`, resumed
+by the same op code that starts the belt. The button only appears on a pad that has it, and
+withdraws if the unit turns out to reject it. The `0x1234` family has a pause in KS+Fit but
+its wire format has not been captured yet; the classic command set has none at all. Details
+in [the protocol reference](docs/protocols.md).
 
 `unverified` means the pad sends a number whose scaling was never established. Those are shown
 raw, flagged, and excluded from every total rather than quietly summed as if they were
@@ -75,6 +81,7 @@ In dev builds only, the console exposes a fake pad:
 
 ```js
 __wp.connectSimulated('classic')   // or 'ftms', 'ks1234', 'fitshow'
+__wp.connectSimulated('ftms', { rejectPause: true })   // a unit that refuses to pause
 __wp.disconnect()
 ```
 
@@ -96,10 +103,14 @@ Details in [Testing](docs/testing.md) and [Deploying](docs/deploying.md).
 
 The belt can start under software control with nobody on it. The app therefore:
 
-- confirms before starting, showing the target speed
+- confirms before starting **and before resuming**, showing the target speed — it may not be
+  the person who paused it standing on the belt now
 - clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default)
 - limits each speed press to ≤0.5 km/h
-- keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd>
+- keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd> — Pause never takes its place,
+  its key, or more than a third of the bar
+- never reports a pause to a belt that is still moving: a unit that rejects the pause command
+  gets stopped instead, and says so
 - pins Stop to a fixed bar above the tab bar whenever the belt is moving, and keeps it on
   screen in ambient mode, so it can never be scrolled out of reach
 - never auto-reconnects — silently reattaching to a possibly-moving belt with stale UI state

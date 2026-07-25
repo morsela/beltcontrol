@@ -11,11 +11,16 @@ import {
   supported,
   driver,
   doStart,
+  doResume,
+  endWalk,
   setMode,
   running,
+  paused,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { status } from '../state/log.js';
+import { settings } from '../state/settings.js';
+import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
@@ -41,11 +46,25 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
               Start button and no mode row, an empty panel is just noise. */}
           {(!isMoving.value || d?.capabilities.mode) && (
             <div class="card">
-              {!isMoving.value && (
-                <button class="btn primary block lg" onClick={() => void doStart()}>
-                  Start
-                </button>
-              )}
+              {!isMoving.value &&
+                (paused.value ? (
+                  <>
+                    <button class="btn primary block lg" onClick={() => void doResume()}>
+                      Resume at {toMph(settings.value.targetKmh).toFixed(1)} mph
+                    </button>
+                    <button class="btn ghost block" style="margin-top:.5rem" onClick={endWalk}>
+                      End walk
+                    </button>
+                    <p class="hint">
+                      Paused — the belt is stopped. The walk stays open for 15 minutes, so
+                      resuming keeps it as one session rather than two.
+                    </p>
+                  </>
+                ) : (
+                  <button class="btn primary block lg" onClick={() => void doStart()}>
+                    Start
+                  </button>
+                ))}
 
               {d?.capabilities.mode && (
                 <div class="mode-row">

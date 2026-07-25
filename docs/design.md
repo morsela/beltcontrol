@@ -34,6 +34,13 @@ km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
   three fixed speeds, so those get chips.
 - **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar and cannot be
   scrolled away. `Esc` still works everywhere.
+- **Pause appears only where it is real.** FTMS is the one protocol with a resumable pause
+  (`08 02`, resumed by the same `07` that starts the belt), so the button is gated on
+  `capabilities.pause` and disappears again the moment a unit answers "op code not
+  supported" — see [Driver 2](protocols.md#driver-2--ftms-00001826). Faking it everywhere
+  else with a stop would put a Resume button in front of a belt that had ended its walk.
+  It never displaces Stop: it takes a third of the pinned bar to Stop's two thirds, and
+  `Esc` stays bound to Stop alone.
 - **Ambient mode.** Hold the hero number: full-screen giant readout holding a
   `navigator.wakeLock`, with Stop always visible. Wake Lock is supported in exactly the same
   browsers as Web Bluetooth, so it adds no new requirement. It is deliberately *not* a
@@ -52,6 +59,14 @@ the belt is started from its own remote or handrail.
 
 - Opens on the first frame with speed > 0; closes after 60 s of stillness, or on disconnect.
 - Anything under 30 s is discarded as noise.
+- **A pause holds the walk open for 15 minutes** instead of those 60 s, so a call or a coffee
+  leaves one session rather than two — or, when the tail falls under the 30 s floor, rather
+  than one and a discarded scrap. It banks no time: `activeMs` still only accrues while the
+  belt is moving. The hold is released by resuming, by *End walk*, or by the 15-minute cap,
+  which exists so a walk abandoned at lunch is filed as a lunchtime walk instead of absorbing
+  whatever happens at four o'clock. Only the connection layer releases it on movement,
+  because a belt coasting down from a pause and a belt somebody just set going again look
+  identical from the session tick — the difference is whether it has come to rest since.
 - Duration is **wall-clock time with the belt moving**, measured locally. It is
   protocol-independent and immune to the pad's counter resets.
 - An in-flight session is checkpointed every 5 s, so reloading mid-walk resumes rather than

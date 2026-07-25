@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { currentSession, todayTotals } from '../state/session.js';
-import { live } from '../state/telemetry.js';
-import { doStop } from '../state/connection.js';
+import { live, isMoving } from '../state/telemetry.js';
+import { doStop, doPause, doResume, canPause, paused } from '../state/connection.js';
 import { requestWakeLock, releaseWakeLock } from '../lib/wakelock.js';
 import { fmtDuration, fmtMph, fmt } from '../lib/format.js';
 
@@ -26,7 +26,9 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
   return (
     <div class="ambient">
       <div class="a-value tnum">{fmtDuration(secs)}</div>
-      <div class="a-unit">{session ? 'this session' : 'walked today'}</div>
+      <div class="a-unit">
+        {session ? (paused.value ? 'this session · paused' : 'this session') : 'walked today'}
+      </div>
 
       <div class="a-secondary tnum">
         <span>{fmtMph(live.value.speedKmh)} mph</span>
@@ -37,6 +39,20 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
         <button class="btn ghost" onClick={onExit}>
           Exit
         </button>
+        {/* Nothing here changes position when the belt does: Stop stays rightmost, and
+            Pause and Resume take the same single slot beside it. */}
+        {paused.value ? (
+          <button class="btn" onClick={() => void doResume()}>
+            Resume
+          </button>
+        ) : (
+          canPause.value &&
+          isMoving.value && (
+            <button class="btn" onClick={() => void doPause()}>
+              Pause
+            </button>
+          )
+        )}
         <button class="btn danger" onClick={() => void doStop()}>
           Stop
         </button>
