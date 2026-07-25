@@ -354,7 +354,10 @@ export function ftmsDriver() {
   let onData = null;
   let onCp = null;
   let onStatus = null;
-  let pending = null; // resolver for the current control-point request
+  // The control-point request in flight: { op, resolve }. FTMS echoes the opcode it is
+  // answering in byte 1 of every 0x80 indication, so an ack is only an ack for *this*
+  // request if that byte matches what was written.
+  let pending = null;
   let haveControl = false;
   // There is only one `pending` slot, so two control-point writes in flight at once would
   // hand the first one's ack to the second. Serialise write-and-wait as a unit.
@@ -449,14 +452,31 @@ export function ftmsDriver() {
       cpCh = await svc.getCharacteristic(UUID.ftmsControlPoint);
       onCp = (e) => {
         const v = e.target.value;
-        if (v.getUint8(0) !== 0x80) return;
+        if (v.byteLength < 3 || v.getUint8(0) !== 0x80) return;
         const req = v.getUint8(1);
         const res = v.getUint8(2);
-        self.onLog?.(
-          `cp ack op 0x${req.toString(16).padStart(2, '0')} → ${FTMS_RESULT[res] ?? res}`
-        );
-        pending?.({ ok: res === 0x01, result: res });
+        const op = `0x${req.toString(16).padStart(2, '0')}`;
+        self.onLog?.(`cp ack op ${op} → ${FTMS_RESULT[res] ?? res}`);
+
+        // An ack for an opcode we are not waiting on says nothing about the request that
+        // is in flight. Accepting it anyway let a device confirm a command it was never
+        // asked to run — a stop reported as acknowledged when the pad only ever
+        // acknowledged a speed change.
+        if (!pending) {
+          self.onLog?.(`unsolicited cp ack ${op} ignored`);
+          return;
+        }
+        if (req !== pending.op) {
+          self.onLog?.(
+            `cp ack ${op} does not answer the pending 0x${pending.op
+              .toString(16)
+              .padStart(2, '0')} — ignored`
+          );
+          return;
+        }
+        const { resolve } = pending;
         pending = null;
+        resolve({ ok: res === 0x01, result: res });
       };
       cpCh.addEventListener('characteristicvaluechanged', onCp);
       await cpCh.startNotifications();
@@ -489,10 +509,14 @@ export function ftmsDriver() {
     _cp(bytes, { timeout = 3000 } = {}) {
       return queue(async () => {
         self.onLog?.(`tx cp ${hex(new Uint8Array(bytes).buffer)}`);
+        const op = bytes[0];
         const ack = new Promise((resolve) => {
-          pending = resolve;
+          // Keyed by opcode: FTMS echoes the op it is answering, so an indication only
+          // settles this request when that byte matches what was written here.
+          const slot = { op, resolve };
+          pending = slot;
           setTimeout(() => {
-            if (pending === resolve) {
+            if (pending === slot) {
               pending = null;
               resolve({ ok: false, result: 'timeout' });
             }
@@ -834,7 +858,18 @@ export function ks1234Driver() {
       self.onLog?.('handshake complete');
     },
 
+    // _send returns quietly when the link is gone, which is right for the handshake —
+    // a teardown mid-handshake is not an error. It is wrong for a command: doStop()
+    // treats a resolved stop() as the belt having been told to stop, so a silent no-op
+    // reports a stop that was never sent. Commands say so instead.
+    _requireOpen() {
+      if (closed || !writeCh) throw new Error('not connected to the pad — command not sent');
+    },
+
+    // async, so a refusal arrives as a rejected promise like every other failure on this
+    // interface rather than as a synchronous throw past a caller's .catch().
     async start() {
+      self._requireOpen();
       // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
       // is accepted and ignored — the belt simply does not move. The connect handshake sets
       // ControlMode 1, which is why the first start of a session worked and no later one
@@ -842,8 +877,14 @@ export function ks1234Driver() {
       await self._send('props ControlMode 1');
       await self._send('props runState 1');
     },
-    stop: () => self._send('props runState 0'),
-    setSpeed: (kmh) => self._send(`props CurrentSpeed ${kmh.toFixed(1)}`),
+    async stop() {
+      self._requireOpen();
+      await self._send('props runState 0');
+    },
+    async setSpeed(kmh) {
+      self._requireOpen();
+      await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
+    },
     async pause() {
       // KS+Fit does have one for this family — its BLE layer carries setPause alongside
       // setStart/setStop, and it warns "speed adjustment is not supported when the device

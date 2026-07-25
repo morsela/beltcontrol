@@ -17,6 +17,7 @@ import {
   setMode,
   running,
   paused,
+  stopPending,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
@@ -130,7 +131,10 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         </p>
       )}
 
-      {running.value && !isMoving.value && (
+      {/* `running` also stays true through a stop the belt has not confirmed, and a
+          silent pad makes that look exactly like a start telemetry has not caught up
+          with — so name the command that is actually outstanding. */}
+      {running.value && !isMoving.value && !stopPending.value && (
         <p class="note" style="margin-bottom:var(--gap)">
           Start command sent — waiting for the belt to report movement.
         </p>

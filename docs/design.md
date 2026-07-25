@@ -125,6 +125,21 @@ moment Escape has somewhere better to be.
 - **Charts are single-hue and hand-rolled.** No chart library. The sequential ramp in
   `tokens.css` was solved numerically for monotone OKLab lightness, adjacent ΔL ≥ 0.06, and
   ≥ 2:1 contrast between the lightest data step and the card surface — in both themes.
+- **The icon is the belt, not a walker.** It was drawn at 16px first, because that is the
+  favicon and the tab strip, and only then checked at 512. Three filled shapes, no strokes,
+  nothing narrower than 24px in a 512px box. The walker it replaced was eight strokes, a 30px
+  head and a dashed centre line: at 16px the dashes vanished, the limbs merged and the deck
+  outline filled in solid. Redraw the SVGs rather than the PNGs — the PNGs are exports:
+
+  ```sh
+  CH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "$CH" --headless --disable-gpu --default-background-color=00000000 \
+    --screenshot=public/icon-512.png --window-size=512,512 "file://$PWD/public/icon.svg"
+  ```
+
+  Repeat at 192, and against `icon-maskable.svg` for `icon-maskable-512.png`. The maskable
+  twin scales the glyph to 75% so Android's mask — the centre circle of 80% diameter — only
+  ever cuts background.
 
 ## Sessions
 

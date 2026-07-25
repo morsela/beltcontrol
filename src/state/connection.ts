@@ -1,7 +1,7 @@
 import { signal, computed, effect } from '@preact/signals';
 import { detectDriver, UUID } from '../lib/drivers.js';
 import type { Driver } from '../lib/drivers.js';
-import { ingest, resetTelemetry, live, isMoving } from './telemetry.js';
+import { ingest, resetTelemetry, live, isMoving, confirmedStopped } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
 import { openDialogs } from './ui.js';
@@ -230,6 +230,7 @@ function stopPolling() {
 
 async function teardown() {
   stopPolling();
+  clearStopWatch();
   stopSessionTracking();
   closeSession('ended (disconnected)');
   try {
@@ -240,6 +241,7 @@ async function teardown() {
   driver.value = null;
   running.value = false;
   paused.value = false;
+  stopPending.value = false;
   resetTelemetry();
   if (phase.value !== 'error') phase.value = 'idle';
 }
@@ -292,6 +294,9 @@ async function begin(kind: 'start' | 'resume') {
   const mph = toMph(settings.value.targetKmh).toFixed(1);
 
   try {
+    // A start supersedes any stop or pause still waiting to be confirmed.
+    clearStopWatch();
+    stopPending.value = false;
     setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
     await d.start();
     running.value = true;
@@ -315,12 +320,94 @@ async function begin(kind: 'start' | 'resume') {
   }
 }
 
+/** How long to wait for the belt to report zero before saying it never confirmed.
+ *  A pad decelerating from walking speed reports zero within a second or two. */
+const STOP_CONFIRM_MS = 6_000;
+
+/**
+ * A stop has been written and the belt has not reported zero since.
+ *
+ * `running` stays true through an unconfirmed stop — the belt may still be moving —
+ * which on its own is indistinguishable from a start whose movement has not shown up
+ * in telemetry yet. `Now` tells the two apart with this, so a pending stop is never
+ * described as a pending start. Stays true past the confirmation deadline: the stop
+ * really is still outstanding.
+ */
+export const stopPending = signal(false);
+
+let stopWatch: number | null = null;
+
+function clearStopWatch() {
+  if (stopWatch != null) window.clearInterval(stopWatch);
+  stopWatch = null;
+}
+
+/**
+ * A resolved `stop()` or `pause()` means the command was written, not that the belt
+ * obeyed it. Only two of the four protocols can even acknowledge one — FTMS via its
+ * control point, and nothing else — so the belt's own telemetry is the only evidence
+ * that applies to every pad. Report the outcome when it reports zero, and say plainly
+ * when it never does, rather than asserting something the app has not observed.
+ *
+ * A pause is held to the same standard, and `paused` is set from here rather than from
+ * `doPause` for that reason: until the belt says zero, the app has a written command and
+ * nothing more. It also makes the flag mean something exact downstream — the belt has
+ * been seen at rest — so movement afterwards really is somebody starting it again, not
+ * the tail of the deceleration.
+ */
+function watchForStop(kind: 'stop' | 'pause' = 'stop') {
+  clearStopWatch();
+  stopPending.value = true;
+  const deadline = Date.now() + STOP_CONFIRM_MS;
+  const done = kind === 'pause' ? 'paused' : 'stopped';
+
+  const check = () => {
+    if (confirmedStopped.value) {
+      clearStopWatch();
+      running.value = false;
+      stopPending.value = false;
+      if (kind === 'pause') {
+        paused.value = true;
+        holdSession(true);
+      }
+      setStatus(done, 'ok');
+      log(`belt reports zero — ${done}`, 'ok');
+      return;
+    }
+    if (Date.now() >= deadline) {
+      clearStopWatch();
+      // Deliberately leaves `running` true: the belt has not said it stopped, so the
+      // UI should keep treating it as a belt that might be moving. For a pause that
+      // also means `paused` is never set — no Resume button in front of a moving belt.
+      const s = live.value.speedKmh;
+      const why =
+        s == null
+          ? 'it is not reporting speed at all'
+          : `it still reports ${toMph(s).toFixed(1)} mph`;
+      setStatus(
+        `${kind === 'pause' ? 'Pause' : 'Stop'} was sent but the belt has not confirmed — ` +
+          `${why}. Use the treadmill's own controls.`,
+        'err'
+      );
+      log(`${kind} unconfirmed after ${STOP_CONFIRM_MS / 1000}s — ${why}`, 'err');
+    }
+  };
+
+  check(); // a pad already reporting zero confirms immediately
+  if (stopWatch == null && !confirmedStopped.value) {
+    // Say what is being waited on. "stopping…" reads as an assertion about the belt;
+    // this reads as an assertion about the app, which is all that is known yet.
+    setStatus(`${kind} sent — waiting for the belt to report zero`);
+    stopWatch = window.setInterval(check, 250);
+  }
+}
+
 /**
  * Pause the belt, keeping the walk and the speed setpoint.
  *
- * The driver reports back what the unit actually did. A treadmill that cannot pause gets
- * stopped instead and loses the button for the rest of the connection — the one thing
- * this must never do is report a pause to a belt that is still moving.
+ * The driver reports what the unit actually did with the command; the watcher above
+ * reports what the belt actually did about it. A treadmill that cannot pause gets
+ * stopped instead and loses the button for the rest of the connection.
  */
 export async function doPause() {
   const d = driver.value;
@@ -328,23 +415,22 @@ export async function doPause() {
   try {
     setStatus('pausing…');
     const outcome = await d.pause();
-    running.value = false;
 
-    if (outcome === 'paused') {
-      settled = false; // the belt is still coasting down; see the effect below
-      paused.value = true;
-      holdSession(true);
-      setStatus('paused', 'ok');
-      log(`paused at ${toMph(settings.value.targetKmh).toFixed(1)} mph`, 'ok');
+    if (outcome === 'stopped') {
+      pauseAccepted.value = false;
+      paused.value = false;
+      holdSession(false);
+      log('unit rejected pause; stopped instead — hiding the button', 'err');
+      setStatus('this treadmill has no pause — belt stopped instead', 'err');
+      watchForStop('stop');
       return;
     }
 
-    pauseAccepted.value = false;
-    paused.value = false;
-    holdSession(false);
-    setStatus('this treadmill has no pause — belt stopped instead', 'err');
-    log('unit rejected pause; stopped instead — hiding the button', 'err');
+    log(`pause sent at ${toMph(settings.value.targetKmh).toFixed(1)} mph`, 'ok');
+    watchForStop('pause');
   } catch (e) {
+    clearStopWatch();
+    stopPending.value = false;
     fail(e);
   }
 }
@@ -355,12 +441,15 @@ export async function doStop() {
   try {
     setStatus('stopping…');
     await d.stop();
-    running.value = false;
+    // Stop ends the walk, so the pause hold goes with it — pausing and then stopping
+    // should let the session close on the ordinary idle rule, not sit open for 15 minutes.
     paused.value = false;
     holdSession(false);
-    setStatus('stopped', 'ok');
-    log('stopped', 'ok');
+    log('stop sent', 'ok');
+    watchForStop();
   } catch (e) {
+    clearStopWatch();
+    stopPending.value = false; // nothing went out, so nothing is outstanding
     fail(e);
   }
 }
@@ -372,20 +461,12 @@ export function endWalk() {
   closeSession('ended');
 }
 
-/** Has the belt actually come to rest since the pause was issued? */
-let settled = false;
-
 // The belt can also be restarted from its own remote or handrail, and then the app is not
-// paused whatever the button last said. But a belt does not stop dead when told to pause —
-// it coasts down over several seconds — so "still moving" during that ramp is not somebody
-// restarting it. Only movement *after* the belt has settled ends the pause.
+// paused whatever the button last said. This needs no grace period for the deceleration:
+// `paused` is only ever set once the belt has confirmed zero, so anything moving after
+// that is somebody starting it, not the tail of the ramp down.
 effect(() => {
-  if (!paused.value) return;
-  if (!isMoving.value) {
-    settled = true;
-    return;
-  }
-  if (settled) {
+  if (paused.value && isMoving.value) {
     paused.value = false;
     holdSession(false);
   }

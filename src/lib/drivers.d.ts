@@ -49,6 +49,9 @@ export interface Driver {
   onLog: ((msg: string) => void) | null;
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
+  /** Throws if the write channel is gone, so a command can never resolve without
+   *  having been sent. Present on the 0x1234 driver; harmless elsewhere. */
+  _requireOpen?(): void;
   detach(): Promise<void>;
   /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
   start(): Promise<void>;

@@ -74,8 +74,14 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
   function tick() {
     // Ramp toward the setpoint rather than snapping, so the "now" readout and the
     // ramping state in the speed control actually get exercised.
+    //
+    // Slowing is much quicker than speeding up, as it is on a real belt. That asymmetry
+    // matters now that a stop or a pause is only reported once the belt says zero: at the
+    // old symmetric 0.35 km/h per second, the brisk preset took fourteen seconds to coast
+    // down and the simulator failed a confirmation deadline real hardware passes easily.
     const delta = target - speed;
-    speed += Math.sign(delta) * Math.min(Math.abs(delta), 0.35);
+    const rate = delta > 0 ? 0.35 : 2;
+    speed += Math.sign(delta) * Math.min(Math.abs(delta), rate);
     if (Math.abs(target - speed) < 0.05) speed = target;
 
     if (speed > 0) {

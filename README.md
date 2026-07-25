@@ -110,6 +110,8 @@ The belt can start under software control with nobody on it. The app therefore:
 - limits each speed press to ≤0.5 km/h
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd> — Pause never takes its place,
   its key, or more than a third of the bar
+- reports a stop **or a pause** only once the belt itself reports zero, and says plainly when
+  it never does — a written command is not a stopped belt
 - pins Stop whenever the belt is moving — above the tab bar on mobile, at the top of the
   rail on desktop — and keeps it on screen in ambient mode and inside every dialog, so it
   can never be scrolled out of reach or covered
