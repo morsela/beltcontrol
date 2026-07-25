@@ -234,55 +234,69 @@ const FTMS_STATUS = {
 
 // Treadmill Data (0x2ACD): uint16 flags, then present fields in spec order. Layout varies per
 // device, so walk the flags with a cursor rather than using fixed offsets.
-export function parseTreadmillData(view) {
-  const flags = view.getUint16(0, true);
-  let o = 2;
-  const out = { raw: hex(view.buffer) };
-  const u8 = () => view.getUint8(o++);
-  const u16 = () => {
-    const v = view.getUint16(o, true);
-    o += 2;
-    return v;
-  };
-  const s16 = () => {
-    const v = view.getInt16(o, true);
-    o += 2;
-    return v;
-  };
-  const u24 = () => {
-    const v = view.getUint8(o) | (view.getUint8(o + 1) << 8) | (view.getUint8(o + 2) << 16);
-    o += 3;
-    return v;
-  };
-  const has = (bit) => (flags & (1 << bit)) !== 0;
+/** Thrown internally when the flags word promises a field the frame does not contain. */
+const TRUNCATED = Symbol('truncated frame');
 
-  // bit 0 is "More Data" — instantaneous speed is present when it is CLEAR.
-  if (!has(0)) out.speedKmh = u16() / 100;
-  if (has(1)) out.avgSpeedKmh = u16() / 100;
-  if (has(2)) out.distKm = u24() / 1000;
-  if (has(3)) {
-    out.inclinePct = s16() / 10;
-    out.rampAngleDeg = s16() / 10;
-  }
-  if (has(4)) {
-    out.elevGainUpM = u16() / 10;
-    out.elevGainDownM = u16() / 10;
-  }
-  if (has(5)) out.paceKmPerMin = u8() / 10;
-  if (has(6)) out.avgPaceKmPerMin = u8() / 10;
-  if (has(7)) {
-    out.kcal = u16();
-    out.kcalPerHour = u16();
-    out.kcalPerMin = u8();
-    if (out.kcal === 0xffff) out.kcal = null; // spec's "not available"
-  }
-  if (has(8)) out.heartRate = u8();
-  if (has(9)) out.mets = u8() / 10;
-  if (has(10)) out.secs = u16();
-  if (has(11)) out.remainingSecs = u16();
-  if (has(12)) {
-    out.forceOnBeltN = s16();
-    out.powerW = s16();
+export function parseTreadmillData(view) {
+  const out = { raw: hex(view.buffer) };
+  let o = 0;
+
+  // Every read is bounds checked. The flags word is the device's claim about what
+  // follows, and nothing guarantees the payload backs it up: a frame whose flags ask
+  // for more bytes than it carries used to throw a RangeError straight out of the
+  // notification handler, which dropped the frame *and* left `live` frozen at its last
+  // value — so the belt could be moving while the screen still read whatever it said
+  // before. A short frame is now reported as truncated, keeping whatever fields were
+  // fully present.
+  const need = (n) => {
+    if (o + n > view.byteLength) throw TRUNCATED;
+    const at = o;
+    o += n;
+    return at;
+  };
+  const u8 = () => view.getUint8(need(1));
+  const u16 = () => view.getUint16(need(2), true);
+  const s16 = () => view.getInt16(need(2), true);
+  const u24 = () => {
+    const p = need(3);
+    return view.getUint8(p) | (view.getUint8(p + 1) << 8) | (view.getUint8(p + 2) << 16);
+  };
+
+  try {
+    const flags = u16();
+    const has = (bit) => (flags & (1 << bit)) !== 0;
+
+    // bit 0 is "More Data" — instantaneous speed is present when it is CLEAR.
+    if (!has(0)) out.speedKmh = u16() / 100;
+    if (has(1)) out.avgSpeedKmh = u16() / 100;
+    if (has(2)) out.distKm = u24() / 1000;
+    if (has(3)) {
+      out.inclinePct = s16() / 10;
+      out.rampAngleDeg = s16() / 10;
+    }
+    if (has(4)) {
+      out.elevGainUpM = u16() / 10;
+      out.elevGainDownM = u16() / 10;
+    }
+    if (has(5)) out.paceKmPerMin = u8() / 10;
+    if (has(6)) out.avgPaceKmPerMin = u8() / 10;
+    if (has(7)) {
+      out.kcal = u16();
+      out.kcalPerHour = u16();
+      out.kcalPerMin = u8();
+      if (out.kcal === 0xffff) out.kcal = null; // spec's "not available"
+    }
+    if (has(8)) out.heartRate = u8();
+    if (has(9)) out.mets = u8() / 10;
+    if (has(10)) out.secs = u16();
+    if (has(11)) out.remainingSecs = u16();
+    if (has(12)) {
+      out.forceOnBeltN = s16();
+      out.powerW = s16();
+    }
+  } catch (e) {
+    if (e !== TRUNCATED) throw e;
+    out.truncated = true;
   }
   return out;
 }
@@ -334,7 +348,19 @@ export function ftmsDriver() {
 
       dataCh = await svc.getCharacteristic(UUID.ftmsTreadmillData);
       onData = (e) => {
-        const d = parseTreadmillData(e.target.value);
+        let d;
+        try {
+          d = parseTreadmillData(e.target.value);
+        } catch (err) {
+          // Nothing throws from parseTreadmillData any more, but an exception escaping
+          // a notification handler is the one failure mode that hides itself: the UI
+          // simply stops updating, with a stale speed still on screen. Keep it visible.
+          self.onLog?.(`unparseable treadmill frame dropped: ${err?.message ?? err}`);
+          return;
+        }
+        if (d.truncated) {
+          self.onLog?.(`truncated treadmill frame (flags promised more than ${d.raw})`);
+        }
         self.onData?.({
           speedKmh: d.speedKmh ?? null,
           distKm: d.distKm ?? null,
