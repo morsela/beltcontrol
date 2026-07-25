@@ -1,0 +1,62 @@
+<!doctype html>
+<!--
+  Source for public/og.png — the 1200x630 image every link preview (Slack, Discord, X,
+  iMessage, Google's social card) renders instead of the app itself, which is a black
+  screen until a treadmill is in radio range.
+
+  Regenerate after changing the mark or the tagline:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless --disable-gpu --hide-scrollbars --virtual-time-budget=2000 \
+      --screenshot=public/og.png --window-size=1200,630 \
+      "file://$PWD/tools/og-image.html"
+
+  Type is set in the same system stack as the app, so it matches whatever the platform
+  renders. Everything is inline: no fonts or images to fetch.
+-->
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1200px; height: 630px;
+    background: #0b0e11;
+    color: #e8ecf1;
+    font: 16px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 64px 72px 60px; box-sizing: border-box;
+    /* A single soft accent wash, so the card is not a flat black rectangle in a feed. */
+    background-image: radial-gradient(900px 520px at 88% 8%, rgba(61, 220, 145, 0.2), transparent 62%);
+  }
+  .top { display: flex; align-items: center; gap: 24px; }
+  .top svg { width: 88px; height: 88px; display: block; }
+  .wordmark { font-size: 34px; font-weight: 600; letter-spacing: -0.01em; }
+  h1 { font-size: 76px; line-height: 1.05; margin: 0 0 24px; letter-spacing: -0.03em; font-weight: 700; }
+  h1 em { font-style: normal; color: #3ddc91; }
+  p { font-size: 30px; line-height: 1.4; margin: 0; color: #8e99a8; max-width: 34ch; }
+  .foot { display: flex; align-items: center; gap: 20px; font-size: 24px; color: #626d7c; }
+  .foot .dot { width: 6px; height: 6px; border-radius: 50%; background: #3ddc91; }
+  .foot .url { color: #e8ecf1; font-weight: 600; }
+</style>
+<div class="top">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+    <rect width="512" height="512" rx="112" fill="#101418"/>
+    <rect x="60" y="192" width="392" height="128" rx="64" fill="#3ddc91"/>
+    <g fill="#101418">
+      <rect x="126" y="244" width="68" height="24" rx="12"/>
+      <rect x="222" y="244" width="68" height="24" rx="12"/>
+      <rect x="318" y="244" width="68" height="24" rx="12"/>
+    </g>
+  </svg>
+  <span class="wordmark">Belt Control</span>
+</div>
+
+<div>
+  <h1>Your treadmill,<br><em>run from a browser tab.</em></h1>
+  <p>Start, stop and set speed on a KingSmith or WalkingPad over Web Bluetooth.</p>
+</div>
+
+<div class="foot">
+  <span class="url">beltcontrol.com</span>
+  <span class="dot"></span>
+  <span>No app, no account, history never leaves your device</span>
+</div>
