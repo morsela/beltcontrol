@@ -63,6 +63,49 @@ manifest, icons and service worker all load, the blob-URL downloads behind Expor
 Export backup still work, and inline script, cross-origin script, styles, images, `fetch` and
 frames are all refused.
 
+## Dependencies and install scripts
+
+The build output drives a motor, so an install script from a compromised package is the
+highest-leverage way in — it runs with your shell's privileges, before any code review of
+the thing it produced.
+
+npm 11 gates this on the `allowScripts` field in `package.json`, and denies by default:
+a package with install scripts that is not listed there does not get to run them, and
+`npm ci` warns until the decision is recorded either way. Both entries are deliberate:
+
+| Entry | Decision |
+|---|---|
+| `esbuild@0.21.5: true` | Needed. esbuild's postinstall puts the platform binary in place, and without it there is no bundler. Pinned to the exact version, so a bump has to be re-approved rather than inheriting the allowance. |
+| `fsevents: false` | Denied, and nothing is lost. fsevents is chokidar's optional macOS watcher and ships `fsevents.node` prebuilt in the tarball; its `package.json` has no `install` or `postinstall` hook at all, only `build`/`clean`/`test`. npm flags it conservatively; denying it changes nothing and silences the warning. |
+
+Check the state of this with:
+
+```sh
+npm approve-scripts --allow-scripts-pending   # should report nothing unreviewed
+```
+
+**This protection depends on the npm doing the installing.** Older npm has no
+`allowScripts` and will run every install script it finds, so the field is inert there
+rather than enforcing. Worth confirming the npm version in any CI or hosting build that
+installs these dependencies.
+
+### The audit findings are dev-only
+
+`npm audit` reports advisories against vitest, vite and esbuild. All three are
+devDependencies, and the production tree is clean:
+
+```sh
+npm audit --omit=dev    # 0 vulnerabilities
+```
+
+The two that matter are reachable only by someone who can already talk to your dev
+server — vitest's UI server (GHSA-5xrq-8626-4rwp) and esbuild's dev server accepting
+cross-origin requests (GHSA-67mh-4wv8-2f99). Both are contained by the dev and preview
+servers binding `127.0.0.1` rather than `0.0.0.0`, which is why `vite.config.ts` and
+`serve.sh` both set the host explicitly. Clearing them outright means vite 8, a major
+upgrade with its own migration — a deliberate decision rather than a security fix, and
+not one to fold into a patch.
+
 ## The domain
 
 Production is **`beltcontrol.com`**, registered at Cloudflare. Two things about that are load

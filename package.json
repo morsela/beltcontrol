@@ -24,6 +24,7 @@
     "vitest": "^2.1.9"
   },
   "allowScripts": {
-    "esbuild@0.21.5": true
+    "esbuild@0.21.5": true,
+    "fsevents": false
   }
 }
