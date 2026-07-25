@@ -5,12 +5,10 @@
   "rewrites": [{ "source": "/((?!assets/|.*\\.).*)", "destination": "/index.html" }],
   "headers": [
     {
-      "comment": "Vite fingerprints these, so the same name always means the same bytes.",
       "source": "/assets/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "comment": "The shell, the worker and the manifest must never go stale.",
       "source": "/(index.html|sw.js|manifest.json)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },

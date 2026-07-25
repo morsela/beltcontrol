@@ -178,6 +178,17 @@ npm run build           # tsc --noEmit && vite build  → dist/
 npx vercel --prod
 ```
 
+`vercel.json` carries the whole hosting config. Its rules, since JSON has nowhere to say so:
+
+- `/assets/*` is immutable for a year — Vite fingerprints those filenames, so the same name
+  always means the same bytes.
+- `index.html`, `sw.js` and `manifest.json` are `must-revalidate`. The shell, the worker and
+  the manifest must never go stale, or a released fix sits behind a cached shell.
+- `Permissions-Policy: bluetooth=(self)` keeps the radio available to this origin and nothing
+  it embeds.
+
+(Vercel's schema rejects unknown keys, so no `comment` fields — the file must stay plain.)
+
 Vercel serves HTTPS, which is the other context Web Bluetooth accepts. Worth knowing: a Vercel
 deployment URL is public by default. Nothing sensitive is exposed — the page is inert without
 a treadmill in radio range — but you can turn on Deployment Protection on the project if
