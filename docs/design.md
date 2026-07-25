@@ -169,6 +169,10 @@ moment Escape has somewhere better to be.
   twin scales the glyph to 75% so Android's mask — the centre circle of 80% diameter — only
   ever cuts background.
 
+  The three screenshots in the README are exports too, and a longer story: they need a
+  month of walking history behind them and a belt actually moving in front of them.
+  `tools/screenshots.sh` stages both — see [Screenshots](screenshots.md).
+
 ## Sessions
 
 Sessions are detected from telemetry, not from the Start button, so a walk still records when
