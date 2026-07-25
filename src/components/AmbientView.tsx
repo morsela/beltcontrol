@@ -5,7 +5,7 @@ import { doStop, doPause, doResume, canPause, paused } from '../state/connection
 import { settings } from '../state/settings.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { requestWakeLock, releaseWakeLock } from '../lib/wakelock.js';
-import { fmtDuration, fmtMph, fmt, toMph } from '../lib/format.js';
+import { fmtDuration, fmtMph, fmtMiles, toMph } from '../lib/format.js';
 
 /**
  * What you leave on the tablet propped on the treadmill for three hours.
@@ -38,7 +38,7 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
 
       <div class="a-secondary tnum">
         <span>{fmtMph(live.value.speedKmh)} mph</span>
-        {session && session.trust.distKm === 'ok' && <span>{fmt(session.distKm, 2)} km</span>}
+        {session && session.trust.distKm === 'ok' && <span>{fmtMiles(session.distKm)} mi</span>}
       </div>
 
       <div class="a-actions">

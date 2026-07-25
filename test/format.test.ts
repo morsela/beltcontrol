@@ -10,6 +10,8 @@ import {
   fmt,
   fmtInt,
   fmtMph,
+  fmtMiles,
+  toMiles,
   dayKey,
   startOfDay,
   fmtDayLabel,
@@ -25,6 +27,8 @@ describe('units', () => {
   it('converts using the exact statute mile', () => {
     expect(toMph(KM_PER_MILE)).toBeCloseTo(1, 10);
     expect(toKmh(3)).toBeCloseTo(4.828032, 6);
+    expect(toMiles(KM_PER_MILE)).toBeCloseTo(1, 10);
+    expect(toMiles(5)).toBeCloseTo(3.106856, 6);
   });
 
   it('keeps one press inside the 0.5 km/h safety limit', () => {
@@ -85,6 +89,18 @@ describe('numeric formatters', () => {
     expect(fmtMph(4.828032)).toBe('3.0');
     expect(fmtMph(0)).toBe('0.0');
     expect(fmtMph(null)).toBe(EM_DASH);
+  });
+
+  it('fmtMiles converts distance the same way speed is converted', () => {
+    // State stays metric like the wire; miles happen only at the screen.
+    expect(fmtMiles(KM_PER_MILE)).toBe('1.00');
+    expect(fmtMiles(6.3421)).toBe('3.94');
+    expect(fmtMiles(0)).toBe('0.00');
+    expect(fmtMiles(null)).toBe(EM_DASH);
+  });
+
+  it('fmtMiles honours a coarser precision for long totals', () => {
+    expect(fmtMiles(48.28032, 1)).toBe('30.0');
   });
 });
 

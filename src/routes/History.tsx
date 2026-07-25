@@ -5,7 +5,7 @@ import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
 import { Heatmap } from '../charts/Heatmap.js';
 import { isDesktop } from '../lib/viewport.js';
-import { fmtDuration, fmt, fmtDayLabel, EM_DASH } from '../lib/format.js';
+import { fmtDuration, fmtMiles, fmtDayLabel, EM_DASH } from '../lib/format.js';
 import { download, stamped } from '../lib/download.js';
 import { log } from '../state/log.js';
 
@@ -119,8 +119,8 @@ export function History() {
             <span class="k">total</span>
           </div>
           <div class="stat">
-            <span class="v tnum">{totalKm > 0 ? fmt(totalKm, 1) : EM_DASH}</span>
-            <span class="k">km</span>
+            <span class="v tnum">{totalKm > 0 ? fmtMiles(totalKm, 1) : EM_DASH}</span>
+            <span class="k">mi</span>
           </div>
           <div class="stat">
             <span class="v tnum">{active}</span>
@@ -151,7 +151,7 @@ export function History() {
                 <tr>
                   <th>Day</th>
                   <th>Minutes</th>
-                  <th>km</th>
+                  <th>mi</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,7 +159,7 @@ export function History() {
                   <tr key={d.key}>
                     <td>{fmtDayLabel(d.date)}</td>
                     <td class="tnum">{Math.round(d.minutes)}</td>
-                    <td class="tnum">{d.distKm > 0 ? fmt(d.distKm, 2) : EM_DASH}</td>
+                    <td class="tnum">{d.distKm > 0 ? fmtMiles(d.distKm) : EM_DASH}</td>
                   </tr>
                 ))}
               </tbody>
@@ -183,7 +183,7 @@ export function History() {
           Some sessions are excluded from the distance totals above. The KingSmith
           0x1234 protocol reports distance and calories on a scale this project never
           established, so those values are kept raw on the session and left out of every
-          aggregate rather than presented as kilometres.
+          aggregate rather than presented as a distance in miles.
         </p>
       )}
 
