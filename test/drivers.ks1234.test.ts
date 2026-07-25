@@ -89,6 +89,42 @@ describe('ks1234Driver', () => {
     expect(sent.filter((l) => l.startsWith('servers getProp'))).toHaveLength(2);
   });
 
+  // The bug this guards: stopping hands control back to the pad's own panel, and in panel
+  // mode `runState 1` is accepted and ignored, so only the first start of a session worked.
+  it('re-takes control on every start, not just the one after the handshake', async () => {
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    write.writes.length = 0;
+
+    await d.start();
+    await d.stop();
+    await d.start();
+
+    expect(lines(write)).toEqual([
+      'props ControlMode 1',
+      'props runState 1',
+      'props runState 0',
+      'props ControlMode 1',
+      'props runState 1',
+    ]);
+  });
+
+  it('never interleaves the fragments of two messages', async () => {
+    // The pad reassembles one stream and splits it on CR, so a message written into the
+    // middle of another one's fragments decodes to garbage and is silently dropped.
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    write.writes.length = 0;
+
+    await Promise.all([d.start(), d.setSpeed(3.2), d.stop()]);
+
+    expect(lines(write).sort()).toEqual(
+      ['props ControlMode 1', 'props CurrentSpeed 3.2', 'props runState 0', 'props runState 1'].sort()
+    );
+  });
+
   it('sends speed with one decimal', async () => {
     const { server, write } = padServer();
     const d = ks1234Driver();

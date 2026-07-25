@@ -31,20 +31,35 @@ export class FakeCharacteristic {
     this.onWrite = opts.onWrite;
   }
 
-  private record(data: Uint8Array) {
-    const copy = new Uint8Array(data);
-    this.writes.push(copy);
-    this.onWrite?.(copy, this);
+  /**
+   * Chrome runs one GATT operation at a time and rejects anything that starts while
+   * another is in flight. Modelling that is the point of the yield below: a write that
+   * completed synchronously could never overlap, so a driver that fires two at once
+   * would look fine here and fail on real hardware.
+   */
+  private async record(data: Uint8Array) {
+    if (this.busy) throw new Error('GATT operation already in progress');
+    this.busy = true;
+    try {
+      await Promise.resolve();
+      const copy = new Uint8Array(data);
+      this.writes.push(copy);
+      this.onWrite?.(copy, this);
+    } finally {
+      this.busy = false;
+    }
   }
+
+  private busy = false;
 
   async writeValueWithoutResponse(data: Uint8Array) {
     if (!this.properties.writeWithoutResponse) throw new Error('not supported');
-    this.record(data);
+    await this.record(data);
   }
 
   async writeValue(data: Uint8Array) {
     if (!this.properties.write) throw new Error('not writable');
-    this.record(data);
+    await this.record(data);
   }
 
   async readValue(): Promise<DataView> {

@@ -80,9 +80,14 @@ F7 A2 <cmd> <param> <crc> FD        crc = (0xA2 + cmd + param) & 0xFF
 | Set mode | `F7 A2 02 <0 auto / 1 manual / 2 standby> <crc> FD` |
 | Start belt | `F7 A2 04 01 A7 FD` |
 
-Start is mode-then-start: `setMode(manual)` → `start` → `setSpeed(n)`.
+Start is wake-mode-then-start: `askStats` → `setMode(manual)` → `start` → `setSpeed(n)`.
 Stop is `setSpeed(0)` → `setMode(standby)`. Commands sent back-to-back get dropped, so the
-driver spaces them ~120 ms apart.
+driver spaces them ~120 ms apart, and it waits ~400 ms after the mode byte before starting the
+belt.
+
+The leading `askStats` is not decoration. Standby parks the same app-control path that
+`attach()` has to wake before anything works, so a start sent straight after a stop arrives at
+a pad that is not listening — which is why only the first start of a session used to land.
 
 Notifications arrive on `fe01`. Integers are **big-endian**.
 
@@ -127,7 +132,10 @@ engineered. Control Point `2ad9` (write + indicate), **little-endian**:
 Acknowledgements arrive as indications `80 <reqOpCode> <result>`, where `result == 0x01` is
 success. Every command is gated on its ack and failures surface in the UI — the app itself
 ships a `ftms_control_fail_tips` string, so rejection is expected in practice. Most units drop
-control permission on stop, so the driver re-requests it.
+control permission on stop, so the driver re-requests it — including when the stop itself was
+rejected, since a unit that refused to stop has certainly not handed control back. A unit that
+never fully left the previous session then refuses `07` outright; the driver answers `04`
+*operation failed* and `05` *control not permitted* with a `01` reset and one retry.
 
 **Treadmill Data (`2acd`)** is a `uint16` flag field followed by only the present fields, in
 spec order. Layout varies per device, so `parseTreadmillData()` walks the flags with a cursor
@@ -204,9 +212,13 @@ what makes the protocol undiscoverable by passive listening. Same order as the o
 
 | Action | Message |
 |---|---|
-| Start | `props runState 1` |
+| Start | `props ControlMode 1` → `props runState 1` |
 | Stop | `props runState 0` |
 | Set speed | `props CurrentSpeed 1.1` (km/h, one decimal) |
+
+Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
+and ignored — the belt simply does not move, with no error anywhere. `ControlMode 1` therefore
+has to be re-asserted on every start, not just once during the handshake.
 
 **Telemetry** arrives on `fed8` as `props` lines, often **partial** — `props RunningSteps 3` on
 its own is normal, so merge updates rather than replacing state:

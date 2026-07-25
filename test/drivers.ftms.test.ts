@@ -127,6 +127,54 @@ describe('ftmsDriver', () => {
     expect(cp.hexWrites()).toEqual(['00', '08 01', '00', '02 c8 00']);
   });
 
+  // The bug this guards: a unit still holding the previous session refuses Start outright,
+  // so the second start of a sitting failed where the first succeeded.
+  it('resets and retakes control when a start is refused', async () => {
+    let refuseStart = true;
+    const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+      onWrite: (b, ch) => {
+        const op = b[0]!;
+        const refused = op === 0x07 && refuseStart;
+        if (op === 0x01) refuseStart = false; // reset clears whatever was blocking it
+        queueMicrotask(() => ch.emit([0x80, op, refused ? 0x04 : 0x01]));
+      },
+    });
+    const server = new FakeServer().addService(UUID.ftmsService, [
+      new FakeCharacteristic(UUID.ftmsTreadmillData),
+      cp,
+    ]);
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    cp.writes.length = 0;
+
+    await d.start();
+
+    expect(cp.hexWrites()).toEqual(['07', '01', '00', '07']); // start, reset, take control, start
+  });
+
+  it('re-requests control after a stop the unit rejected', async () => {
+    // A failed stop used to leave `haveControl` stale, so the next start skipped Request
+    // Control and was silently refused.
+    const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+      onWrite: (b, ch) => {
+        const ok = b[0] !== 0x08;
+        queueMicrotask(() => ch.emit([0x80, b[0]!, ok ? 0x01 : 0x04]));
+      },
+    });
+    const server = new FakeServer().addService(UUID.ftmsService, [
+      new FakeCharacteristic(UUID.ftmsTreadmillData),
+      cp,
+    ]);
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    cp.writes.length = 0;
+
+    await expect(d.stop()).rejects.toThrow(/operation failed/);
+    await d.start();
+
+    expect(cp.hexWrites()).toEqual(['08 01', '00', '07']);
+  });
+
   it('surfaces a rejected command instead of failing silently', async () => {
     const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
       onWrite: (b, ch) => queueMicrotask(() => ch.emit([0x80, b[0]!, 0x05])), // control not permitted
