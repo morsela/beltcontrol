@@ -232,9 +232,13 @@ describe('ftmsDriver', () => {
     // only thing that can end this stop, and waiting it out for real is dead time.
     vi.useFakeTimers();
     try {
-      const stopping = d.stop();
+      // Assert first, advance second. The other way round the rejection lands while
+      // nothing is listening for it, which Node reports as an unhandled rejection and
+      // vitest counts as an unhandled error — it fails the run, and warns that it can
+      // make other tests pass for the wrong reason.
+      const stopping = expect(d.stop()).rejects.toThrow(/timeout/);
       await vi.advanceTimersByTimeAsync(3_000);
-      await expect(stopping).rejects.toThrow(/timeout/);
+      await stopping;
     } finally {
       vi.useRealTimers();
     }
