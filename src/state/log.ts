@@ -12,9 +12,14 @@ const MAX_LINES = 400;
 
 export const logLines = signal<LogLine[]>([]);
 
-/** Status text under the connection chip. Rendered into an aria-live region. */
+/**
+ * Latest thing worth saying about the connection. Carried by the status chip,
+ * which shows it only when it is an error — the chip already names every normal
+ * state in its own words, so a standing line repeating "ready" or "connected"
+ * beside it was noise. Empty until something happens.
+ */
 export const status = signal<{ text: string; kind: LogKind }>({
-  text: 'ready',
+  text: '',
   kind: '',
 });
 

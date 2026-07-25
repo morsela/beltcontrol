@@ -120,8 +120,16 @@ export async function connect({ filtered }: { filtered: boolean }) {
   } catch (e) {
     const err = e as DOMException;
     phase.value = 'idle';
-    setStatus(err?.name === 'NotFoundError' ? 'no device selected' : err.message, 'err');
-    log(err?.name === 'NotFoundError' ? 'device chooser cancelled or nothing matched' : err.message);
+    // Backing out of the chooser is not a failure — the chip returns to "Not
+    // connected" beside a Connect button, which says everything there is to say.
+    // Only a real chooser fault is worth putting on screen.
+    if (err?.name === 'NotFoundError') {
+      setStatus('');
+      log('device chooser cancelled or nothing matched');
+    } else {
+      setStatus(err.message, 'err');
+      log(err.message);
+    }
     return;
   }
 

@@ -90,6 +90,9 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.25rem 0 0.75rem;
+  /* An error grows the chip past a single line; Ambient drops below rather than
+     being squeezed off the edge. */
+  flex-wrap: wrap;
 }
 .topbar-btn { min-height: 40px; padding: 0.3rem 0.7rem; font-size: var(--t-sm); flex: none; }
 
@@ -112,6 +115,22 @@
   white-space: nowrap;
   color: var(--muted);
 }
+/* Carrying a failure, the chip stops being a pill of two words. It takes the width
+   it needs and wraps: a safety message ("the belt has not confirmed — use the
+   treadmill's own controls") must never be ellipsed away. */
+.chip-err {
+  max-width: 100%;
+  flex: 1 1 100%;
+  align-items: flex-start;
+  text-align: left;
+  border-radius: var(--radius);
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, var(--panel));
+  color: var(--bad);
+  padding: 0.5rem 0.75rem;
+  line-height: 1.35;
+}
+.chip-err .dot { margin-top: 0.35em; }
 /* The dot is never the only carrier of state — .chip always renders a label too. */
 .dot {
   width: 9px;
