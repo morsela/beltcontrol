@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useErrorBoundary, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { Analytics } from '@vercel/analytics/react';
 import { Now } from './routes/Now.js';
@@ -8,6 +8,7 @@ import { TabBar } from './components/TabBar.js';
 import { StopBar } from './components/StopBar.js';
 import { AmbientView } from './components/AmbientView.js';
 import { DesktopOnlyNotice } from './components/DesktopOnlyNotice.js';
+import { Recovery } from './components/Recovery.js';
 import { Disclaimer } from './components/Disclaimer.js';
 import { isMoving } from './state/telemetry.js';
 import { connected, running } from './state/connection.js';
@@ -32,9 +33,14 @@ window.addEventListener('hashchange', () => {
 
 export function App() {
   const [ambient, setAmbient] = useState(false);
+  // Stored history is read on every render path, so a throw over bad data repeats on
+  // every load. Without a boundary that is a permanently blank page and no way back.
+  const [error, resetError] = useErrorBoundary();
   const contentRef = useRef<HTMLDivElement>(null);
   const r = route.value;
   const desktop = isDesktop.value;
+
+  if (error) return <Recovery error={error} onRetry={resetError} />;
 
   // Ambient mode is only meaningful while something is actually connected.
   useEffect(() => {

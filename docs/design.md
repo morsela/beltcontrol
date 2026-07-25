@@ -11,6 +11,34 @@ session logic — most of what looks arbitrary here is load-bearing.
 - [Counter resets](#counter-resets)
 - [Field trust](#field-trust)
 
+## Reading storage back
+
+`localStorage` is untrusted input. Not because an attacker is assumed — same-origin
+storage is reachable only by this app — but because *this app* wrote it, across
+versions, possibly interrupted by a full disk or a crash mid-write.
+
+It used to be read back with a bare cast (`parsed as Session[]`), and one bad record was
+enough to take the app down on every load, permanently, with no way back in short of the
+devtools:
+
+| Stored record | What happened |
+|---|---|
+| missing `trust` | `TypeError` in the Today render path, which reads `s.trust.distKm` |
+| `distKm: "abc"` | every total `NaN`, for good |
+
+Both read paths — the session list and the in-flight session — now go through
+`sanitizeSession`, the same validator the backup import already used. A record that
+cannot be placed on the calendar at all (no usable `startedAt`) is dropped and logged;
+everything else is coerced into range. Under-trusting is the safe direction, so an
+unrecognised protocol yields an all-absent trust map, which keeps that session's numbers
+out of every aggregate rather than presenting raw counter values as kilometres.
+
+`App` also holds an error boundary. Validation closes the case that actually happened; the
+boundary closes the category, because any render that throws over stored data throws again
+on the next load. It offers a retry, a download of the raw stored strings — handed over
+without being parsed, so it works even when the data is what the app is choking on — and
+only then the option to clear.
+
 ## The three screens
 
 Three tiers, each answering one question:
@@ -96,6 +124,14 @@ moment Escape has somewhere better to be.
   everywhere. Dialogs cover it, so dialogs carry their own — see
   [Dialogs and the Escape key](#dialogs-and-the-escape-key). For the same reason
   Disconnect is not styled `danger`: red is reserved for Stop.
+- **Pause appears only where it is real.** FTMS is the one protocol with a resumable pause
+  (`08 02`, resumed by the same `07` that starts the belt), so the button is gated on
+  `capabilities.pause` and disappears again the moment a unit answers "op code not
+  supported" — see [Driver 2](protocols.md#driver-2--ftms-00001826). Faking it everywhere
+  else with a stop would put a Resume button in front of a belt that had ended its walk.
+  It never displaces Stop: it takes a third of the pinned bar to Stop's two thirds, and
+  `Esc` stays bound to Stop alone. Resuming gets the same confirmation dialog as starting,
+  in ambient mode too — a resume moves a belt exactly as much as a start does.
 - **Ambient mode is a button, not only a gesture.** Holding the hero number still works,
   but a long press is no gesture at all on a keyboard, and the hint that it exists is
   hidden on protocols with a single available metric. The `Ambient` button beside the
@@ -140,6 +176,14 @@ the belt is started from its own remote or handrail.
 
 - Opens on the first frame with speed > 0; closes after 60 s of stillness, or on disconnect.
 - Anything under 30 s is discarded as noise.
+- **A pause holds the walk open for 15 minutes** instead of those 60 s, so a call or a coffee
+  leaves one session rather than two — or, when the tail falls under the 30 s floor, rather
+  than one and a discarded scrap. It banks no time: `activeMs` still only accrues while the
+  belt is moving. The hold is released by resuming, by *End walk*, or by the 15-minute cap,
+  which exists so a walk abandoned at lunch is filed as a lunchtime walk instead of absorbing
+  whatever happens at four o'clock. Only the connection layer releases it on movement,
+  because a belt coasting down from a pause and a belt somebody just set going again look
+  identical from the session tick — the difference is whether it has come to rest since.
 - Duration is **wall-clock time with the belt moving**, measured locally. It is
   protocol-independent and immune to the pad's counter resets.
 - An in-flight session is checkpointed every 5 s, so reloading mid-walk resumes rather than

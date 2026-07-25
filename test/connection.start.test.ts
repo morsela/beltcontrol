@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { doStart, driver, running, startPending, stopPending } from '../src/state/connection.js';
+import {
+  doStart,
+  doResume,
+  driver,
+  paused,
+  running,
+  startPending,
+  stopPending,
+} from '../src/state/connection.js';
 import { ingest, live, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
 import type { Driver } from '../src/lib/drivers.js';
@@ -17,7 +25,14 @@ function fakePad(over: Partial<Driver> = {}): Driver {
   return {
     id: 'ks1234',
     name: 'fake',
-    capabilities: { speed: true, mode: false, incline: false, steps: true, needsPolling: false },
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: false,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.1,
@@ -27,6 +42,9 @@ function fakePad(over: Partial<Driver> = {}): Driver {
     detach: async () => {},
     start: async () => {},
     stop: async () => {},
+    pause: async () => {
+      throw new Error('this fake pad has no pause');
+    },
     setSpeed: async () => {},
     setMode: async () => {},
     poll: async () => {},
@@ -44,6 +62,7 @@ describe('doStart', () => {
     vi.useFakeTimers();
     resetTelemetry();
     running.value = false;
+    paused.value = false;
     startPending.value = false;
     stopPending.value = false;
   });
@@ -136,6 +155,41 @@ describe('doStart', () => {
     expect(running.value).toBe(true);
     expect(startPending.value).toBe(true);
     expect(status.value.kind).toBe('err');
+  });
+
+  // A resume drops `paused` on the way out, because a Resume button in front of a belt
+  // that was just told to go is wrong. If the belt then never goes, the walk is exactly
+  // where it was and the button has to come back with it — otherwise the pause is lost
+  // and the held-open session gets filed as over.
+  it('puts the belt back to paused when a resume never confirms', async () => {
+    driver.value = fakePad();
+    paused.value = true;
+
+    const p = doResume();
+    await settle();
+    await p;
+
+    expect(paused.value).toBe(false); // told to go; not paused any more as far as we know
+
+    await vi.advanceTimersByTimeAsync(10_500);
+
+    expect(paused.value).toBe(true);
+    expect(running.value).toBe(false);
+    expect(status.value.text).toMatch(/Resume was sent/);
+  });
+
+  it('leaves the belt paused when the resume write itself failed', async () => {
+    driver.value = fakePad({
+      start: async () => {
+        throw new Error('not connected to the pad — command not sent');
+      },
+    });
+    paused.value = true;
+
+    await doResume();
+
+    expect(paused.value).toBe(true);
+    expect(running.value).toBe(false);
   });
 
   it('leaves nothing outstanding when the start write itself failed', async () => {

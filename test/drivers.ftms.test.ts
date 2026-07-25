@@ -321,4 +321,72 @@ describe('ftmsDriver', () => {
     const d = ftmsDriver();
     await expect(d.setMode(1)).rejects.toThrow(/no mode switch/);
   });
+
+  // --- pause --------------------------------------------------------------
+
+  it('pauses with the pause parameter, not the stop one', async () => {
+    const { server, cp } = padServer();
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await expect(d.pause()).resolves.toBe('paused');
+    expect(cp.hexWrites()).toEqual(['00', '08 02']);
+  });
+
+  it('resumes with the same op code that starts the belt', async () => {
+    // 0x07 is "Start or Resume" — there is no separate resume command to get wrong.
+    const { server, cp } = padServer();
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await d.pause();
+    await d.start();
+    expect(cp.hexWrites()).toEqual(['00', '08 02', '00', '07']);
+  });
+
+  it('stops the belt when the unit rejects pause, and says so', async () => {
+    // The one thing this must never do is report a pause to a treadmill still running.
+    const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+      onWrite: (b, ch) =>
+        queueMicrotask(() => {
+          const rejectPause = b[0] === 0x08 && b[1] === 0x02;
+          ch.emit([0x80, b[0]!, rejectPause ? 0x02 : 0x01]); // 0x02 = op code not supported
+        }),
+    });
+    const server = new FakeServer().addService(UUID.ftmsService, [
+      new FakeCharacteristic(UUID.ftmsTreadmillData),
+      cp,
+    ]);
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    // No second Request Control: refusing an op code does not revoke it, so the fallback
+    // stop still holds the control it took for the pause.
+    await expect(d.pause()).resolves.toBe('stopped');
+    expect(cp.hexWrites()).toEqual(['00', '08 02', '08 01']);
+  });
+
+  it('rethrows a transient rejection rather than reading it as "no pause here"', async () => {
+    // 0x04 operation failed is a bad moment, not a verdict on the unit — swallowing it
+    // as unsupported would retire a working Pause button over one glitch.
+    const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+      onWrite: (b, ch) =>
+        queueMicrotask(() => ch.emit([0x80, b[0]!, b[0] === 0x08 ? 0x04 : 0x01])),
+    });
+    const server = new FakeServer().addService(UUID.ftmsService, [
+      new FakeCharacteristic(UUID.ftmsTreadmillData),
+      cp,
+    ]);
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    await expect(d.pause()).rejects.toThrow(/operation failed/);
+  });
+
+  it('takes control back before pausing, having given it up on the last stop', async () => {
+    const { server, cp } = padServer();
+    const d = ftmsDriver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await d.stop();
+    await d.pause();
+    expect(cp.hexWrites()).toEqual(['00', '08 01', '00', '08 02']);
+  });
 });

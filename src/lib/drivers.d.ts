@@ -26,6 +26,10 @@ export interface Capabilities {
   mode: boolean;
   incline: boolean;
   steps: boolean;
+  /** The protocol carries a real pause — a stop the belt can be resumed from, rather
+   *  than a full stop dressed up as one. FTMS only, so far. Whether the individual
+   *  unit honours it is a separate question, answered by `pause()`'s result. */
+  pause: boolean;
   /** Classic pads never push status; the caller must poll on a timer. */
   needsPolling: boolean;
 }
@@ -49,8 +53,18 @@ export interface Driver {
    *  having been sent. Present on the 0x1234 driver; harmless elsewhere. */
   _requireOpen?(): void;
   detach(): Promise<void>;
+  /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
   start(): Promise<void>;
   stop(): Promise<void>;
+  /**
+   * Pause the belt, resumable with `start()`.
+   *
+   * Resolves `'paused'` when the unit honoured it, or `'stopped'` when it did not
+   * support pause and the driver stopped the belt instead — never leave a treadmill
+   * running behind a button that claims it is paused. Rejects only on a real failure,
+   * and on protocols that have no pause command at all.
+   */
+  pause(): Promise<'paused' | 'stopped'>;
   setSpeed(kmh: number): Promise<void>;
   setMode(mode: number): Promise<void>;
   poll(): Promise<void>;

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, type Session } from '../src/state/session.js';
-import { trustFor } from '../src/state/telemetry.js';
+import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
+import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
 import type { DriverId } from '../src/lib/drivers.js';
 import { dayKey } from '../src/lib/format.js';
 
@@ -205,6 +205,86 @@ describe('sessionsOn', () => {
 
   it('is empty for a day with nothing on it', () => {
     expect(sessionsOn('2020-01-01')).toEqual([]);
+  });
+});
+
+describe('pausing a walk', () => {
+  const MINUTE = 60_000;
+  const belt = (kmh: number) => {
+    live.value = { ...live.value, speedKmh: kmh };
+  };
+  /** Walk long enough to clear the 30 s floor, so what follows is about the hold. */
+  const walkAWhile = () => {
+    belt(3);
+    vi.advanceTimersByTime(45_000);
+  };
+
+  beforeEach(() => {
+    setSessionMeta({ protocol: 'classic', protocolName: 'test', deviceName: 'test' });
+    startSessionTracking();
+  });
+
+  afterEach(() => {
+    stopSessionTracking();
+    holdSession(false);
+    live.value = { ...EMPTY };
+  });
+
+  it('closes an idle session when nothing is holding it', () => {
+    walkAWhile();
+    belt(0);
+    vi.advanceTimersByTime(61_000);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+  });
+
+  it('holds the walk open past the idle timeout while paused', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    expect(currentSession.value).not.toBeNull();
+    expect(sessions.value).toHaveLength(0);
+  });
+
+  it('keeps a pause and resume as one walk, not two', () => {
+    walkAWhile();
+    const id = currentSession.value!.id;
+
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    holdSession(false); // resuming releases the hold, as doResume does
+    belt(3);
+    vi.advanceTimersByTime(30_000);
+
+    expect(sessions.value).toHaveLength(0);
+    expect(currentSession.value!.id).toBe(id);
+    // Only moving time counts: 45 s before the pause, 30 s after, nothing in between,
+    // less the tick that opened the session and so had no interval to bank.
+    expect(currentSession.value!.activeMs).toBe(74_000);
+  });
+
+  it('files the walk once the hold lapses, rather than holding it forever', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(16 * MINUTE);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+    // The 15 idle minutes bank nothing — a held session is still a stopped belt.
+    expect(sessions.value[0]!.activeMs).toBe(44_000);
+  });
+
+  it('lets the idle rule take over again once the hold is released', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    holdSession(false);
+    vi.advanceTimersByTime(61_000);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
   });
 });
 

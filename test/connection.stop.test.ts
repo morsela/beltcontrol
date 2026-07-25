@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { doStop, driver, running, stopPending } from '../src/state/connection.js';
+import {
+  doStop,
+  doPause,
+  driver,
+  running,
+  stopPending,
+  paused,
+  canPause,
+  phase,
+} from '../src/state/connection.js';
 import { ingest, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
 import type { Driver } from '../src/lib/drivers.js';
@@ -9,11 +18,21 @@ import type { Driver } from '../src/lib/drivers.js';
  * going near navigator.bluetooth — these tests are about what the app *claims* after
  * writing a stop command, not about the transport.
  */
-function fakePad(stop: () => Promise<void>): Driver {
+function fakePad(
+  stop: () => Promise<void>,
+  opts: { pause?: Driver['pause']; hasPause?: boolean } = {}
+): Driver {
   return {
     id: 'ks1234',
     name: 'fake',
-    capabilities: { speed: true, mode: false, incline: false, steps: true, needsPolling: false },
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: true,
+      pause: opts.hasPause ?? false,
+      needsPolling: false,
+    },
     maxSpeedKmh: 6,
     minSpeedKmh: 0.5,
     speedStep: 0.1,
@@ -23,6 +42,11 @@ function fakePad(stop: () => Promise<void>): Driver {
     detach: async () => {},
     start: async () => {},
     stop,
+    pause:
+      opts.pause ??
+      (async () => {
+        throw new Error('this fake pad has no pause');
+      }),
     setSpeed: async () => {},
     setMode: async () => {},
     poll: async () => {},
@@ -151,5 +175,93 @@ describe('doStop', () => {
     ingest({ speedKmh: 0 });
     vi.advanceTimersByTime(1_000);
     expect(status.value.kind).toBe('err');
+  });
+});
+
+describe('doPause', () => {
+  const pausingPad = () => fakePad(async () => {}, { pause: async () => 'paused', hasPause: true });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetTelemetry();
+    running.value = true;
+    stopPending.value = false;
+    paused.value = false;
+    phase.value = 'connected'; // so `canPause` is answering about the pad, not the link
+  });
+
+  afterEach(() => {
+    driver.value = null;
+    paused.value = false;
+    phase.value = 'idle';
+    vi.useRealTimers();
+  });
+
+  it('does not claim a pause until the belt reports zero', async () => {
+    driver.value = pausingPad();
+    ingest({ speedKmh: 3.2 }); // still coasting down as the command goes out
+
+    await doPause();
+
+    expect(paused.value).toBe(false);
+    expect(running.value).toBe(true);
+    expect(status.value.text).toMatch(/waiting|pause sent/i);
+  });
+
+  it('reports paused once the belt reports zero', async () => {
+    driver.value = pausingPad();
+    ingest({ speedKmh: 3.2 });
+
+    await doPause();
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(300);
+
+    expect(status.value.text).toBe('paused');
+    expect(status.value.kind).toBe('ok');
+    expect(paused.value).toBe(true);
+    expect(running.value).toBe(false);
+  });
+
+  it('offers no Resume button when the belt never confirms the pause', async () => {
+    // The whole point: a Resume button in front of a belt that is still moving would be
+    // an invitation to step onto it.
+    driver.value = pausingPad();
+    ingest({ speedKmh: 3.2 });
+
+    await doPause();
+    vi.advanceTimersByTime(6_500);
+
+    expect(paused.value).toBe(false);
+    expect(running.value).toBe(true);
+    expect(status.value.kind).toBe('err');
+    expect(status.value.text).toMatch(/Pause was sent but the belt has not confirmed/);
+  });
+
+  it('stops the belt and retires the button when the unit has no pause', async () => {
+    driver.value = fakePad(async () => {}, { pause: async () => 'stopped', hasPause: true });
+    ingest({ speedKmh: 3.2 });
+
+    expect(canPause.value).toBe(true);
+    await doPause();
+
+    expect(canPause.value).toBe(false);
+    expect(paused.value).toBe(false);
+    // Still held to the same evidence: the fallback stop is confirmed, not assumed.
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(300);
+    expect(status.value.text).toBe('stopped');
+    expect(running.value).toBe(false);
+  });
+
+  it('drops the pause when the belt starts moving again by itself', async () => {
+    driver.value = pausingPad();
+    ingest({ speedKmh: 3.2 });
+    await doPause();
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(300);
+    expect(paused.value).toBe(true);
+
+    ingest({ speedKmh: 2.4 }); // somebody used the pad's own remote
+    expect(paused.value).toBe(false);
   });
 });
