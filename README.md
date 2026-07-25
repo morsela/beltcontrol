@@ -12,7 +12,8 @@ history of every walk — without the KS+Fit phone app.
 
 Everything runs in the browser. The BLE link is browser → treadmill over the local radio; the
 server only ships static files and never sees any telemetry. Session history lives in
-`localStorage` and is never uploaded.
+`localStorage` and is never uploaded — History exports it as a JSON backup you can import
+into another browser, or as a CSV for a spreadsheet.
 
 | Now | Today | History |
 |:---:|:---:|:---:|
@@ -128,7 +129,7 @@ src/app.tsx             shell, hash router, tab bar
 src/routes/             Now · Today · History
 src/components/         hero, speed control, tiles, stop bar, ambient mode, sheets
 src/charts/             hand-rolled inline SVG: column, area, heatmap
-src/state/              connection · telemetry · session · settings · log
+src/state/              connection · telemetry · session · settings · backup · log
 src/lib/drivers.js      the protocol drivers — plain JS, deliberately untouched
 src/lib/drivers.d.ts    hand-written types for the above
 src/lib/simulator.ts    fake pad for development (dropped from production builds)

@@ -21,6 +21,8 @@ protocol decoding and the arithmetic behind the totals.
 | `test/drivers.ftms.test.ts` | the `0x2ACD` flags walk, the inverted "More Data" bit, the `0xFFFF` energy sentinel, signed incline, control-point acks *and* rejections |
 | `test/drivers.ks1234.test.ts` | the permuted base64 codec, `props` parsing, 20-byte fragment reassembly in both directions, the connect handshake |
 | `test/session.test.ts` | counter-reset rebasing, per-protocol trust exclusions, day aggregates, streaks, CSV export |
+| `test/backup.test.ts` | the JSON backup round trip, import merging and idempotence, and what a hand-edited or foreign file is allowed to do to the stored history |
+| `test/download.test.ts` | export filenames stamped with the local day, not the UTC one |
 | `test/telemetry.test.ts` | merge-never-replace ingest, movement detection, the trust table |
 | `test/format.test.ts` | duration and unit formatting, local-midnight day keys, a DST boundary |
 | `test/metrics.test.ts` | which metrics each protocol may honestly display, and hero cycling |

@@ -513,6 +513,11 @@ a { color: var(--accent); }
 .session-item .when { font-size: var(--t-sm); color: var(--muted); }
 .session-item .dur { font-weight: 600; }
 
+/* Export/import row. Wraps to one button per line on a narrow phone rather than
+   squeezing three labels into a width that truncates them. */
+.data-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.data-actions .btn { flex: 1 1 8.5rem; }
+
 /* --- ambient mode --------------------------------------------------------- */
 
 .ambient {

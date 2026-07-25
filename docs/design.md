@@ -61,6 +61,32 @@ the belt is started from its own remote or handrail.
 History lives in `localStorage` and is never uploaded. Clearing site data clears it; export
 first if you care about it.
 
+## Export and import
+
+Two exports, because they answer different questions.
+
+- **`Export backup`** writes the complete record as JSON — every session, its speed samples,
+  its trust map, and your settings, under a `walkingpad.backup.v1` schema tag. It is the only
+  export that can be read back.
+- **`Export CSV`** flattens one row per session for a spreadsheet. It drops the samples and
+  nothing reads it back.
+
+`Import backup` **merges**: a session id already present wins over the incoming copy, so
+importing the same file twice is a no-op rather than a doubled history, and restoring onto a
+browser that already has walks in it does not throw them away. The walk still in progress is
+deliberately left out of an export — exporting a half-finished session would collide with
+itself once it closes and carries its real totals.
+
+Everything arriving from a file is untrusted: a backup can be hand-edited, truncated by a
+full disk, or written by an older build, and whatever it contains lands in `localStorage` and
+then in the charts. `src/state/backup.ts` therefore validates field by field and drops what it
+cannot vouch for. An entry with no usable start time has nowhere to go on the calendar and is
+skipped; a non-finite or negative number becomes zero rather than poisoning every total it
+touches; an unrecognised protocol falls back to an all-`absent` trust map, which keeps its
+numbers out of the aggregates. Under-trusting is the safe direction. A file that is not a
+backup at all is refused outright, leaving the stored history untouched, and the count of
+skipped rows is reported next to the button rather than swallowed.
+
 ## Counter resets
 
 The pads report cumulative-since-power-on counters that reset without warning. Differencing
