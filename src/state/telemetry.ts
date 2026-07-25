@@ -82,3 +82,14 @@ export const confirmedStopped = computed(() => {
   const s = live.value.speedKmh;
   return s != null && s <= MOVING_KMH;
 });
+
+/**
+ * Positive evidence that the belt is running.
+ *
+ * Speed alone is not enough: a pad spinning up reports `runState 1` with
+ * `CurrentSpeed 0.0` for a second or two before the belt has any speed to report, and
+ * treating that gap as a failed start would be wrong. Either signal counts.
+ */
+export const confirmedRunning = computed(
+  () => isMoving.value || live.value.state === 1
+);

@@ -15,6 +15,7 @@ import {
   setMode,
   running,
   stopPending,
+  startPending,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
@@ -25,6 +26,12 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
   const d = driver.value;
+
+  // `running` and not just telemetry: a start that has been written but not yet
+  // confirmed is outstanding, and a second one stacked on top of it is not what
+  // pressing the button again means. When the belt never confirms, `running` goes back
+  // to false and Start returns — which is the point of the whole change.
+  const canStart = !isMoving.value && !running.value;
 
   return (
     <>
@@ -52,9 +59,9 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
 
           {/* Only wrap in a card when there is something to put in it — with no
               Start button and no mode row, an empty panel is just noise. */}
-          {(!isMoving.value || d?.capabilities.mode) && (
+          {(canStart || d?.capabilities.mode) && (
             <div class="card">
-              {!isMoving.value && (
+              {canStart && (
                 <button class="btn primary block lg" onClick={() => setConfirmStart(true)}>
                   Start
                 </button>
@@ -111,7 +118,7 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
       {/* `running` also stays true through a stop the belt has not confirmed, and a
           silent pad makes that look exactly like a start telemetry has not caught up
           with — so name the command that is actually outstanding. */}
-      {running.value && !isMoving.value && !stopPending.value && (
+      {startPending.value && !stopPending.value && (
         <p class="note" style="margin-bottom:var(--gap)">
           Start command sent — waiting for the belt to report movement.
         </p>
