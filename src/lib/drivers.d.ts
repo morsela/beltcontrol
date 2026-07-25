@@ -111,5 +111,8 @@ export declare function hex(buf: ArrayBuffer | ArrayBufferView): string;
 export declare function ksEncode(text: string): string;
 export declare function ksDecode(cipher: string): string;
 
+/** Ceiling on the 0x1234 driver's line-reassembly buffer, in characters. */
+export declare const MAX_RX_CHARS: number;
+
 /** `null` when the line is not a `props` line at all. */
 export declare function parseProps(line: string): Record<string, string> | null;

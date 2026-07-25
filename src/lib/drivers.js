@@ -572,11 +572,18 @@ function parseProps(line) {
 
 const num = (v) => (v == null || v === '' ? null : Number(v));
 
+/** Ceiling on the line-reassembly buffer. Generous next to the few-hundred-character
+ *  props replies in the capture, and small enough that a pad which never terminates a
+ *  line cannot grow it without bound. */
+export const MAX_RX_CHARS = 4096;
+
 export function ks1234Driver() {
   let writeCh = null;
   let notifyCh = null;
   let onNotify = null;
   let rxBuf = '';
+  /** Set after an overflow: discard input until the next line terminator. */
+  let resync = false;
   let closed = false;
 
   const self = {
@@ -591,6 +598,7 @@ export function ks1234Driver() {
 
     async attach(server) {
       closed = false;
+      resync = false;
       const svc = await server.getPrimaryService(UUID.ks1234Service);
       writeCh = await svc.getCharacteristic(UUID.ks1234Write);
       notifyCh = await svc.getCharacteristic(UUID.ks1234Notify);
@@ -616,6 +624,7 @@ export function ks1234Driver() {
       }
       writeCh = notifyCh = onNotify = null;
       rxBuf = '';
+      resync = false;
     },
 
     // Encode, terminate with CR, and fragment to 20 bytes — the app's MTU payload size.
@@ -658,6 +667,35 @@ export function ks1234Driver() {
 
     _rx(view) {
       rxBuf += new TextDecoder().decode(view.buffer);
+
+      // Having overflowed, throw bytes away until a terminator arrives. Clearing the
+      // buffer alone is not enough: whatever junk followed would be glued to the front
+      // of the next real line and take that line down with it.
+      if (resync) {
+        const cr = rxBuf.indexOf('\r');
+        if (cr < 0) {
+          rxBuf = '';
+          return;
+        }
+        rxBuf = rxBuf.slice(cr + 1);
+        resync = false;
+        self.onLog?.('resynced on a line terminator');
+      }
+
+      // Notifications are reassembled into CR-terminated lines, so a pad that never
+      // sends a CR grows this buffer for as long as it keeps talking — ~1 kB/s from a
+      // unit notifying once a second, unbounded, in the tab that holds the Stop button.
+      // Nothing legitimate comes close: the longest line in the captured traffic is a
+      // props reply of a few hundred characters.
+      if (rxBuf.length > MAX_RX_CHARS) {
+        self.onLog?.(
+          `rx buffer overflow (${rxBuf.length} chars with no terminator) — discarding until the next line`
+        );
+        rxBuf = '';
+        resync = true;
+        return;
+      }
+
       let i;
       while ((i = rxBuf.indexOf('\r')) >= 0) {
         const chunk = rxBuf.slice(0, i);

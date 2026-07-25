@@ -171,6 +171,39 @@ describe('ks1234Driver', () => {
     expect(seen[1]!.stateLabel).toBe('stopped');
   });
 
+  it('discards the reassembly buffer rather than growing it without bound', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    logs.length = 0;
+
+    // A pad that never terminates a line. 20 bytes per notification is the MTU payload.
+    const junk = new Uint8Array(20).fill(0x41);
+    for (let i = 0; i < 400; i++) notify.emit(junk); // 8000 chars, twice the cap
+    expect(logs.join('\n')).toMatch(/rx buffer overflow/);
+
+    // The junk is discarded up to the next terminator, so the line that closes the
+    // garbage is lost — and the one after it is clean.
+    push(notify, 'props CurrentSpeed 9.9'); // consumed by the resync
+    expect(logs.join('\n')).toMatch(/resynced on a line terminator/);
+    push(notify, 'props CurrentSpeed 2.5');
+    expect(seen[seen.length - 1]!.speedKmh).toBe(2.5);
+  });
+
+  it('does not trip the cap on ordinary traffic', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    logs.length = 0;
+    for (let i = 0; i < 200; i++) push(notify, 'props CurrentSpeed 1.1 RunningSteps 42');
+    expect(logs.join('\n')).not.toMatch(/overflow/);
+  });
+
   it('logs an undecodable chunk instead of throwing', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();
