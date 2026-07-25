@@ -23,6 +23,7 @@ lives here instead.
 |---|---|
 | `/assets/*` → `max-age=31536000, immutable` | Vite fingerprints those filenames, so the same name always means the same bytes. |
 | `index.html`, `sw.js`, `manifest.json` → `max-age=0, must-revalidate` | The shell, the worker and the manifest must never go stale, or a released fix sits behind a cached shell. |
+| `sw.js` cache name is stamped at build time | `VERSION` in `sw.js` carries a hash of the emitted asset filenames, injected by the `stamp-service-worker` plugin in `vite.config.ts`. It was a hand-written constant that never moved, which left the worker's `activate` handler — delete every cache that is not `VERSION` — with nothing to delete on any deploy. |
 | `Content-Security-Policy` | The one header that is load bearing rather than ordinary hardening — see below. |
 | `X-Frame-Options: DENY` | Same intent as `frame-ancestors 'none'`, for browsers that predate it. |
 | `Permissions-Policy: bluetooth=(self)` | Keeps the radio available to this origin and nothing it embeds. |
