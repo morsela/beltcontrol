@@ -650,6 +650,29 @@ function parseProps(line) {
 
 const num = (v) => (v == null || v === '' ? null : Number(v));
 
+/**
+ * A stable, meaningless id for the `props user_id` slot in the handshake.
+ *
+ * Kept in localStorage so one browser looks like one client across sessions — some pads
+ * key their own session bookkeeping off it — while carrying no connection to any real
+ * KS+Fit account. Falls back to a per-connection value when storage is unavailable
+ * (private mode, quota); nothing depends on it persisting.
+ */
+const INSTALL_ID_KEY = 'wp.installId.v1';
+
+export function installId() {
+  const fresh = () => String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
+  try {
+    const saved = localStorage.getItem(INSTALL_ID_KEY);
+    if (saved && /^\d+$/.test(saved)) return saved;
+    const id = fresh();
+    localStorage.setItem(INSTALL_ID_KEY, id);
+    return id;
+  } catch {
+    return fresh();
+  }
+}
+
 export function ks1234Driver() {
   let writeCh = null;
   let notifyCh = null;
@@ -720,7 +743,13 @@ export function ks1234Driver() {
       await self._send('version');
       // Property id list the app asks for on connect — device config and limits.
       await self._send('servers getProp 1 3 7 8 9 16 17 18 19 21 22 23 24 13 15');
-      await self._send('props user_id 5980681');
+      // The pad accepts any integer here and the app never reads it back, so this is
+      // not an identity the protocol checks. The value in the original capture was the
+      // KS+Fit account id of whoever's phone was being recorded, and shipping someone
+      // else's account number to every pad this app touches is nobody's intent —
+      // least of all if a unit ever relays it to the vendor's cloud. Per-install and
+      // random instead, so it is stable for one browser and means nothing anywhere else.
+      await self._send(`props user_id ${installId()}`);
       await self._send('get_pk');
       // ControlMode 1 hands control to the app (2 = the pad's own panel).
       await self._send('props ControlMode 1');

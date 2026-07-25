@@ -1,15 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WalkingPad">
-  <!-- Maskable variant: full-bleed background and the glyph scaled to ~64% so it
-       survives any mask shape Android chooses to apply. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Belt Control">
+  <!-- Maskable variant: full-bleed background, glyph scaled to 75%. Android's safe zone is
+       the centre circle of 80% diameter (radius 205 about 256,256); at this scale the deck's
+       far corner sits 155 from centre, so every mask shape — circle, squircle, teardrop —
+       cuts background and nothing else. -->
   <rect width="512" height="512" fill="#101418"/>
-  <g transform="translate(256 256) scale(0.64) translate(-256 -256)">
-    <rect x="76" y="300" width="360" height="84" rx="42" fill="none" stroke="#3ddc91" stroke-width="22"/>
-    <line x1="150" y1="342" x2="362" y2="342" stroke="#3ddc91" stroke-width="14" stroke-linecap="round" stroke-dasharray="6 40"/>
-    <circle cx="286" cy="132" r="30" fill="#3ddc91"/>
-    <path d="M286 170 L286 246" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-    <path d="M286 246 L232 300" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-    <path d="M286 246 L336 296" stroke="#3ddc91" stroke-width="22" stroke-linecap="round"/>
-    <path d="M286 196 L226 176" stroke="#3ddc91" stroke-width="20" stroke-linecap="round"/>
-    <path d="M286 196 L344 222" stroke="#3ddc91" stroke-width="20" stroke-linecap="round"/>
+  <g transform="translate(256 256) scale(0.75) translate(-256 -256)">
+    <rect x="60" y="192" width="392" height="128" rx="64" fill="#3ddc91"/>
+    <g fill="#101418">
+      <rect x="126" y="244" width="68" height="24" rx="12"/>
+      <rect x="222" y="244" width="68" height="24" rx="12"/>
+      <rect x="318" y="244" width="68" height="24" rx="12"/>
+    </g>
   </g>
 </svg>

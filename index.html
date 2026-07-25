@@ -3,18 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Belt Control</title>
-<meta name="description" content="An independent web app for treadmills that speak the KingSmith / WalkingPad Bluetooth protocols. Not affiliated with Beijing KingSmith Technology Co., Ltd.">
+
+<title>Belt Control — WalkingPad &amp; KingSmith treadmill controller</title>
+<meta name="description" content="Independent web app that starts, stops and sets the speed of a KingSmith or WalkingPad treadmill from Chrome over Web Bluetooth — no phone app, no account.">
+<link rel="canonical" href="https://beltcontrol.com/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+
+<!-- Link previews. og:image is an absolute URL because Slack, Discord and X will not
+     resolve a relative one. Regenerate it with tools/og-image.html — see docs/deploying.md. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Belt Control">
+<meta property="og:url" content="https://beltcontrol.com/">
+<meta property="og:title" content="Belt Control — WalkingPad &amp; KingSmith treadmill controller">
+<meta property="og:description" content="Start, stop and set speed over Web Bluetooth, straight from the browser. Live telemetry and a private session history that never leaves your device.">
+<meta property="og:image" content="https://beltcontrol.com/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Belt Control: control a KingSmith or WalkingPad treadmill from your browser.">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Belt Control">
+<meta name="apple-mobile-web-app-title" content="Belt Control">
+
+<!-- Structured data. The app is free, browser-only and hardware-bound, so the parts that
+     matter to a search result are the price (nothing), the requirement (Web Bluetooth) and
+     the independence note — the same three things a visitor needs to know before clicking. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Belt Control",
+  "url": "https://beltcontrol.com/",
+  "applicationCategory": "HealthApplication",
+  "applicationSubCategory": "Treadmill control",
+  "operatingSystem": "Any (runs in the browser)",
+  "browserRequirements": "Requires Web Bluetooth: Chrome 56+, Edge, Opera or Samsung Internet. Firefox and Safari are not supported.",
+  "description": "An independent web app that connects to a treadmill speaking the KingSmith / WalkingPad Bluetooth protocols to start it, stop it, set speed, read live telemetry and keep a private history of every walk.",
+  "disambiguatingDescription": "Not affiliated with, endorsed by, or sponsored by Beijing KingSmith Technology Co., Ltd. WalkingPad and KingSmith are their trademarks, used here only to identify compatible treadmills.",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": [
+    "Start, stop and set treadmill speed over Web Bluetooth",
+    "Live speed, distance, steps and calorie telemetry",
+    "Automatic session detection and daily totals",
+    "30-day history, goal tracking and a consistency heatmap",
+    "JSON backup and CSV export, stored only in the browser"
+  ],
+  "softwareHelp": "https://github.com/morsela/walkingpad#readme",
+  "codeRepository": "https://github.com/morsela/walkingpad",
+  "author": { "@type": "Person", "name": "morsela" }
+}
+</script>
+
+<style>
+  /* Only ever rendered inside <noscript>, so it costs nothing in the normal path. */
+  .fallback { max-width: 34rem; margin: 3rem auto; padding: 0 1.25rem;
+    font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #101418; }
+  .fallback h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  .fallback .lede { color: #67707d; margin-top: 0; }
+  .fallback small { color: #67707d; }
+  @media (prefers-color-scheme: dark) { .fallback { color: #e8ecf1; } }
+</style>
 </head>
 <body>
 <div id="app"></div>
-<noscript>This app needs JavaScript and Web Bluetooth. Use Chrome, Edge, Opera or Samsung Internet.</noscript>
+<noscript>
+  <div class="fallback">
+    <h1>Belt Control</h1>
+    <p class="lede">A treadmill controller that runs in the browser.</p>
+    <p>
+      Belt Control talks directly to a treadmill speaking the KingSmith / WalkingPad Bluetooth
+      protocols — start, stop, set speed, watch live telemetry, and keep a private history of
+      every walk, without the manufacturer's phone app. The Bluetooth link is browser to
+      treadmill over the local radio; the server only ships static files and never sees any
+      telemetry.
+    </p>
+    <p><strong>It needs JavaScript and Web Bluetooth</strong>, which means:</p>
+    <ul>
+      <li>Chrome 56+, Edge, Opera or Samsung Internet — supported, desktop or Android.</li>
+      <li>Firefox and Safari, including Safari on iOS — not supported. Neither browser ever
+        implemented Web Bluetooth, so no iPhone or iPad can run this app.</li>
+    </ul>
+    <p><a href="https://github.com/morsela/walkingpad">Source, protocol notes and compatibility
+      table on GitHub</a>.</p>
+    <p><small>Belt Control is an independent project. It is not affiliated with, endorsed by,
+      or sponsored by Beijing KingSmith Technology Co., Ltd. WalkingPad® and KingSmith® are
+      trademarks of that company, used here only to say which treadmills this app can talk
+      to.</small></p>
+  </div>
+</noscript>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

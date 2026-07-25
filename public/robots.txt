@@ -1,0 +1,7 @@
+# Everything here is a single public page. Nothing to hide from a crawler, and
+# nothing behind a path either — the app is hash-routed, so /#/today and friends
+# are never requested from the server.
+User-agent: *
+Allow: /
+
+Sitemap: https://beltcontrol.com/sitemap.xml

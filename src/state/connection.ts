@@ -4,6 +4,7 @@ import type { Driver } from '../lib/drivers.js';
 import { ingest, resetTelemetry, live, confirmedStopped } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
+import { openDialogs } from './ui.js';
 import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
 import {
   setSessionMeta,
@@ -218,6 +219,7 @@ async function teardown() {
   }
   driver.value = null;
   running.value = false;
+  stopPending.value = false;
   resetTelemetry();
   if (phase.value !== 'error') phase.value = 'idle';
 }
@@ -249,18 +251,16 @@ export async function disconnect() {
 
 // --- controls --------------------------------------------------------------
 
+/** Confirmation lives in the UI (see `Now`), not here: a `window.confirm` in the
+ *  middle of the control path blocks the event loop and takes Escape away from the
+ *  app at the one moment Escape has somewhere better to be. */
 export async function doStart() {
   const d = driver.value;
   if (!d) return;
 
-  const ok = confirm(
-    `Start the belt at ${toMph(settings.value.targetKmh).toFixed(1)} mph?\n\n` +
-      'Make sure the belt is clear and you are ready.'
-  );
-  if (!ok) return;
-
   try {
     clearStopWatch(); // a start supersedes any stop still waiting to be confirmed
+    stopPending.value = false;
     setStatus('starting…');
     await d.start();
     running.value = true;
@@ -285,6 +285,17 @@ export async function doStart() {
  *  A pad decelerating from walking speed reports zero within a second or two. */
 const STOP_CONFIRM_MS = 6_000;
 
+/**
+ * A stop has been written and the belt has not reported zero since.
+ *
+ * `running` stays true through an unconfirmed stop — the belt may still be moving —
+ * which on its own is indistinguishable from a start whose movement has not shown up
+ * in telemetry yet. `Now` tells the two apart with this, so a pending stop is never
+ * described as a pending start. Stays true past the confirmation deadline: the stop
+ * really is still outstanding.
+ */
+export const stopPending = signal(false);
+
 let stopWatch: number | null = null;
 
 function clearStopWatch() {
@@ -301,12 +312,14 @@ function clearStopWatch() {
  */
 function watchForStop() {
   clearStopWatch();
+  stopPending.value = true;
   const deadline = Date.now() + STOP_CONFIRM_MS;
 
   const check = () => {
     if (confirmedStopped.value) {
       clearStopWatch();
       running.value = false;
+      stopPending.value = false;
       setStatus('stopped', 'ok');
       log('belt reports zero — stopped', 'ok');
       return;
@@ -347,6 +360,7 @@ export async function doStop() {
     watchForStop();
   } catch (e) {
     clearStopWatch();
+    stopPending.value = false; // nothing went out, so nothing is outstanding
     fail(e);
   }
 }
@@ -407,7 +421,12 @@ export async function setMode(mode: number) {
 export function installGuards() {
   // Stop is the one control that must always be reachable.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && driver.value) void doStop();
+    if (e.key !== 'Escape' || !driver.value) return;
+    // While a dialog is open Escape belongs to it — dismissing a sheet should not
+    // also halt the walk. Safe because every dialog renders its own Stop while the
+    // belt is moving, so the control never leaves the screen. See state/ui.ts.
+    if (openDialogs.value > 0) return;
+    void doStop();
   });
 
   // Leaving the page does not stop the belt — say so rather than let it surprise anyone.

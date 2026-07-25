@@ -4,6 +4,8 @@ Why the app looks and behaves the way it does. Read this before changing the UI 
 session logic — most of what looks arbitrary here is load-bearing.
 
 - [The three screens](#the-three-screens)
+- [Two layouts](#two-layouts)
+- [Dialogs and the Escape key](#dialogs-and-the-escape-key)
 - [Design decisions](#design-decisions)
 - [Sessions](#sessions)
 - [Counter resets](#counter-resets)
@@ -11,7 +13,7 @@ session logic — most of what looks arbitrary here is load-bearing.
 
 ## The three screens
 
-Three tiers, each on its own screen, reachable from the bottom tab bar:
+Three tiers, each answering one question:
 
 | Screen | Question it answers |
 |---|---|
@@ -21,6 +23,63 @@ Three tiers, each on its own screen, reachable from the bottom tab bar:
 
 Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
 km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
+
+## Two layouts
+
+Desktop is the primary target: Web Bluetooth exists in desktop Chromium and nowhere on
+iOS at all. The breakpoint is **64rem**, declared once in `src/lib/viewport.ts` and read
+from both sides — the shell branches on it in JS and `app.css` branches on it in CSS. If
+the two ever disagree the page renders half in each mode, so the media query names the
+file above it and a test pins the constant.
+
+**Below 64rem** the layout is unchanged: one column, bottom tab bar, Stop pinned above it.
+
+**At 64rem and up**, Now stops being a destination and becomes a rail:
+
+| Region | Holds |
+|---|---|
+| Top bar | Wordmark, Today, History — *not* Now |
+| Left rail (sticky, own scroll) | Stop, connection, hero, speed, mode |
+| Content column | Today or History, and the disclaimer |
+
+Now is not in the nav because it is never absent — a nav entry for something already on
+screen is a control that cannot report a state. `#/now` is rewritten to `#/today` rather
+than rendered as a page nothing in the nav is current for.
+
+The rail exists so the live numbers hold still while History scrolls, which is the entire
+argument for two columns. It is its own scroll container so a short window cannot strand
+Stop below the fold. Note that `position: sticky` creates a stacking context whatever its
+z-index, and every dialog in the app is born inside the rail — hence the explicit
+`z-index` there, without which the content column paints straight through them.
+
+The charts take a `width` prop rather than one fixed viewBox. An SVG scales everything,
+so a phone-sized viewBox in a desktop column magnifies the axis text and the goal dashes
+along with the bars; callers pass roughly the rendered width to hold 1 unit ≈ 1 px. The
+consistency heatmap shows 26 weeks on desktop against 14 on a phone — twice the column
+deserves more history, not bigger squares.
+
+## Dialogs and the Escape key
+
+`Esc` does double duty: it stops the belt from anywhere, and it is the universal dismiss
+key. Those collided — closing the connection sheet also halted the walk. The rule is now
+that **Esc belongs to the topmost dialog when one is open, and to the belt otherwise**,
+arbitrated by a counter in `src/state/ui.ts`.
+
+That is only safe because of a second rule: **no dialog may hide Stop**. `Sheet` renders
+its own Stop whenever the belt is moving, so the control is on screen for the entire time
+the key points elsewhere. It is enforced in the primitive rather than per-dialog, so a
+future sheet cannot forget.
+
+`Sheet` declares `aria-modal`, so it owes the keyboard what that implies: focus moves in
+on open, Tab cycles inside, focus returns to the opener on close. It focuses the first
+control *in the body* — never its own Stop, which would make Enter a way to halt the belt
+by accident. Stop must be reachable, not preselected. There is also a visible close
+button, because a key is not an affordance.
+
+`window.confirm` and `window.prompt` are gone (`ConfirmDialog`, and the goal editor in
+`GoalMeter`). They cannot be styled or validated, they block the event loop, and — the
+reason they had to go — they take focus and Escape out of the app's hands at exactly the
+moment Escape has somewhere better to be.
 
 ## Design decisions
 
@@ -32,11 +91,15 @@ km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
 - **Three speed presets.** The steppers move 0.2 mph per press to stay inside the
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.
-- **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar and cannot be
-  scrolled away. `Esc` still works everywhere. The connection sheet is the one surface that
-  covers the stop bar, so it renders its own Stop at the top while the belt is moving —
-  otherwise the only red button on screen would be Disconnect, which does *not* stop the
-  belt. For the same reason Disconnect is not styled `danger`: red is reserved for Stop.
+- **Stop is pinned.** While the belt moves, Stop is fixed above the tab bar on mobile and
+  at the top of the rail on desktop, and cannot be scrolled away. `Esc` still works
+  everywhere. Dialogs cover it, so dialogs carry their own — see
+  [Dialogs and the Escape key](#dialogs-and-the-escape-key). For the same reason
+  Disconnect is not styled `danger`: red is reserved for Stop.
+- **Ambient mode is a button, not only a gesture.** Holding the hero number still works,
+  but a long press is no gesture at all on a keyboard, and the hint that it exists is
+  hidden on protocols with a single available metric. The `Ambient` button beside the
+  connection chip is the discoverable and keyboard-reachable path to the same screen.
 - **Ambient mode.** Hold the hero number: full-screen giant readout holding a
   `navigator.wakeLock`, with Stop always visible. Wake Lock is supported in exactly the same
   browsers as Web Bluetooth, so it adds no new requirement. It is deliberately *not* a
@@ -54,6 +117,21 @@ km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
 - **Charts are single-hue and hand-rolled.** No chart library. The sequential ramp in
   `tokens.css` was solved numerically for monotone OKLab lightness, adjacent ΔL ≥ 0.06, and
   ≥ 2:1 contrast between the lightest data step and the card surface — in both themes.
+- **The icon is the belt, not a walker.** It was drawn at 16px first, because that is the
+  favicon and the tab strip, and only then checked at 512. Three filled shapes, no strokes,
+  nothing narrower than 24px in a 512px box. The walker it replaced was eight strokes, a 30px
+  head and a dashed centre line: at 16px the dashes vanished, the limbs merged and the deck
+  outline filled in solid. Redraw the SVGs rather than the PNGs — the PNGs are exports:
+
+  ```sh
+  CH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "$CH" --headless --disable-gpu --default-background-color=00000000 \
+    --screenshot=public/icon-512.png --window-size=512,512 "file://$PWD/public/icon.svg"
+  ```
+
+  Repeat at 192, and against `icon-maskable.svg` for `icon-maskable-512.png`. The maskable
+  twin scales the glyph to 75% so Android's mask — the centre circle of 80% diameter — only
+  ever cuts background.
 
 ## Sessions
 

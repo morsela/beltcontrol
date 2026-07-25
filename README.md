@@ -103,8 +103,9 @@ The belt can start under software control with nobody on it. The app therefore:
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd>
 - reports a stop only once the belt itself reports zero, and says plainly when it never
   does — a written command is not a stopped belt
-- pins Stop to a fixed bar above the tab bar whenever the belt is moving, and keeps it on
-  screen in ambient mode, so it can never be scrolled out of reach
+- pins Stop whenever the belt is moving — above the tab bar on mobile, at the top of the
+  rail on desktop — and keeps it on screen in ambient mode and inside every dialog, so it
+  can never be scrolled out of reach or covered
 - never auto-reconnects — silently reattaching to a possibly-moving belt with stale UI state
   is not a safe default
 - warns before you navigate away while the belt is running
@@ -127,7 +128,7 @@ real safety stop.
 ```
 index.html              Vite entry
 src/main.tsx            bootstrap, guards, service-worker registration
-src/app.tsx             shell, hash router, tab bar
+src/app.tsx             shell (one column on mobile, rail + content on desktop), hash router
 src/routes/             Now · Today · History
 src/components/         hero, speed control, tiles, stop bar, ambient mode, sheets
 src/charts/             hand-rolled inline SVG: column, area, heatmap
@@ -135,6 +136,7 @@ src/state/              connection · telemetry · session · settings · backup
 src/lib/drivers.js      the protocol drivers — plain JS, deliberately untouched
 src/lib/drivers.d.ts    hand-written types for the above
 src/lib/simulator.ts    fake pad for development (dropped from production builds)
+src/lib/viewport.ts     the 64rem desktop breakpoint, shared by the shell and app.css
 src/styles/tokens.css   the single source of truth for colour, type and spacing
 public/                 manifest, icons, service worker
 test/                   unit tests, plus a fake GATT surface in ble-mock.ts

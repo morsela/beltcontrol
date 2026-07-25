@@ -4,6 +4,7 @@ import { GoalMeter } from '../components/GoalMeter.js';
 import { Tiles } from '../components/Tiles.js';
 import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
 import {
   connected,
@@ -13,18 +14,30 @@ import {
   doStart,
   setMode,
   running,
+  stopPending,
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
+import { settings } from '../state/settings.js';
 import { status } from '../state/log.js';
+import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
   const d = driver.value;
 
   return (
     <>
       <div class="topbar">
         <StatusChip onOpen={() => setSheet(true)} />
+        {/* Ambient mode used to be reachable only by holding the hero number, which
+            is no gesture at all on a keyboard — and the hint that it exists is
+            hidden on protocols with a single metric. A button is both. */}
+        {connected.value && (
+          <button class="btn ghost topbar-btn" onClick={onAmbient}>
+            Ambient
+          </button>
+        )}
       </div>
 
       <div class="card">
@@ -42,7 +55,7 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           {(!isMoving.value || d?.capabilities.mode) && (
             <div class="card">
               {!isMoving.value && (
-                <button class="btn primary block lg" onClick={() => void doStart()}>
+                <button class="btn primary block lg" onClick={() => setConfirmStart(true)}>
                   Start
                 </button>
               )}
@@ -95,10 +108,28 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         </p>
       )}
 
-      {running.value && !isMoving.value && (
+      {/* `running` also stays true through a stop the belt has not confirmed, and a
+          silent pad makes that look exactly like a start telemetry has not caught up
+          with — so name the command that is actually outstanding. */}
+      {running.value && !isMoving.value && !stopPending.value && (
         <p class="note" style="margin-bottom:var(--gap)">
           Start command sent — waiting for the belt to report movement.
         </p>
+      )}
+
+      {confirmStart && (
+        <ConfirmDialog
+          title="Start the belt?"
+          body={`The belt will start moving at ${toMph(settings.value.targetKmh).toFixed(
+            1
+          )} mph. Make sure it is clear and you are ready.`}
+          confirmLabel="Start"
+          onConfirm={() => {
+            setConfirmStart(false);
+            void doStart();
+          }}
+          onCancel={() => setConfirmStart(false)}
+        />
       )}
 
       {/* The protocol log lives in the connection sheet, not here. It is a

@@ -201,8 +201,14 @@ what makes the protocol undiscoverable by passive listening. Same order as the o
 | `time_posix <unix seconds>` | `time_posix 0` |
 | `version` | `version 0014` |
 | `servers getProp 1 3 7 8 9 16 17 18 19 21 22 23 24 13 15` | `servers 0`, then a full config dump |
-| `props user_id <id>` | — |
+| `props user_id <id>` | — |  <!-- any integer; the pad does not validate it -->
 | `get_pk` | `get_pk 3` |
+
+`user_id` is not an identity the protocol checks — the pad accepts any integer and the app
+never reads it back. The value visible in the capture is the KS+Fit account id of the phone
+being recorded, so this app sends a random per-install number kept in `localStorage`
+instead: stable enough for a pad that keys its own bookkeeping off it, and connected to no
+real account.
 | `props ControlMode 1` | `props ControlMode 1` |
 | `servers getProp 1 9 15 2 10 11 12 13 14` | `servers 0` — subscribes to live telemetry |
 

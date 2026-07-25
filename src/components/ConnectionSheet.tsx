@@ -4,7 +4,6 @@ import { LogPanel } from './LogPanel.js';
 import {
   connect,
   disconnect,
-  doStop,
   driver,
   deviceName,
   connected,
@@ -12,7 +11,7 @@ import {
   beltLabel,
   beltTone,
 } from '../state/connection.js';
-import { live, isMoving } from '../state/telemetry.js';
+import { live } from '../state/telemetry.js';
 import { status, logLines } from '../state/log.js';
 import { toMph } from '../lib/format.js';
 
@@ -31,17 +30,8 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="Connection" onClose={onClose}>
-      {/* The sheet sits above the pinned stop bar and would otherwise hide the one
-          control that must always be reachable — leaving Disconnect as the only red
-          button on screen, which does not stop the belt. So Stop comes with it. */}
-      {connected.value && isMoving.value && (
-        <div class="sheet-stop">
-          <button class="btn danger block" onClick={() => void doStop()}>
-            Stop
-          </button>
-        </div>
-      )}
-
+      {/* Stop is not rendered here: `Sheet` carries it for every dialog, so no modal
+          in the app can hide the one control that must always be reachable. */}
       <dl class="meta">
         <dt>State</dt>
         <dd>

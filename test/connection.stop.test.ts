@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { doStop, driver, running } from '../src/state/connection.js';
+import { doStop, driver, running, stopPending } from '../src/state/connection.js';
 import { ingest, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
 import type { Driver } from '../src/lib/drivers.js';
@@ -34,6 +34,7 @@ describe('doStop', () => {
     vi.useFakeTimers();
     resetTelemetry();
     running.value = true;
+    stopPending.value = false;
   });
 
   afterEach(() => {
@@ -94,6 +95,45 @@ describe('doStop', () => {
 
     expect(status.value.kind).toBe('err');
     expect(status.value.text).toMatch(/not reporting speed at all/);
+  });
+
+  // `Now` shows "Start command sent — waiting for the belt to report movement" on
+  // `running && !isMoving`, and an unconfirmed stop satisfies both. Without this flag a
+  // pad that has gone silent mid-stop gets described as a pending *start*.
+  it('marks a stop outstanding until the belt confirms it', async () => {
+    driver.value = fakePad(async () => {});
+    ingest({ speedKmh: 3.2 });
+
+    await doStop();
+    expect(stopPending.value).toBe(true);
+
+    ingest({ speedKmh: 0 });
+    vi.advanceTimersByTime(300);
+    expect(stopPending.value).toBe(false);
+  });
+
+  it('keeps the stop outstanding past the deadline, alongside `running`', async () => {
+    driver.value = fakePad(async () => {});
+    ingest({ speedKmh: 3.2 });
+
+    await doStop();
+    vi.advanceTimersByTime(6_500);
+
+    // Same reasoning as `running` staying true: the belt never confirmed, so the stop
+    // is still the last thing this app asked of it.
+    expect(stopPending.value).toBe(true);
+    expect(running.value).toBe(true);
+  });
+
+  it('leaves nothing outstanding when the write itself failed', async () => {
+    driver.value = fakePad(async () => {
+      throw new Error('not connected to the pad — command not sent');
+    });
+    ingest({ speedKmh: 3.2 });
+
+    await doStop();
+
+    expect(stopPending.value).toBe(false);
   });
 
   it('surfaces a write that failed instead of reporting a stop', async () => {

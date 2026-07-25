@@ -117,5 +117,9 @@ export declare function hex(buf: ArrayBuffer | ArrayBufferView): string;
 export declare function ksEncode(text: string): string;
 export declare function ksDecode(cipher: string): string;
 
+/** A stable, meaningless id for the handshake's `props user_id` slot — persisted per
+ *  browser, unrelated to any real KS+Fit account. */
+export declare function installId(): string;
+
 /** `null` when the line is not a `props` line at all. */
 export declare function parseProps(line: string): Record<string, string> | null;
