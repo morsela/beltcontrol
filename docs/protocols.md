@@ -195,6 +195,15 @@ framing   : ksBase64(plaintext) + "\r", fragmented across 20-byte ATT writes
 payload   : plain text, space separated — "props CurrentSpeed 1.1"
 ```
 
+**What the command set actually is.** Once decoded, the vocabulary is not KingSmith's at all —
+it is [Xiaomi's MIoT serial communication protocol](https://blakadder.github.io/miot/), the
+command set a Mi-ecosystem device's MCU speaks to its network module, tunneled here over BLE.
+`props`, `time_posix`, `mcu_version`, `version`, `error` and the `0` success replies to
+`servers` are all MIoT's, and KingSmith is a Mi-ecosystem vendor (its product catalog is served
+from `mi-img.com`). Knowing that does not decode any command the capture did not contain — the
+property names are the vendor's — but it does mean the *envelope* has a published specification,
+which is where the error codes below come from rather than from guesswork.
+
 **The encoding is base64 with a permuted alphabet**, a 64-char literal in `libapp.so`:
 
 ```
@@ -238,8 +247,45 @@ real account.
 | Set speed | `props CurrentSpeed 1.1` (km/h, one decimal) |
 
 Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
-and ignored — the belt simply does not move, with no error anywhere. `ControlMode 1` therefore
-has to be re-asserted on every start, not just once during the handshake.
+and ignored — the belt simply does not move. `ControlMode 1` therefore has to be re-asserted on
+every start, not just once during the handshake.
+
+**Re-asserting it is not always enough, and the pad says so.** A start can be refused outright,
+and on a KS-C2 it takes the app three tries often enough to be worth handling. From a real log,
+with the ten-second waits between attempts removed:
+
+```
+--> props ControlMode 1 / props runState 1
+<-- props ControlMode 2 ChildLockSwitch 0 runState 0 CurrentSpeed 0.0 ...   ← panel kept control
+<-- props Error ErrorCode -5000                                            ← refused
+--> props ControlMode 1 / props runState 1
+<-- props Error ErrorCode -5000                                            ← refused again
+--> props ControlMode 1 / props runState 1
+<-- props ControlMode 1                                                    ← taken
+<-- props runState 1 CurrentSpeed 0.0                                      ← and moving
+```
+
+Nothing in the capture explains what differs about the third attempt. What is usable is that the
+pad answers **within the same second, every time**: a vendor error code, or `ControlMode 2` (its
+own panel still holding control, so the run state is about to be ignored), or the `ControlMode 1`
+echo that means it took the command.
+
+**Error codes are MIoT's, and `-5000` is deliberately not.** The spec fixes `-4001` to `-4007`
+(not readable, not writable, nonexistent, internal, value, parameter, DID) and then reserves
+**`-9999` to `-5000` inclusive** for codes the device vendor defines itself — *"the error message
+and error code can be customized"*. So `-5000` is KingSmith firmware's own, documented nowhere,
+and its meaning here is only what the log shows: this start will not be honoured. The driver
+therefore treats the **whole vendor band** as a refusal rather than matching `-5000` alone, since
+a sibling model may well answer `-5003`; and it treats none of `-4001…-4007` that way, because
+none of them mean refused. KS+Fit's own advice for this failure — recovered from
+`device_error_code_tips` in `libapp.so` — is to check the safety lock, check the panel for an
+E-code, and *"try restarting the movement"*: the vendor's remedy is a retry too.
+
+`ks1234Driver.startVerdict()` reports this as `accepted` / `refused` / `unknown`, and
+`state/connection.ts` re-sends a refused start up to three times before reporting failure. A
+verdict is only ever about the command; movement is still confirmed the one way it can be, by
+the belt reporting it. The retry sends nothing new and changes no ordering — it is the same two
+writes the capture shows, and it stops the moment a stop, pause or disconnect arrives.
 
 **Pause exists on this family but has not been captured.** KS+Fit's BLE layer for these
 pads — the `Wilink*` classes, whose property names (`ControlMode`, `ChildLockSwitch`,

@@ -6,11 +6,19 @@
 // when import.meta.env.DEV is true, so it is tree-shaken out of a production build.
 
 import { protocolDefaults } from './drivers.js';
-import type { Driver, DriverId, Telemetry } from './drivers.js';
+import type { Driver, DriverId, StartVerdict, Telemetry } from './drivers.js';
 
-export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } = {}): Driver {
+export function simulatedDriver(
+  opts: { id?: DriverId; rejectPause?: boolean; refuseStarts?: number } = {}
+): Driver {
   const id: DriverId = opts.id ?? 'classic';
   const rejectPause = opts.rejectPause ?? false;
+
+  // A real KS-C2 refuses a start out loud and sometimes takes three tries to accept one.
+  // `connectSimulated('ks1234', { refuseStarts: 2 })` plays that back, so the retry path
+  // can be walked through in dev instead of only in front of a treadmill.
+  let startsToRefuse = opts.refuseStarts ?? 0;
+  let lastVerdict: StartVerdict = 'unknown';
 
   let timer: number | null = null;
   let target = 0;
@@ -40,8 +48,21 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
       timer = null;
     },
     async start() {
+      if (startsToRefuse > 0) {
+        startsToRefuse--;
+        lastVerdict = 'refused';
+        self.onLog?.(`simulator: the pad refuses the start (${startsToRefuse} more will be refused)`);
+        return;
+      }
       self.onLog?.('simulator: start');
+      lastVerdict = 'accepted';
       target = Math.max(target, 1.0);
+    },
+
+    // Only the 0x1234 pad answers a start on real hardware; every other protocol is
+    // simulated as saying nothing, which is what its driver would report.
+    async startVerdict() {
+      return id === 'ks1234' ? lastVerdict : 'unknown';
     },
     async stop() {
       self.onLog?.('simulator: stop');
