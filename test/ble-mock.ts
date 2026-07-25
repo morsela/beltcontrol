@@ -110,7 +110,10 @@ export const toHex = (b: Uint8Array | number[]) =>
   [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ');
 
 class FakeService {
-  constructor(private readonly chars: Map<string | number, FakeCharacteristic>) {}
+  constructor(
+    readonly uuid: string,
+    private readonly chars: Map<string | number, FakeCharacteristic>
+  ) {}
 
   async getCharacteristic(uuid: string | number) {
     const c = this.chars.get(uuid);
@@ -119,11 +122,20 @@ class FakeService {
   }
 }
 
+/** The full form a real GATT table reports, which is what `getPrimaryServices` returns. */
+const fullUuid = (u: string | number) =>
+  typeof u === 'number'
+    ? `${u.toString(16).padStart(8, '0')}-0000-1000-8000-00805f9b34fb`
+    : String(u).toLowerCase();
+
 export class FakeServer {
   private readonly services = new Map<string | number, FakeService>();
+  /** Set false to model a stack that does not implement enumeration. */
+  enumerable = true;
 
   addService(uuid: string | number, chars: FakeCharacteristic[]) {
-    this.services.set(uuid, new FakeService(new Map(chars.map((c) => [c.uuid, c]))));
+    const byUuid = new Map(chars.map((c) => [c.uuid, c]));
+    this.services.set(uuid, new FakeService(fullUuid(uuid), byUuid));
     return this;
   }
 
@@ -131,5 +143,10 @@ export class FakeServer {
     const s = this.services.get(uuid);
     if (!s) throw new Error(`no service ${String(uuid)}`);
     return s;
+  }
+
+  async getPrimaryServices() {
+    if (!this.enumerable) throw new Error('getPrimaryServices not supported');
+    return [...this.services.values()];
   }
 }

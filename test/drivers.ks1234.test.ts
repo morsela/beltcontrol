@@ -219,6 +219,27 @@ describe('ks1234Driver', () => {
     expect(seen).toHaveLength(0);
   });
 
+  it('drops a value that is not a number rather than publishing NaN', async () => {
+    // NaN survives the absent-key strip, and once it is in `live` the belt is neither
+    // moving nor stopped: isMoving is false and confirmedStopped is false, so a stop
+    // can never confirm and the readout says NaN.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props CurrentSpeed --');
+    expect(seen).toHaveLength(0);
+  });
+
+  it('keeps the readable fields of a line whose other values are junk', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props CurrentSpeed n/a RunningSteps 11');
+    expect(Object.keys(seen[0]!).sort()).toEqual(['raw', 'steps']);
+  });
+
   it('adopts the limits the pad reports', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();
@@ -238,6 +259,21 @@ describe('ks1234Driver', () => {
     expect(d.maxSpeedKmh).toBe(6); // defaults kept
     expect(d.minSpeedKmh).toBe(0.5);
     expect(logs.join('\n')).toMatch(/implausible max speed/);
+  });
+
+  it('refuses a minimum that arrives on its own above the maximum', async () => {
+    // The pad reports StartSpeed and Max in separate frames, so a minimum can land
+    // above a maximum that is still the 6.0 default. SpeedControl then reads the belt
+    // as being at its minimum and its maximum at once and disables both steppers.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props StartSpeed 7.0');
+    expect(d.minSpeedKmh).toBeLessThanOrEqual(d.maxSpeedKmh);
+    expect(d.minSpeedKmh).toBe(0.5);
+    expect(logs.join('\n')).toMatch(/implausible min speed/);
   });
 
   it('labels run state', async () => {
@@ -273,6 +309,29 @@ describe('ks1234Driver', () => {
     // would otherwise be reporting a command that never left the building.
     await expect(d.setSpeed(2)).rejects.toThrow(/not connected/);
     expect(write.writes).toHaveLength(0);
+  });
+
+  it('gives up quietly when the link goes away between two fragments of a message', async () => {
+    // A long line is written 20 bytes at a time. Tearing the link down partway through
+    // used to dereference the characteristic that had just been nulled, so a disconnect
+    // during the connect handshake surfaced as "Cannot read properties of null".
+    let d: ReturnType<typeof ks1234Driver>;
+    let torn = false;
+    const write = new FakeCharacteristic(UUID.ks1234Write, {
+      onWrite: (bytes) => {
+        // A full 20 bytes means more fragments of this message are still to come.
+        if (bytes.length === 20 && !torn) {
+          torn = true;
+          void d.detach();
+        }
+      },
+    });
+    const notify = new FakeCharacteristic(UUID.ks1234Notify);
+    const server = new FakeServer().addService(UUID.ks1234Service, [write, notify]);
+    d = ks1234Driver();
+
+    await expect(d.attach(server as unknown as BluetoothRemoteGATTServer)).resolves.toBeUndefined();
+    expect(torn).toBe(true); // the tear-down really did land mid-message
   });
 
   it('refuses stop() on a detached link rather than resolving', async () => {
