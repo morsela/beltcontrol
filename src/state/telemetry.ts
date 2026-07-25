@@ -65,5 +65,20 @@ export function resetTelemetry() {
   lastFrameAt.value = null;
 }
 
+/** Below this, a reported speed is noise rather than movement. */
+export const MOVING_KMH = 0.05;
+
 /** True when the belt is actually moving, whatever the belt-state code claims. */
-export const isMoving = computed(() => (live.value.speedKmh ?? 0) > 0.05);
+export const isMoving = computed(() => (live.value.speedKmh ?? 0) > MOVING_KMH);
+
+/**
+ * Positive evidence that the belt is stopped, which is not the same as `!isMoving`.
+ *
+ * `isMoving` treats "no speed reported yet" as not moving, which is the right default
+ * for a status dot and the wrong one for confirming a stop: silence from the pad is
+ * not the pad saying zero.
+ */
+export const confirmedStopped = computed(() => {
+  const s = live.value.speedKmh;
+  return s != null && s <= MOVING_KMH;
+});

@@ -1,7 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { detectDriver, UUID } from '../lib/drivers.js';
 import type { Driver } from '../lib/drivers.js';
-import { ingest, resetTelemetry, live } from './telemetry.js';
+import { ingest, resetTelemetry, live, confirmedStopped } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
 import { settings, updateSettings } from './settings.js';
 import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
@@ -208,6 +208,7 @@ function stopPolling() {
 
 async function teardown() {
   stopPolling();
+  clearStopWatch();
   stopSessionTracking();
   closeSession('ended (disconnected)');
   try {
@@ -259,6 +260,7 @@ export async function doStart() {
   if (!ok) return;
 
   try {
+    clearStopWatch(); // a start supersedes any stop still waiting to be confirmed
     setStatus('starting…');
     await d.start();
     running.value = true;
@@ -279,16 +281,72 @@ export async function doStart() {
   }
 }
 
+/** How long to wait for the belt to report zero before saying it never confirmed.
+ *  A pad decelerating from walking speed reports zero within a second or two. */
+const STOP_CONFIRM_MS = 6_000;
+
+let stopWatch: number | null = null;
+
+function clearStopWatch() {
+  if (stopWatch != null) window.clearInterval(stopWatch);
+  stopWatch = null;
+}
+
+/**
+ * A resolved `stop()` means the command was written, not that the belt obeyed it.
+ * Only two of the four protocols can even acknowledge one — FTMS via its control
+ * point, and nothing else — so the belt's own telemetry is the only evidence that
+ * applies to every pad. Report "stopped" when it reports zero, and say plainly when
+ * it never does, rather than asserting an outcome the app has not observed.
+ */
+function watchForStop() {
+  clearStopWatch();
+  const deadline = Date.now() + STOP_CONFIRM_MS;
+
+  const check = () => {
+    if (confirmedStopped.value) {
+      clearStopWatch();
+      running.value = false;
+      setStatus('stopped', 'ok');
+      log('belt reports zero — stopped', 'ok');
+      return;
+    }
+    if (Date.now() >= deadline) {
+      clearStopWatch();
+      // Deliberately leaves `running` true: the belt has not said it stopped, so the
+      // UI should keep treating it as a belt that might be moving.
+      const s = live.value.speedKmh;
+      const why =
+        s == null
+          ? 'it is not reporting speed at all'
+          : `it still reports ${toMph(s).toFixed(1)} mph`;
+      setStatus(
+        `Stop was sent but the belt has not confirmed — ${why}. Use the treadmill's own controls.`,
+        'err'
+      );
+      log(`stop unconfirmed after ${STOP_CONFIRM_MS / 1000}s — ${why}`, 'err');
+    }
+  };
+
+  check(); // a pad already reporting zero confirms immediately
+  if (stopWatch == null && !confirmedStopped.value) {
+    // Say what is being waited on. "stopping…" reads as an assertion about the belt;
+    // this reads as an assertion about the app, which is all that is known yet.
+    setStatus('stop sent — waiting for the belt to report zero');
+    stopWatch = window.setInterval(check, 250);
+  }
+}
+
 export async function doStop() {
   const d = driver.value;
   if (!d) return;
   try {
     setStatus('stopping…');
     await d.stop();
-    running.value = false;
-    setStatus('stopped', 'ok');
-    log('stopped', 'ok');
+    log('stop sent', 'ok');
+    watchForStop();
   } catch (e) {
+    clearStopWatch();
     fail(e);
   }
 }

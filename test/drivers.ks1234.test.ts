@@ -219,13 +219,25 @@ describe('ks1234Driver', () => {
     expect(seen).toHaveLength(1); // the good line still lands
   });
 
-  it('stops writing once detached', async () => {
+  it('stops writing once detached, and says the command was not sent', async () => {
     const { server, write } = padServer();
     const d = ks1234Driver();
     await d.attach(server as unknown as BluetoothRemoteGATTServer);
     await d.detach();
     write.writes.length = 0;
-    await d.setSpeed(2);
+    // Still writes nothing — but a caller that reports success on a resolved promise
+    // would otherwise be reporting a command that never left the building.
+    await expect(d.setSpeed(2)).rejects.toThrow(/not connected/);
+    expect(write.writes).toHaveLength(0);
+  });
+
+  it('refuses stop() on a detached link rather than resolving', async () => {
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await d.detach();
+    write.writes.length = 0;
+    await expect(d.stop()).rejects.toThrow(/not connected/);
     expect(write.writes).toHaveLength(0);
   });
 });

@@ -101,6 +101,8 @@ The belt can start under software control with nobody on it. The app therefore:
 - clamps speed to the unit's real range (FTMS `2ad4`, or a conservative default)
 - limits each speed press to ≤0.5 km/h
 - keeps **Stop** always enabled, and binds it to <kbd>Esc</kbd>
+- reports a stop only once the belt itself reports zero, and says plainly when it never
+  does — a written command is not a stopped belt
 - pins Stop to a fixed bar above the tab bar whenever the belt is moving, and keeps it on
   screen in ambient mode, so it can never be scrolled out of reach
 - never auto-reconnects — silently reattaching to a possibly-moving belt with stale UI state
