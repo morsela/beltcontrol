@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ks1234Driver, ksEncode, ksDecode, parseProps, UUID } from '../src/lib/drivers.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ks1234Driver, ksEncode, ksDecode, parseProps, installId, UUID } from '../src/lib/drivers.js';
 import type { Telemetry } from '../src/lib/drivers.js';
 import { FakeServer, FakeCharacteristic } from './ble-mock.js';
 
@@ -89,6 +89,74 @@ describe('ks1234Driver', () => {
     expect(sent.filter((l) => l.startsWith('servers getProp'))).toHaveLength(2);
   });
 
+  it('sends a per-install user_id, not the account id from the capture', async () => {
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    const sent = lines(write);
+    const line = sent.find((l) => l.startsWith('props user_id '))!;
+    expect(line).toBeDefined();
+    // A real KS+Fit account id from someone's packet capture has no business here.
+    expect(line).not.toContain('5980681');
+    expect(line).toMatch(/^props user_id \d+$/);
+  });
+
+  it('keeps the same user_id across connections in one browser', async () => {
+    const first = padServer();
+    const a = ks1234Driver();
+    await a.attach(first.server as unknown as BluetoothRemoteGATTServer);
+    const second = padServer();
+    const b = ks1234Driver();
+    await b.attach(second.server as unknown as BluetoothRemoteGATTServer);
+    const id = (w: typeof first.write) =>
+      lines(w).find((l) => l.startsWith('props user_id '));
+    expect(id(first.write)).toBe(id(second.write));
+  });
+
+  it('still produces a usable id when storage is unavailable', () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('private mode');
+    });
+    expect(installId()).toMatch(/^\d+$/);
+    getItem.mockRestore();
+  });
+
+  // The bug this guards: stopping hands control back to the pad's own panel, and in panel
+  // mode `runState 1` is accepted and ignored, so only the first start of a session worked.
+  it('re-takes control on every start, not just the one after the handshake', async () => {
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    write.writes.length = 0;
+
+    await d.start();
+    await d.stop();
+    await d.start();
+
+    expect(lines(write)).toEqual([
+      'props ControlMode 1',
+      'props runState 1',
+      'props runState 0',
+      'props ControlMode 1',
+      'props runState 1',
+    ]);
+  });
+
+  it('never interleaves the fragments of two messages', async () => {
+    // The pad reassembles one stream and splits it on CR, so a message written into the
+    // middle of another one's fragments decodes to garbage and is silently dropped.
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    write.writes.length = 0;
+
+    await Promise.all([d.start(), d.setSpeed(3.2), d.stop()]);
+
+    expect(lines(write).sort()).toEqual(
+      ['props ControlMode 1', 'props CurrentSpeed 3.2', 'props runState 0', 'props runState 1'].sort()
+    );
+  });
+
   it('sends speed with one decimal', async () => {
     const { server, write } = padServer();
     const d = ks1234Driver();
@@ -160,6 +228,18 @@ describe('ks1234Driver', () => {
     expect(d.minSpeedKmh).toBe(1);
   });
 
+  it('refuses limits outside the app’s own envelope', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props Max 99.0 StartSpeed 0.01');
+    expect(d.maxSpeedKmh).toBe(6); // defaults kept
+    expect(d.minSpeedKmh).toBe(0.5);
+    expect(logs.join('\n')).toMatch(/implausible max speed/);
+  });
+
   it('labels run state', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();
@@ -183,13 +263,25 @@ describe('ks1234Driver', () => {
     expect(seen).toHaveLength(1); // the good line still lands
   });
 
-  it('stops writing once detached', async () => {
+  it('stops writing once detached, and says the command was not sent', async () => {
     const { server, write } = padServer();
     const d = ks1234Driver();
     await d.attach(server as unknown as BluetoothRemoteGATTServer);
     await d.detach();
     write.writes.length = 0;
-    await d.setSpeed(2);
+    // Still writes nothing — but a caller that reports success on a resolved promise
+    // would otherwise be reporting a command that never left the building.
+    await expect(d.setSpeed(2)).rejects.toThrow(/not connected/);
+    expect(write.writes).toHaveLength(0);
+  });
+
+  it('refuses stop() on a detached link rather than resolving', async () => {
+    const { server, write } = padServer();
+    const d = ks1234Driver();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    await d.detach();
+    write.writes.length = 0;
+    await expect(d.stop()).rejects.toThrow(/not connected/);
     expect(write.writes).toHaveLength(0);
   });
 });

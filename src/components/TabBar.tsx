@@ -32,19 +32,31 @@ const TABS: { route: Route; label: string; icon: preact.JSX.Element }[] = [
   },
 ];
 
-export function TabBar({ route }: { route: Route }) {
+/**
+ * Bottom thumb bar on a phone; a top bar on desktop.
+ *
+ * The desktop variant drops `Now`, because on desktop Now is not a destination —
+ * it is the rail, always on screen. A nav entry for something already visible is a
+ * control that cannot report a state.
+ */
+export function TabBar({ route, variant = 'bottom' }: { route: Route; variant?: 'bottom' | 'top' }) {
+  const tabs = variant === 'top' ? TABS.filter((t) => t.route !== 'now') : TABS;
+
   return (
-    <nav class="tabbar" aria-label="Sections">
-      {TABS.map((t) => (
-        <a
-          key={t.route}
-          href={`#/${t.route}`}
-          aria-current={route === t.route ? 'page' : undefined}
-        >
-          {t.icon}
-          <span>{t.label}</span>
-        </a>
-      ))}
+    <nav class={`tabbar ${variant}`} aria-label="Sections">
+      <div class="tabbar-inner">
+        {variant === 'top' && <span class="wordmark">Belt Control</span>}
+        {tabs.map((t) => (
+          <a
+            key={t.route}
+            href={`#/${t.route}`}
+            aria-current={route === t.route ? 'page' : undefined}
+          >
+            {t.icon}
+            <span>{t.label}</span>
+          </a>
+        ))}
+      </div>
     </nav>
   );
 }

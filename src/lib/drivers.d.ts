@@ -26,6 +26,10 @@ export interface Capabilities {
   mode: boolean;
   incline: boolean;
   steps: boolean;
+  /** The protocol carries a real pause — a stop the belt can be resumed from, rather
+   *  than a full stop dressed up as one. FTMS only, so far. Whether the individual
+   *  unit honours it is a separate question, answered by `pause()`'s result. */
+  pause: boolean;
   /** Classic pads never push status; the caller must poll on a timer. */
   needsPolling: boolean;
 }
@@ -45,9 +49,22 @@ export interface Driver {
   onLog: ((msg: string) => void) | null;
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
+  /** Throws if the write channel is gone, so a command can never resolve without
+   *  having been sent. Present on the 0x1234 driver; harmless elsewhere. */
+  _requireOpen?(): void;
   detach(): Promise<void>;
+  /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
   start(): Promise<void>;
   stop(): Promise<void>;
+  /**
+   * Pause the belt, resumable with `start()`.
+   *
+   * Resolves `'paused'` when the unit honoured it, or `'stopped'` when it did not
+   * support pause and the driver stopped the belt instead — never leave a treadmill
+   * running behind a button that claims it is paused. Rejects only on a real failure,
+   * and on protocols that have no pause command at all.
+   */
+  pause(): Promise<'paused' | 'stopped'>;
   setSpeed(kmh: number): Promise<void>;
   setMode(mode: number): Promise<void>;
   poll(): Promise<void>;
@@ -75,6 +92,25 @@ export declare const UUID: {
 
 export declare const CLASSIC_MODE: { auto: 0; manual: 1; standby: 2 };
 
+/** The app's own speed envelope, applied on top of whatever a device reports about
+ *  itself — see `adoptSpeedLimits`. */
+export declare const HARD_MAX_KMH: number;
+export declare const HARD_MIN_KMH: number;
+export declare const HARD_MAX_STEP_KMH: number;
+
+/**
+ * Fold device-reported speed limits into a driver, rejecting any that fall outside the
+ * envelope above. A rejected field keeps the driver's conservative default and is
+ * reported through `onLog`.
+ */
+export declare function adoptSpeedLimits<
+  T extends Pick<Driver, 'minSpeedKmh' | 'maxSpeedKmh' | 'speedStep'>,
+>(
+  self: T,
+  limits: { min?: number; max?: number; step?: number },
+  onLog?: ((msg: string) => void) | null
+): T;
+
 export declare function detectDriver(
   server: BluetoothRemoteGATTServer
 ): Promise<Driver | null>;
@@ -89,6 +125,9 @@ export declare function ks1234Driver(): Driver;
  *  different things here: not sent, versus sent as the spec's "not available". */
 export interface TreadmillData extends Partial<Telemetry> {
   raw: string;
+  /** The flags word promised a field the frame did not carry. Fields that were fully
+   *  present are still returned; everything after the short read is absent. */
+  truncated?: true;
   avgSpeedKmh?: number;
   rampAngleDeg?: number;
   elevGainUpM?: number;
@@ -110,6 +149,10 @@ export declare function hex(buf: ArrayBuffer | ArrayBufferView): string;
  *  the standard one, so this is not interchangeable with btoa/atob. */
 export declare function ksEncode(text: string): string;
 export declare function ksDecode(cipher: string): string;
+
+/** A stable, meaningless id for the handshake's `props user_id` slot — persisted per
+ *  browser, unrelated to any real KS+Fit account. */
+export declare function installId(): string;
 
 /** `null` when the line is not a `props` line at all. */
 export declare function parseProps(line: string): Record<string, string> | null;

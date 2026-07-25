@@ -80,9 +80,18 @@ F7 A2 <cmd> <param> <crc> FD        crc = (0xA2 + cmd + param) & 0xFF
 | Set mode | `F7 A2 02 <0 auto / 1 manual / 2 standby> <crc> FD` |
 | Start belt | `F7 A2 04 01 A7 FD` |
 
-Start is mode-then-start: `setMode(manual)` → `start` → `setSpeed(n)`.
+Start is wake-mode-then-start: `askStats` → `setMode(manual)` → `start` → `setSpeed(n)`.
 Stop is `setSpeed(0)` → `setMode(standby)`. Commands sent back-to-back get dropped, so the
-driver spaces them ~120 ms apart.
+driver spaces them ~120 ms apart, and it waits ~400 ms after the mode byte before starting the
+belt.
+
+The leading `askStats` is not decoration. Standby parks the same app-control path that
+`attach()` has to wake before anything works, so a start sent straight after a stop arrives at
+a pad that is not listening — which is why only the first start of a session used to land.
+
+There is **no pause** in this command set, in the APK or in `ph4-walkingpad`. Speed 0 without
+the standby that follows it in `stop()` is the obvious candidate, but whether the belt picks
+up again from there has never been checked on a pad, so `pause()` throws.
 
 Notifications arrive on `fe01`. Integers are **big-endian**.
 
@@ -127,7 +136,21 @@ engineered. Control Point `2ad9` (write + indicate), **little-endian**:
 Acknowledgements arrive as indications `80 <reqOpCode> <result>`, where `result == 0x01` is
 success. Every command is gated on its ack and failures surface in the UI — the app itself
 ships a `ftms_control_fail_tips` string, so rejection is expected in practice. Most units drop
-control permission on stop, so the driver re-requests it.
+control permission on stop, so the driver re-requests it — including when the stop itself was
+rejected, since a unit that refused to stop has certainly not handed control back. A unit that
+never fully left the previous session then refuses `07` outright; the driver answers `04`
+*operation failed* and `05` *control not permitted* with a `01` reset and one retry.
+
+**Pause is real here, and only here.** One op code covers "Start or Resume" and one covers
+"Stop or Pause", so resuming needs no command of its own — `07` does both jobs. Support
+cannot be discovered in advance: there is no pause bit in `2acc` Feature or anywhere else, so
+the spec's own answer is to send it and read the result. A unit that cannot pause replies
+`02` op-code-not-supported or `03` invalid-parameter, and `pause()` then stops the belt and
+reports `'stopped'` back to the caller, which drops the button for the rest of the
+connection. A belt still running under a button that says Paused is the one outcome worth
+writing code to prevent.
+
+KS+Fit does the same thing — `2ad9: request pause or stop, result: ` sits in its `libapp.so`.
 
 **Treadmill Data (`2acd`)** is a `uint16` flag field followed by only the present fields, in
 spec order. Layout varies per device, so `parseTreadmillData()` walks the flags with a cursor
@@ -193,8 +216,14 @@ what makes the protocol undiscoverable by passive listening. Same order as the o
 | `time_posix <unix seconds>` | `time_posix 0` |
 | `version` | `version 0014` |
 | `servers getProp 1 3 7 8 9 16 17 18 19 21 22 23 24 13 15` | `servers 0`, then a full config dump |
-| `props user_id <id>` | — |
+| `props user_id <id>` | — |  <!-- any integer; the pad does not validate it -->
 | `get_pk` | `get_pk 3` |
+
+`user_id` is not an identity the protocol checks — the pad accepts any integer and the app
+never reads it back. The value visible in the capture is the KS+Fit account id of the phone
+being recorded, so this app sends a random per-install number kept in `localStorage`
+instead: stable enough for a pad that keys its own bookkeeping off it, and connected to no
+real account.
 | `props ControlMode 1` | `props ControlMode 1` |
 | `servers getProp 1 9 15 2 10 11 12 13 14` | `servers 0` — subscribes to live telemetry |
 
@@ -204,9 +233,33 @@ what makes the protocol undiscoverable by passive listening. Same order as the o
 
 | Action | Message |
 |---|---|
-| Start | `props runState 1` |
+| Start | `props ControlMode 1` → `props runState 1` |
 | Stop | `props runState 0` |
 | Set speed | `props CurrentSpeed 1.1` (km/h, one decimal) |
+
+Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
+and ignored — the belt simply does not move, with no error anywhere. `ControlMode 1` therefore
+has to be re-asserted on every start, not just once during the handshake.
+
+**Pause exists on this family but has not been captured.** KS+Fit's BLE layer for these
+pads — the `Wilink*` classes, whose property names (`ControlMode`, `ChildLockSwitch`,
+`VelocitySensitivity`, `runState`) are exactly the ones above — carries a pause alongside
+start and stop, and the app has a paused device state to go with it:
+
+```
+WilinkDeviceActionExt|setStart    WilinkDeviceActionExt|setStop
+WilinkDeviceActionExt|setPause    WilinkDeviceActionExt|startOrStop
+KsTreadmillDevice startOrPause mode:
+Speed adjustment is not supported when the device is paused.
+```
+
+The payload is not recoverable from the binary — the command templates are built at runtime,
+which is the same reason the protocol needed a capture in the first place, and `blutter` is
+still arm64-only against this v7a build. The capture itself only ever exercised `runState`
+`0` and `1`. `props runState 2` is the obvious guess and it stays a guess: `ks1234Driver.pause()`
+throws rather than aim an unverified control command at a treadmill. Settling it needs one
+more HCI trace — start a walk in KS+Fit, press pause, press resume — through the same
+pipeline as above.
 
 **Telemetry** arrives on `fed8` as `props` lines, often **partial** — `props RunningSteps 3` on
 its own is normal, so merge updates rather than replacing state:

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, type Session } from '../src/state/session.js';
-import { trustFor } from '../src/state/telemetry.js';
+import { Counter, sessions, currentSession, todayTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
+import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
 import type { DriverId } from '../src/lib/drivers.js';
 import { dayKey } from '../src/lib/format.js';
 
@@ -208,6 +208,86 @@ describe('sessionsOn', () => {
   });
 });
 
+describe('pausing a walk', () => {
+  const MINUTE = 60_000;
+  const belt = (kmh: number) => {
+    live.value = { ...live.value, speedKmh: kmh };
+  };
+  /** Walk long enough to clear the 30 s floor, so what follows is about the hold. */
+  const walkAWhile = () => {
+    belt(3);
+    vi.advanceTimersByTime(45_000);
+  };
+
+  beforeEach(() => {
+    setSessionMeta({ protocol: 'classic', protocolName: 'test', deviceName: 'test' });
+    startSessionTracking();
+  });
+
+  afterEach(() => {
+    stopSessionTracking();
+    holdSession(false);
+    live.value = { ...EMPTY };
+  });
+
+  it('closes an idle session when nothing is holding it', () => {
+    walkAWhile();
+    belt(0);
+    vi.advanceTimersByTime(61_000);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+  });
+
+  it('holds the walk open past the idle timeout while paused', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    expect(currentSession.value).not.toBeNull();
+    expect(sessions.value).toHaveLength(0);
+  });
+
+  it('keeps a pause and resume as one walk, not two', () => {
+    walkAWhile();
+    const id = currentSession.value!.id;
+
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    holdSession(false); // resuming releases the hold, as doResume does
+    belt(3);
+    vi.advanceTimersByTime(30_000);
+
+    expect(sessions.value).toHaveLength(0);
+    expect(currentSession.value!.id).toBe(id);
+    // Only moving time counts: 45 s before the pause, 30 s after, nothing in between,
+    // less the tick that opened the session and so had no interval to bank.
+    expect(currentSession.value!.activeMs).toBe(74_000);
+  });
+
+  it('files the walk once the hold lapses, rather than holding it forever', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(16 * MINUTE);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+    // The 15 idle minutes bank nothing — a held session is still a stopped belt.
+    expect(sessions.value[0]!.activeMs).toBe(44_000);
+  });
+
+  it('lets the idle rule take over again once the hold is released', () => {
+    walkAWhile();
+    holdSession(true);
+    belt(0);
+    vi.advanceTimersByTime(5 * MINUTE);
+    holdSession(false);
+    vi.advanceTimersByTime(61_000);
+    expect(currentSession.value).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+  });
+});
+
 describe('deleteSession', () => {
   it('removes only the one asked for', () => {
     const a = session({ protocol: 'classic' });
@@ -217,6 +297,20 @@ describe('deleteSession', () => {
     expect(sessions.value.map((s) => s.id)).toEqual([b.id]);
   });
 });
+
+/** Counts fields the way a CSV reader would: commas inside quotes do not separate. */
+function countCsvFields(row: string): number {
+  let fields = 1;
+  let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    const c = row[i];
+    if (c === '"') {
+      if (inQuotes && row[i + 1] === '"') i++; // an escaped quote, not a delimiter
+      else inQuotes = !inQuotes;
+    } else if (c === ',' && !inQuotes) fields++;
+  }
+  return fields;
+}
 
 describe('exportCsv', () => {
   it('carries the trust columns, so a raw number is never mistaken for a real one', () => {
@@ -230,10 +324,69 @@ describe('exportCsv', () => {
     expect(exportCsv().split('\n')).toHaveLength(1);
   });
 
+  it('neutralises a device name a spreadsheet would run as a formula', () => {
+    // Device names come off the air, and "Show all devices" connects to anything.
+    sessions.value = [session({ protocol: 'classic', deviceName: "=cmd|' /C calc'!A0" })];
+    const row = exportCsv().split('\n')[1]!;
+    expect(row).toContain(`"'=cmd|' /C calc'!A0"`);
+    // The cell no longer begins with = once unquoted, so it is text, not a formula.
+    expect(row).not.toContain('"=cmd');
+  });
+
+  it('escapes an embedded quote the way CSV requires, not the way JSON does', () => {
+    sessions.value = [session({ protocol: 'classic', deviceName: 'Pad "Pro"' })];
+    const row = exportCsv().split('\n')[1]!;
+    expect(row).toContain('"Pad ""Pro"""'); // doubled, not backslashed
+    expect(row).not.toContain('\\"');
+  });
+
+  it('keeps the column count stable whatever the device is called', () => {
+    const names = [
+      'KS-C2',
+      'Pad, the second',
+      'Pad "Pro"',
+      "=cmd|' /C calc'!A0",
+      '+41 555',
+      '-lead',
+      '@here',
+      'KS-C2,9999,9999,9999',
+    ];
+    for (const deviceName of names) {
+      sessions.value = [session({ protocol: 'classic', deviceName })];
+      const row = exportCsv().split('\n')[1]!;
+      expect(countCsvFields(row)).toBe(10);
+    }
+  });
+
   it('quotes the device name so a comma in it cannot shift the columns', () => {
     sessions.value = [session({ protocol: 'classic', deviceName: 'Pad, the second' })];
     const row = exportCsv().split('\n')[1]!;
     expect(row).toContain('"Pad, the second"');
     expect(row.split('","')).toHaveLength(1);
+  });
+});
+
+describe('csvField', () => {
+  it('always quotes, so an empty field is still a field', () => {
+    expect(csvField('')).toBe('""');
+    expect(csvField(null)).toBe('""');
+    expect(csvField(undefined)).toBe('""');
+  });
+
+  it('doubles quotes rather than backslashing them', () => {
+    expect(csvField('a"b')).toBe('"a""b"');
+  });
+
+  it('prefixes the characters spreadsheets treat as formula starters', () => {
+    expect(csvField('=1+1')).toBe(`"'=1+1"`);
+    expect(csvField('+1')).toBe(`"'+1"`);
+    expect(csvField('-1')).toBe(`"'-1"`);
+    expect(csvField('@x')).toBe(`"'@x"`);
+    expect(csvField('\tx')).toBe(`"'\tx"`);
+  });
+
+  it('leaves an ordinary name alone', () => {
+    expect(csvField('KS-C2')).toBe('"KS-C2"');
+    expect(csvField('Pad, the second')).toBe('"Pad, the second"');
   });
 });

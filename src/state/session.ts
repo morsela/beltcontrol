@@ -14,8 +14,12 @@ import { log } from './log.js';
 const SESSIONS_KEY = 'wp.sessions.v1';
 const OPEN_KEY = 'wp.session.open.v1';
 
-/** A pause shorter than this does not split a session — desk walkers stop constantly. */
+/** A lull shorter than this does not split a session — desk walkers stop constantly. */
 const IDLE_END_MS = 60_000;
+/** How long an *explicit* pause holds an idle session open on top of that. Long enough
+ *  for a call or a coffee; short enough that a walk abandoned at lunch is filed as a
+ *  lunchtime walk rather than absorbing whatever happens at four o'clock. */
+const PAUSE_HOLD_MS = 15 * 60_000;
 /** Anything shorter than this is noise (a nudged belt, a mis-tap). */
 const MIN_SESSION_MS = 30_000;
 /** One sample per this interval feeds the session speed chart. */
@@ -173,6 +177,7 @@ export const sessions = signal<Session[]>(loadSessions());
 let counters = { dist: new Counter(), steps: new Counter(), kcal: new Counter() };
 let lastTickAt: number | null = null;
 let lastMoveAt: number | null = null;
+let heldSince: number | null = null;
 let lastSampleAt = 0;
 let ticker: number | null = null;
 
@@ -272,10 +277,27 @@ function finalise(s: Session) {
   persistSessions();
 }
 
+/**
+ * Hold the open session across a deliberate pause.
+ *
+ * Held, an idle belt gets `PAUSE_HOLD_MS` before the walk ends rather than the usual
+ * `IDLE_END_MS`, so stepping away and coming back leaves one session instead of two —
+ * or, when the tail falls under the 30 s floor, instead of one and a discarded scrap.
+ * It never adds time: `activeMs` still only accrues while the belt is moving.
+ *
+ * Releasing it is the caller's business, because only the caller can tell a belt that is
+ * coasting down from a pause apart from one somebody has just set going again. The cap
+ * above is the backstop for a hold nobody ever releases.
+ */
+export function holdSession(on: boolean) {
+  heldSince = on ? Date.now() : null;
+}
+
 /** Close the open session, discarding it if it was too short to be real. */
 export function closeSession(reason = 'ended') {
   const s = currentSession.value;
   currentSession.value = null;
+  heldSince = null;
   persistOpen();
   if (!s) return;
   if (s.activeMs < MIN_SESSION_MS) {
@@ -344,7 +366,10 @@ function tick() {
   currentSession.value = { ...s };
 
   if (!moving && lastMoveAt != null && now - lastMoveAt > IDLE_END_MS) {
-    closeSession('ended (idle)');
+    if (heldSince == null) closeSession('ended (idle)');
+    else if (now - heldSince > PAUSE_HOLD_MS) {
+      closeSession(`ended (paused over ${PAUSE_HOLD_MS / 60_000} min)`);
+    }
   }
 }
 
@@ -470,6 +495,29 @@ export function mergeSessions(incoming: Session[]): { added: number; duplicate: 
   return { added, duplicate };
 }
 
+/**
+ * One CSV field, quoted the way RFC 4180 actually specifies and defanged for
+ * spreadsheets.
+ *
+ * The device name is the reason this needs care: it arrives over the air from whatever
+ * the pad advertises, and "Show all devices" will happily connect to anything. Two
+ * separate problems come with that.
+ *
+ * `JSON.stringify` was doing the quoting, which escapes an embedded quote as \" —
+ * valid JSON, invalid CSV, where the escape is a doubled quote. A name containing one
+ * corrupted the row.
+ *
+ * And a leading =, +, -, @, tab or CR makes Excel, Sheets and LibreOffice treat the
+ * cell as a formula rather than text, quoting notwithstanding: a device advertising
+ * itself as `=cmd|' /C calc'!A0` lands as a live formula in the exported file. The
+ * usual fix is to prefix a single quote, which those apps read as "this is text".
+ */
+export function csvField(value: unknown): string {
+  const s = String(value ?? '');
+  const defanged = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return `"${defanged.replace(/"/g, '""')}"`;
+}
+
 export function exportCsv(): string {
   const rows = [
     'started,ended,active_minutes,distance_km,steps,kcal,protocol,device,distance_trust,steps_trust',
@@ -484,7 +532,7 @@ export function exportCsv(): string {
         Math.round(s.steps),
         Math.round(s.kcal),
         s.protocol ?? '',
-        JSON.stringify(s.deviceName ?? ''),
+        csvField(s.deviceName ?? ''),
         s.trust.distKm,
         s.trust.steps,
       ].join(',')
