@@ -40,11 +40,11 @@ function stampServiceWorker(): Plugin {
   };
 }
 
-// No plugin needed for Preact: esbuild handles the JSX transform via tsconfig's
+// No plugin needed for Preact: oxc handles the JSX transform via tsconfig's
 // jsxImportSource. Keeping the plugin list empty keeps `npm install` to four packages.
 export default defineConfig({
   plugins: [stampServiceWorker()],
-  esbuild: { jsx: 'automatic', jsxImportSource: 'preact' },
+  oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   resolve: {
     // Lets any stray `react` import resolve to Preact rather than failing the build.
     alias: {
