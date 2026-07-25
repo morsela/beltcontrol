@@ -73,7 +73,12 @@
   --tap: 48px;        /* minimum touch target */
   --gap: 0.75rem;
   --pad: 1rem;
-  --maxw: 30rem;
+  /* --maxw was doing three unrelated jobs — the phone column, the dialog and the
+     stop bar all happened to want 30rem. They stop agreeing on desktop. */
+  --maxw: 30rem;        /* the mobile content column, and the stop bar with it */
+  --maxw-sheet: 34rem;  /* a centred dialog wants to be narrower than the page */
+  --maxw-desktop: 76rem;
+  --rail: 23rem;        /* the live pane: hero at --t-hero fits with room to spare */
 
   --shadow: 0 1px 2px rgb(16 20 24 / 6%), 0 8px 24px rgb(16 20 24 / 4%);
   --ease: cubic-bezier(0.2, 0, 0, 1);
