@@ -6,6 +6,7 @@ import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
+import { Brand } from '../components/Logo.js';
 import {
   connected,
   connect,
@@ -22,6 +23,7 @@ import {
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
+import { isDesktop } from '../lib/viewport.js';
 import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
@@ -40,6 +42,11 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
 
   return (
     <>
+      {/* Only on a phone. On desktop this route is the rail, and the top bar above it
+          is already carrying the lockup — a second one a few hundred pixels away is
+          not branding, it is a duplicate. */}
+      {!isDesktop.value && <Brand class="page-brand" />}
+
       <div class="topbar">
         <StatusChip onOpen={() => setSheet(true)} />
         {/* Ambient mode used to be reachable only by holding the hero number, which

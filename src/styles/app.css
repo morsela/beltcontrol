@@ -82,6 +82,31 @@
   color: var(--muted);
 }
 
+/* --- brand ---------------------------------------------------------------- */
+
+/* Mark and name as one lockup, so they cannot drift apart or wrap between. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+/* `block` because an inline svg sits on the text baseline and leaves a descender's
+   worth of space under the tile, which reads as a mark hung too high. */
+.brand .logo { flex: none; display: block; }
+
+/* The phone header. Deliberately quiet and deliberately short: the screen below it
+   is glanced at from a treadmill, and every pixel spent here is a pixel off the
+   number that has to be read from arm's length. */
+.page-brand {
+  display: flex;
+  padding-bottom: 0.5rem;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
 /* --- status chip ---------------------------------------------------------- */
 
 .topbar {
@@ -807,11 +832,8 @@ table.data th { color: var(--muted); font-weight: 500; }
     gap: 0.25rem;
     align-items: center;
   }
-  .tabbar.top .wordmark {
-    flex: 1;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
+  /* Typography and the mark come from .brand; this only pushes the tabs right. */
+  .tabbar.top .wordmark { flex: 1; }
   .tabbar.top a {
     flex: none;
     flex-direction: row;
