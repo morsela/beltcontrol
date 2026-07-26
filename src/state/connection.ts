@@ -1,6 +1,6 @@
 import { signal, computed, effect } from '@preact/signals';
 import { detectDriver, UUID } from '../lib/drivers.js';
-import type { Driver } from '../lib/drivers.js';
+import type { Driver, StartVerdict } from '../lib/drivers.js';
 import {
   ingest,
   resetTelemetry,
@@ -244,7 +244,7 @@ async function wireDriver(
  */
 export async function connectSimulated(
   id?: 'classic' | 'ftms' | 'ks1234' | 'fitshow',
-  opts: { rejectPause?: boolean } = {}
+  opts: { rejectPause?: boolean; refuseStarts?: number } = {}
 ) {
   if (!import.meta.env.DEV) return;
   const { simulatedDriver } = await import('../lib/simulator.js');
@@ -332,30 +332,72 @@ async function begin(kind: 'start' | 'resume') {
   // A start supersedes any stop or pause still waiting to be confirmed.
   clearStopWatch();
   stopPending.value = false;
-  askedToMoveAt = Date.now();
 
-  try {
-    setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
-    await d.start();
-  } catch (e) {
-    // The command never went out, so the belt is where it was — including still paused,
-    // if that is where it was.
-    clearStartWatch();
-    running.value = false;
-    fail(e);
-    return;
+  // Raised for the whole sequence, retries included, rather than left to `watchForStart`
+  // at the end of it. A refused start is a belt sitting there reporting zero, and with
+  // `running` up and this flag down that is precisely the shape the self-stop watcher
+  // reads as "the belt stopped by itself" — it would file the walk mid-retry.
+  const gen = ++startGeneration;
+  startPending.value = true;
+
+  let verdict: StartVerdict = 'unknown';
+
+  for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
+    // Refreshed per attempt: only what the belt says after the latest command counts as
+    // its answer to that command.
+    askedToMoveAt = Date.now();
+
+    try {
+      setStatus(kind === 'resume' ? 'resuming…' : 'starting…');
+      await d.start();
+    } catch (e) {
+      // The command never went out, so the belt is where it was — including still paused,
+      // if that is where it was.
+      clearStartWatch();
+      running.value = false;
+      fail(e);
+      return;
+    }
+    if (startGeneration !== gen) return;
+
+    // `running` means "a start is outstanding, so the belt may be moving" from here on,
+    // which is what keeps Stop pinned and reachable. It is not a claim that the belt
+    // obeyed — the verdict below and then `watchForStart` decide that, in that order.
+    // `paused` drops for the same reason in reverse: a Resume button in front of a belt
+    // that was just told to go is wrong even if it turns out not to have gone.
+    //
+    // Up from the first attempt and never lowered between them: a pad that answered no
+    // is still a pad that might act on the command late, and Stop has to stay in reach
+    // for every second of that.
+    running.value = true;
+    paused.value = false;
+    holdSession(false);
+    if (attempt === 1) {
+      log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
+    }
+
+    // `unknown` on every protocol that cannot answer, which is all of them but one, so
+    // this loop runs exactly once and behaves as it always did unless a pad says no.
+    verdict = (await d.startVerdict?.()) ?? 'unknown';
+    if (startGeneration !== gen) return;
+    if (verdict !== 'refused') break;
+
+    // The refusal is the pad's account of the command, not of the belt. If the belt is
+    // moving regardless, that outranks it — and re-sending a start to a belt already
+    // under way is the one retry with nothing to gain and a person standing on it.
+    if (confirmedRunning.value) break;
+    if (attempt === MAX_START_ATTEMPTS) break;
+
+    log(
+      `the belt refused the ${kind} — sending it again ` +
+        `(attempt ${attempt + 1} of ${MAX_START_ATTEMPTS})`,
+      'err'
+    );
+    await new Promise((r) => setTimeout(r, START_RETRY_MS));
+    if (startGeneration !== gen) return;
   }
 
-  // `running` means "a start is outstanding, so the belt may be moving" from here on,
-  // which is what keeps Stop pinned and reachable. It is not a claim that the belt
-  // obeyed — `watchForStart` decides that. `paused` drops for the same reason in
-  // reverse: a Resume button in front of a belt that was just told to go is wrong even
-  // if it turns out not to have gone.
-  running.value = true;
-  paused.value = false;
-  holdSession(false);
-  log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
-  watchForStart(kind);
+  watchForStart(kind, verdict === 'refused');
 
   try {
     // Some units ignore a speed set before the belt is actually moving.
@@ -373,14 +415,44 @@ async function begin(kind: 'start' | 'resume') {
  *  quietly refused says nothing at all, ever. */
 const START_CONFIRM_MS = 10_000;
 
+/**
+ * How many times a start the pad answered with a flat refusal is worth writing again.
+ *
+ * Three, because three is what the KS-C2 that prompted this took: two refusals, then an
+ * identical third attempt the pad simply accepted. Nothing in the protocol explains what
+ * changed between them, and that is exactly why this is a small cap and not persistence —
+ * a pad that keeps refusing is telling the truth about itself, and hammering a treadmill
+ * with start commands until one lands is not a thing this app does.
+ */
+const MAX_START_ATTEMPTS = 3;
+
+/** Breathing room between a refusal and the next attempt. */
+const START_RETRY_MS = 800;
+
 /** A start has been written and the belt has not confirmed it yet. */
 export const startPending = signal(false);
 
 let startWatch: number | null = null;
 
-function clearStartWatch() {
+/**
+ * Bumped by everything that ends a start's life: a stop, a pause, a disconnect, or another
+ * start. `begin` takes a copy and re-checks it after every await, which is how a retry
+ * sequence nobody wants any more stops between attempts instead of putting one more start
+ * on the wire behind the back of whoever just pressed Stop.
+ */
+let startGeneration = 0;
+
+/** Drop the confirmation timer without touching `startPending`. Re-arming the watch has
+ *  to leave the flag alone: the self-stop watcher reads it, and a single blink off is all
+ *  that watcher needs to file a start that is still perfectly alive. */
+function stopStartTimer() {
   if (startWatch != null) window.clearInterval(startWatch);
   startWatch = null;
+}
+
+function clearStartWatch() {
+  startGeneration++;
+  stopStartTimer();
   startPending.value = false;
 }
 
@@ -395,8 +467,8 @@ function clearStartWatch() {
  * never confirm because the "speed" it was waiting to see fall to zero was the app's
  * invention. So: assert nothing, wait for the pad, and say so when it never answers.
  */
-function watchForStart(kind: 'start' | 'resume' = 'start') {
-  clearStartWatch();
+function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
+  stopStartTimer();
   startPending.value = true;
   const deadline = Date.now() + START_CONFIRM_MS;
 
@@ -421,13 +493,26 @@ function watchForStart(kind: 'start' | 'resume' = 'start') {
       }
       // Phrased like the unconfirmed-stop message beside it: what was sent, what the
       // belt did about it, what to do next. The chip carries this now, and wraps.
+      //
+      // A pad that refused out loud gets told back what it said, rather than the softer
+      // "never reported movement" — it did not fail to answer, it answered no, and every
+      // retry it had was spent. Saying so is what points at the panel as the thing to fix.
       setStatus(
-        `${capitalise(kind)} was sent but the belt never reported movement — it may have ` +
-          "handed control back to its own panel. Use the treadmill's own controls, or " +
-          'disconnect and reconnect.',
+        refused
+          ? `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
+              "each one — its own panel still has control. Use the treadmill's own " +
+              'controls, or disconnect and reconnect.'
+          : `${capitalise(kind)} was sent but the belt never reported movement — it may ` +
+              "have handed control back to its own panel. Use the treadmill's own " +
+              'controls, or disconnect and reconnect.',
         'err'
       );
-      log(`${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`, 'err');
+      log(
+        refused
+          ? `${kind} refused ${MAX_START_ATTEMPTS} times — the belt never moved`
+          : `${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`,
+        'err'
+      );
     }
   };
 

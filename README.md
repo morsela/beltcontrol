@@ -84,6 +84,7 @@ In dev builds only, the console exposes a fake pad:
 ```js
 __wp.connectSimulated('classic')   // or 'ftms', 'ks1234', 'fitshow'
 __wp.connectSimulated('ftms', { rejectPause: true })   // a unit that refuses to pause
+__wp.connectSimulated('ks1234', { refuseStarts: 2 })   // a pad that takes three tries to start
 __wp.disconnect()
 ```
 
@@ -120,6 +121,11 @@ The belt can start under software control with nobody on it. The app therefore:
   resume** only once the belt reports movement — a written command is not a moving belt, or
   a stopped one. All four say plainly when the belt never confirms, and none of them ever
   invents a reading of its own to stand in for one
+- re-sends a start **only when the pad has answered that it refused one** — at most three
+  times, only while the app is still saying "starting", and never after it has reported
+  failure or once a stop, a pause or a disconnect has arrived. A belt that lurches into
+  motion long after the app said it never moved, when whoever pressed the button has
+  stepped off, is precisely the thing a retry must not become
 - pins Stop from the moment a start goes out until the belt reports zero — above the tab
   bar on mobile, at the top of the rail on desktop — and keeps it on screen in ambient
   mode and inside every dialog, so it can never be scrolled out of reach or covered

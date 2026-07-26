@@ -954,6 +954,23 @@ export function installId() {
 /** Ceiling on the line-reassembly buffer — see `_rx`. */
 const KS_RX_MAX = 4096;
 
+/**
+ * The band this protocol's parent spec — Xiaomi's MIoT serial command set — reserves for
+ * errors the device vendor defines itself: -9999 to -5000 inclusive. Everything above it
+ * (-4001 to -4007) is MIoT's own fixed list, and none of those mean "refused".
+ *
+ * A KS-C2 that will not honour a start answers `props Error ErrorCode -5000` within the
+ * same second. What -5000 means is KingSmith firmware's business and is written down
+ * nowhere public, so the whole band is treated as one thing — the pad saying no — rather
+ * than pinning the reading on a single number that a sibling model may not share.
+ */
+const KS_VENDOR_ERROR_MAX = -5000;
+const KS_VENDOR_ERROR_MIN = -9999;
+
+/** How long to give the pad to answer a start before giving up on hearing either way. On
+ *  a real KS-C2 both the refusal and the acceptance land inside one second. */
+const KS_START_VERDICT_MS = 1500;
+
 export function ks1234Driver() {
   let writeCh = null;
   let notifyCh = null;
@@ -961,6 +978,37 @@ export function ks1234Driver() {
   let rxBuf = '';
   let closed = false;
   const queue = serialiser();
+
+  /** The pad's answer to the most recent `start()`; null before the first one. */
+  let lastStart = null;
+
+  /**
+   * Open a window for the pad to answer the start that is about to be written.
+   *
+   * Armed *before* the write rather than after it, because the refusal comes back inside
+   * the same second and a listener installed afterwards races it.
+   */
+  function armStartVerdict() {
+    lastStart?.settle('unknown'); // a new start supersedes the old one's window
+    let resolve;
+    const answer = new Promise((r) => {
+      resolve = r;
+    });
+    const record = {
+      answer,
+      open: true,
+      timer: null,
+      settle(verdict) {
+        if (!record.open) return;
+        record.open = false;
+        if (record.timer != null) clearTimeout(record.timer);
+        record.timer = null;
+        resolve(verdict);
+      },
+    };
+    lastStart = record;
+    return record;
+  }
 
   const self = {
     id: 'ks1234',
@@ -986,6 +1034,9 @@ export function ks1234Driver() {
 
     async detach() {
       closed = true;
+      // Nothing is going to answer now, and a caller awaiting the verdict of a start that
+      // was in flight when the link went should not be left holding an unsettled promise.
+      lastStart?.settle('unknown');
       if (notifyCh && onNotify) {
         notifyCh.removeEventListener('characteristicvaluechanged', onNotify);
         try {
@@ -1053,12 +1104,41 @@ export function ks1234Driver() {
     // interface rather than as a synchronous throw past a caller's .catch().
     async start() {
       self._requireOpen();
-      // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
-      // is accepted and ignored — the belt simply does not move. The connect handshake sets
-      // ControlMode 1, which is why the first start of a session worked and no later one
-      // did. Re-assert it every time; it is a no-op when the app already holds control.
-      await self._send('props ControlMode 1');
-      await self._send('props runState 1');
+      const verdict = armStartVerdict();
+      try {
+        // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
+        // is accepted and ignored — the belt simply does not move. The connect handshake sets
+        // ControlMode 1, which is why the first start of a session worked and no later one
+        // did. Re-assert it every time; it is a no-op when the app already holds control.
+        //
+        // Deliberately still written back-to-back, with no wait for the pad to acknowledge
+        // the mode before the run state goes out: that is the exact order and pacing the
+        // capture shows KS+Fit using on a start that worked. The acknowledgement is read
+        // afterwards, by `startVerdict`, so nothing about what goes on the wire changes.
+        await self._send('props ControlMode 1');
+        await self._send('props runState 1');
+      } catch (e) {
+        verdict.settle('unknown');
+        throw e;
+      }
+      // The clock runs from the moment the writes are actually out, not from the call.
+      verdict.timer = setTimeout(() => verdict.settle('unknown'), KS_START_VERDICT_MS);
+    },
+
+    /**
+     * What the pad said about the last start.
+     *
+     * `'refused'` is the pad answering no — either a vendor error code, or its own panel
+     * still reported as holding control, which per the note in `start()` means the run
+     * state was accepted and ignored. `'accepted'` is the mode echo coming back. Silence
+     * is `'unknown'`, which is the only honest reading of a pad that says nothing: the
+     * caller waits for movement, exactly as it does on every other protocol.
+     *
+     * A verdict is not a claim about the belt — only about whether the command was taken.
+     * Movement is still confirmed the one way it can be, by the belt reporting it.
+     */
+    async startVerdict() {
+      return lastStart ? lastStart.answer : 'unknown';
     },
     async stop() {
       self._requireOpen();
@@ -1101,6 +1181,7 @@ export function ks1234Driver() {
           continue;
         }
         self.onLog?.(`<-- ${line}`);
+        self._noteStartVerdict(line);
         self._apply(line);
       }
       // Whatever is left is the start of a line still arriving. A pad talking noise —
@@ -1109,6 +1190,38 @@ export function ks1234Driver() {
       if (rxBuf.length > KS_RX_MAX) {
         self.onLog?.(`discarding ${rxBuf.length} B of unterminated input from the pad`);
         rxBuf = '';
+      }
+    },
+
+    /**
+     * Read the pad's answer to an outstanding start out of an incoming line.
+     *
+     * Kept apart from `_apply` because this is the control plane, not telemetry: none of
+     * it describes the walk, and none of it belongs in the merged reading the UI shows.
+     *
+     * Matched on the raw line rather than through `parseProps`, which pairs tokens off two
+     * at a time and so cannot read the odd-length `props Error ErrorCode -5000` the pad
+     * actually sends. Left that way on purpose — `parseProps` reproduces the captured
+     * even-length frames byte for byte and is not worth disturbing for one control line.
+     */
+    _noteStartVerdict(line) {
+      if (!lastStart?.open) return;
+
+      const err = /\bErrorCode\s+(-?\d+)\b/.exec(line);
+      const code = err ? Number(err[1]) : null;
+      if (code != null && code >= KS_VENDOR_ERROR_MIN && code <= KS_VENDOR_ERROR_MAX) {
+        self.onLog?.(`the pad refused the start (error ${code})`);
+        lastStart.settle('refused');
+        return;
+      }
+
+      const mode = /\bControlMode\s+(\d+)\b/.exec(line);
+      if (!mode) return;
+      if (Number(mode[1]) === 2) {
+        self.onLog?.('the pad kept control on its own panel — the start will be ignored');
+        lastStart.settle('refused');
+      } else if (Number(mode[1]) === 1) {
+        lastStart.settle('accepted');
       }
     },
 

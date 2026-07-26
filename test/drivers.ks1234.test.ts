@@ -142,6 +142,105 @@ describe('ks1234Driver', () => {
     ]);
   });
 
+  // The pad answers a start it will not honour, and it answers within the same second.
+  // Reading that answer is the difference between knowing in one second and guessing
+  // after ten — see the `startVerdict` note in drivers.js.
+  describe('the pad’s answer to a start', () => {
+    async function started() {
+      const { server, write, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await d.start();
+      return { d, write, notify, logs };
+    }
+
+    it('reads a vendor error code as the pad refusing', async () => {
+      const { d, notify } = await started();
+      // Exactly what a real KS-C2 sends. Note the odd token count: `parseProps` pairs
+      // tokens off two at a time and cannot read this line, which is why the driver
+      // matches the raw text instead.
+      push(notify, 'props Error ErrorCode -5000');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+    });
+
+    it('reads the whole vendor band, not just the one code seen on this pad', async () => {
+      // MIoT hands -9999..-5000 to the vendor to define. A sibling model answering -5003
+      // is saying the same thing in its own dialect.
+      for (const code of [-5000, -5003, -9999]) {
+        const { d, notify } = await started();
+        push(notify, `props Error ErrorCode ${code}`);
+        await expect(d.startVerdict!()).resolves.toBe('refused');
+      }
+    });
+
+    it('leaves MIoT’s own error codes alone — none of them mean refused', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props Error ErrorCode -4003'); // "property does not exist"
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    it('reads the pad still holding control on its own panel as a refusal', async () => {
+      // Per `start()`: in panel mode `runState 1` is accepted and ignored. The pad saying
+      // it kept control is the pad saying the start will do nothing.
+      const { d, notify, logs } = await started();
+      push(notify, 'props ControlMode 2 ChildLockSwitch 0 runState 0 CurrentSpeed 0.0');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+      expect(logs.join('\n')).toMatch(/own panel/);
+    });
+
+    it('reads the control-mode echo as the pad taking the command', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    // Real timers, and so a genuinely slow test: the driver paces its own writes with
+    // sleeps, and faking the clock deadlocks `attach` before the pad can say anything.
+    it('says nothing either way when the pad says nothing', async () => {
+      const { d } = await started();
+      // Not 'accepted': silence is not consent. The caller falls back to waiting for the
+      // belt to actually move, exactly as it does on every other protocol.
+      await expect(d.startVerdict!()).resolves.toBe('unknown');
+    }, 10_000);
+
+    it('keeps the first answer, ignoring what the pad says afterwards', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props Error ErrorCode -5000');
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+    });
+
+    it('settles a start left in flight when the link goes', async () => {
+      // Nothing is going to answer now; a caller awaiting this must not hang on it.
+      const { d } = await started();
+      const verdict = d.startVerdict!();
+      await d.detach();
+      await expect(verdict).resolves.toBe('unknown');
+    });
+
+    it('gives each start its own window', async () => {
+      const { d, notify } = await started();
+      const first = d.startVerdict!();
+      await d.start(); // supersedes it before the pad ever answered
+      push(notify, 'props ControlMode 1');
+      await expect(first).resolves.toBe('unknown');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    it('is not fooled by a control-mode line arriving outside a start', async () => {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      push(notify, 'props ControlMode 1');
+      // No start has been written, so there is nothing for the pad to have accepted.
+      await expect(d.startVerdict!()).resolves.toBe('unknown');
+    });
+  });
+
   it('never interleaves the fragments of two messages', async () => {
     // The pad reassembles one stream and splits it on CR, so a message written into the
     // middle of another one's fragments decodes to garbage and is silently dropped.

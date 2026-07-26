@@ -36,6 +36,17 @@ export interface Capabilities {
 
 export type DriverId = 'classic' | 'ftms' | 'fitshow' | 'ks1234';
 
+/**
+ * What a pad said about a start, for the protocols that say anything at all.
+ *
+ *   accepted  the unit acknowledged taking the command
+ *   refused   the unit answered no — it will not move
+ *   unknown   the unit said nothing either way inside the window
+ *
+ * Never a statement about the belt: only movement reported by the belt is that.
+ */
+export type StartVerdict = 'accepted' | 'refused' | 'unknown';
+
 export interface Driver {
   readonly id: DriverId;
   readonly name: string;
@@ -55,6 +66,18 @@ export interface Driver {
   detach(): Promise<void>;
   /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
   start(): Promise<void>;
+  /**
+   * The unit's own answer to the last `start()`, once it has had a moment to give one.
+   *
+   * Optional, and absent on every protocol that cannot answer — a caller must read a
+   * missing method as `'unknown'` and fall back to waiting for the belt to move, which
+   * is what it does anyway. Only the 0x1234 driver implements it: that pad refuses a
+   * start out loud, and a refusal heard in one second beats a silence timed out in ten.
+   *
+   * Safe to call once per start, after `start()` resolves; the window is armed inside
+   * `start()` itself so a fast answer cannot be missed.
+   */
+  startVerdict?(): Promise<StartVerdict>;
   stop(): Promise<void>;
   /**
    * Pause the belt, resumable with `start()`.

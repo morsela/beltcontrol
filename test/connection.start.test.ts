@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   doStart,
   doResume,
+  doStop,
   driver,
   paused,
   running,
@@ -10,7 +11,7 @@ import {
 } from '../src/state/connection.js';
 import { ingest, live, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
-import type { Driver } from '../src/lib/drivers.js';
+import type { Driver, StartVerdict } from '../src/lib/drivers.js';
 
 /**
  * The mirror of `connection.stop.test.ts`, and for the same reason: these are about
@@ -55,6 +56,30 @@ function fakePad(over: Partial<Driver> = {}): Driver {
 /** `doStart` waits out the speed-settle delay before resolving. */
 async function settle() {
   await vi.advanceTimersByTimeAsync(700);
+}
+
+/**
+ * A pad that answers each start in turn from `verdicts`, and counts what it was sent.
+ *
+ * Anything past the end of the list is `'unknown'` — the answer from every protocol that
+ * cannot answer at all, which is all of them but the 0x1234.
+ */
+function answeringPad(verdicts: StartVerdict[], over: Partial<Driver> = {}) {
+  const counter = { attempts: 0 };
+  let i = 0;
+  const d = fakePad({
+    start: async () => {
+      counter.attempts++;
+    },
+    startVerdict: async () => verdicts[i++] ?? 'unknown',
+    ...over,
+  });
+  return { d, counter };
+}
+
+/** Long enough for three attempts, the two retry gaps between them, and the settle. */
+async function retries() {
+  await vi.advanceTimersByTimeAsync(2500);
 }
 
 describe('doStart', () => {
@@ -227,6 +252,125 @@ describe('doStart', () => {
 
     expect(paused.value).toBe(true);
     expect(running.value).toBe(false);
+  });
+
+  /**
+   * From a real KS-C2 log: two starts refused with `ErrorCode -5000` a second apart, then
+   * an identical third the pad simply took. Every attempt was a hand pressing the button,
+   * with ten seconds of the app insisting nothing had happened in between.
+   */
+  describe('when the pad refuses the start', () => {
+    it('sends it again, and stops as soon as one lands', async () => {
+      const { d, counter } = answeringPad(['refused', 'refused', 'accepted']);
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+
+      expect(counter.attempts).toBe(3);
+      expect(running.value).toBe(true);
+      // Accepted is not moving: the belt still has to say so itself.
+      expect(startPending.value).toBe(true);
+      expect(status.value.kind).not.toBe('err');
+    });
+
+    it('gives up after three, and says the belt refused rather than that it went quiet', async () => {
+      const { d, counter } = answeringPad(['refused', 'refused', 'refused']);
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+
+      expect(counter.attempts).toBe(3);
+      expect(running.value).toBe(true); // Stop stays reachable while it might yet move
+
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(running.value).toBe(false);
+      expect(status.value.kind).toBe('err');
+      expect(status.value.text).toMatch(/refused each one/);
+      expect(status.value.text).not.toMatch(/never reported movement/);
+    });
+
+    it('does not re-send it to a belt that is moving anyway', async () => {
+      // The refusal is the pad's account of the command, not of the belt. A belt that is
+      // under way outranks it, and a second start is the one retry with a person on it.
+      const { d, counter } = answeringPad(['refused', 'accepted']);
+      driver.value = d;
+
+      const p = doStart();
+      ingest({ speedKmh: 2.0 });
+      await retries();
+      await p;
+
+      expect(counter.attempts).toBe(1);
+      expect(running.value).toBe(true);
+    });
+
+    it('abandons the sequence when somebody presses Stop mid-way', async () => {
+      const { d, counter } = answeringPad(['refused', 'refused', 'accepted']);
+      driver.value = d;
+
+      const p = doStart();
+      await vi.advanceTimersByTimeAsync(100); // inside the first retry gap
+      expect(counter.attempts).toBe(1);
+
+      await doStop();
+      await vi.advanceTimersByTimeAsync(3000);
+      await p;
+
+      // The whole point of the generation check: no start goes on the wire behind the
+      // back of whoever just asked the belt to stop.
+      expect(counter.attempts).toBe(1);
+    });
+
+    // A refused start leaves the pad reporting a stationary belt, which is the exact
+    // shape the self-stop watcher reads as "it stopped by itself". Without `startPending`
+    // held up across the whole sequence it would file the walk between attempts.
+    it('does not read the stillness between attempts as a belt stopping itself', async () => {
+      const { d, counter } = answeringPad(['refused', 'accepted']);
+      driver.value = d;
+
+      const p = doStart();
+      ingest({ speedKmh: 0, state: 0, stateLabel: 'stopped' });
+      await retries();
+      await p;
+
+      expect(counter.attempts).toBe(2);
+      expect(running.value).toBe(true);
+      expect(status.value.text).not.toMatch(/stopped on its own/);
+    });
+
+    it('leaves a refused resume paused, exactly as an unconfirmed one', async () => {
+      const { d } = answeringPad(['refused', 'refused', 'refused']);
+      driver.value = d;
+      paused.value = true;
+
+      const p = doResume();
+      await retries();
+      await p;
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(paused.value).toBe(true);
+      expect(running.value).toBe(false);
+      expect(status.value.text).toMatch(/^Resume was sent/);
+    });
+  });
+
+  it('sends exactly one start to a pad that cannot answer for itself', async () => {
+    // Every protocol but the 0x1234. Nothing to read, so nothing to retry on — the
+    // behaviour here is what it was before any of this existed.
+    const { d, counter } = answeringPad([]);
+    driver.value = d;
+
+    const p = doStart();
+    await retries();
+    await p;
+
+    expect(counter.attempts).toBe(1);
+    expect(startPending.value).toBe(true);
   });
 
   it('leaves nothing outstanding when the start write itself failed', async () => {
