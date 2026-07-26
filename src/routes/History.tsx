@@ -1,5 +1,7 @@
 import { useRef, useState } from 'preact/hooks';
-import { dailySeries, streak, sessions, exportCsv } from '../state/session.js';
+import { dailySeries, streak, sessions, exportCsv, lifetimeTotals } from '../state/session.js';
+import { Odometer } from '../components/Odometer.js';
+import { lifetimeHeadline, fmtOdometer } from '../lib/odometer.js';
 import { exportJson, importBackup, BackupError } from '../state/backup.js';
 import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
@@ -76,6 +78,53 @@ function DataCard() {
   );
 }
 
+/**
+ * Everything, ever, on wheels that turn while you walk.
+ *
+ * The 30-day card below it answers "am I keeping this up"; this answers the other
+ * question a walking history gets asked, which is "how far have I actually got".
+ * Deliberately one number: a lifetime figure people can quote, not a second stat row.
+ */
+function LifetimeCard() {
+  const t = lifetimeTotals.value;
+  const head = lifetimeHeadline(t);
+  const text = fmtOdometer(head.value);
+  const noun = head.unit === 'mi' ? 'miles' : 'hours';
+  const since =
+    t.since != null
+      ? new Date(t.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : null;
+
+  return (
+    <div class="card">
+      <div class="odo-row">
+        <Odometer text={text} label={`${text} ${noun} in total.`} />
+        <span class="odo-unit">{head.unit}</span>
+      </div>
+      <p class="note" style="margin-top:.6rem">
+        {t.walks} walk{t.walks === 1 ? '' : 's'} on {t.days} day{t.days === 1 ? '' : 's'}
+        {since ? `, since ${since}` : ''}.
+      </p>
+      {/* Same rule as every other total on this screen: say what is not in it. */}
+      {head.fellBack ? (
+        <p class="note" style="margin-top:.4rem">
+          Counting hours rather than miles: no walk here came from a protocol that
+          reports distance on a scale this project established, and hours are measured
+          by this app rather than taken from the pad.
+        </p>
+      ) : (
+        t.excluded > 0 && (
+          <p class="note" style="margin-top:.4rem">
+            {t.excluded} walk{t.excluded === 1 ? ' is' : 's are'} left out of this
+            distance — the KingSmith 0x1234 protocol reports it on a scale nobody
+            established, so those numbers are kept raw rather than summed as miles.
+          </p>
+        )
+      )}
+    </div>
+  );
+}
+
 export function History() {
   const [showTable, setShowTable] = useState(false);
   const desktop = isDesktop.value;
@@ -110,8 +159,11 @@ export function History() {
   return (
     <>
       <h1 class="page">History</h1>
-      <p class="page-sub">Last 30 days</p>
 
+      <p class="section-title">Lifetime</p>
+      <LifetimeCard />
+
+      <p class="section-title">Last 30 days</p>
       <div class="card">
         <div class="stat-row">
           <div class="stat">
