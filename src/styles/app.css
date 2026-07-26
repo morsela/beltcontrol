@@ -172,6 +172,24 @@
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .dot.pulsing { animation: pulse 1.6s ease-in-out infinite; }
 
+/* One ring per frame off the radio — the link's heartbeat, not a belt state. Neutral
+   on purpose: --muted is not in the status palette, so the ring cannot be read as a
+   fourth thing the dot might be saying. It sits on its own layer over the dot, which
+   keeps it clear of the `pulsing` animation the same dot runs while connecting. */
+.link-dot { position: relative; display: inline-flex; flex: none; }
+@keyframes dot-ping {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+.dot-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  pointer-events: none;
+  animation: dot-ping 0.9s var(--ease) forwards;
+}
+
 /* --- tread strip ---------------------------------------------------------- */
 
 /* The deck the number sits on. Squared off and ruled top and bottom on purpose:

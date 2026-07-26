@@ -159,6 +159,18 @@ moment Escape has somewhere better to be.
   is the wrong thing to park beside someone working — which makes it the one place that
   cannot draw from `--ink`, near-black in the light theme. It has its own
   `--ambient-bg/-ink/-muted` tokens instead, measured at 17:1 and 7:1 in both themes.
+- **The chip's dot carries the radio, not just the belt.** A ring ticks outward once per
+  frame ingested, throttled to about four a second so a burst of reassembled fragments
+  reads as a heartbeat rather than a flicker. The app's least ordinary property is that
+  the link is real and local — browser to treadmill, no server in it — and nothing on
+  screen showed it: the label only moves when the belt's *state* changes, so a pad
+  happily reporting 3.0 mph for twenty minutes left the whole screen still. The ring is
+  deliberately **not** a state and **not** an error. It is drawn in `--muted`, which is
+  outside the status palette, so it cannot be read as a fourth thing the dot is saying;
+  when frames stop it simply stops, before any timeout has run out and without anything
+  being declared wrong. The connection sheet carries the age of the last frame for
+  anyone who wants the number, updated by a clock of its own — nothing in the signal
+  graph moves when a pad goes silent, which is exactly the case that row exists to show.
 - **A failure is never only in the log.** Every status, including one raised while
   connected, renders in a single always-mounted `aria-live` region on Now. A speed write
   that the belt rejects also puts the readout back where it was: the target on screen is
