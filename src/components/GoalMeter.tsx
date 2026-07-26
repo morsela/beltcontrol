@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { settings, updateSettings } from '../state/settings.js';
 import { todayTotals } from '../state/session.js';
 import { Sheet } from './Sheet.js';
+import { trackEvent } from '../lib/analytics.js';
 
 /**
  * One ratio against one limit. A meter on a same-ramp track — not a ring, not a
@@ -51,6 +52,7 @@ function GoalDialog({ goal, onClose }: { goal: number; onClose: () => void }) {
     e.preventDefault();
     if (!valid) return;
     updateSettings({ goalMinutes: Math.round(n) });
+    trackEvent('goal_changed', { minutes: Math.round(n) });
     onClose();
   };
 

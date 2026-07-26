@@ -8,6 +8,7 @@ import { isDesktop } from '../lib/viewport.js';
 import { fmtDuration, fmtMiles, fmtDayLabel, EM_DASH } from '../lib/format.js';
 import { download, stamped } from '../lib/download.js';
 import { log } from '../state/log.js';
+import { trackEvent } from '../lib/analytics.js';
 
 /**
  * Export, and the import that makes an export worth having: a backup nothing can read
@@ -32,10 +33,12 @@ function DataCard() {
       if (r.settingsRestored) parts.push('settings restored');
       setMsg({ text: `${parts.join(', ')}.` });
       log(`backup imported: ${parts.join(', ')}`, 'ok');
+      trackEvent('backup_imported', { added: r.added, duplicate: r.duplicate, skipped: r.skipped });
     } catch (err) {
       const text = err instanceof BackupError ? err.message : 'Could not read that file.';
       setMsg({ text, err: true });
       log(`backup import failed: ${text}`, 'err');
+      trackEvent('backup_import_failed');
     }
   }
 
@@ -45,14 +48,20 @@ function DataCard() {
         <button
           class="btn"
           disabled={n === 0}
-          onClick={() => download(stamped('backup', 'json'), exportJson(), 'application/json')}
+          onClick={() => {
+            download(stamped('backup', 'json'), exportJson(), 'application/json');
+            trackEvent('data_exported', { format: 'backup' });
+          }}
         >
           Export backup
         </button>
         <button
           class="btn"
           disabled={n === 0}
-          onClick={() => download(stamped('sessions', 'csv'), exportCsv(), 'text/csv')}
+          onClick={() => {
+            download(stamped('sessions', 'csv'), exportCsv(), 'text/csv');
+            trackEvent('data_exported', { format: 'csv' });
+          }}
         >
           Export CSV
         </button>

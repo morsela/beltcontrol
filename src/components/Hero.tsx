@@ -5,6 +5,7 @@ import { trustFor } from '../state/telemetry.js';
 import { todayTotals, currentSession } from '../state/session.js';
 import { availableMetrics, cycleMetric, metricValue, METRIC_UNIT } from '../lib/metrics.js';
 import { fmtDuration, fmtMiles } from '../lib/format.js';
+import { trackEvent } from '../lib/analytics.js';
 
 /**
  * The one number the screen leads with, at ~72px so it reads from arm's length
@@ -50,7 +51,9 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
             fired.current = false;
             return;
           }
-          updateSettings({ heroMetric: cycleMetric(key, available) });
+          const next = cycleMetric(key, available);
+          updateSettings({ heroMetric: next });
+          trackEvent('hero_metric_changed', { metric: next });
         }}
         onPointerDown={startPress}
         onPointerUp={endPress}

@@ -1,4 +1,6 @@
+import { useEffect } from 'preact/hooks';
 import { download, stamped } from '../lib/download.js';
+import { trackEvent } from '../lib/analytics.js';
 
 /**
  * The screen of last resort.
@@ -34,6 +36,13 @@ function rawDump(): string {
 
 export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   const message = error instanceof Error ? error.message : String(error);
+
+  // The one place a crash surfaces, so the one signal that the stored-data guards
+  // missed something. Deliberately no properties: the error message can quote
+  // whatever stored data caused it.
+  useEffect(() => {
+    trackEvent('recovery_shown');
+  }, []);
 
   return (
     <main class="shell">
@@ -78,6 +87,8 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
           class="btn danger block"
           onClick={() => {
             if (!confirm('Delete all stored walking history and settings from this browser?')) return;
+            // Best effort only — the reload below may outrun the beacon.
+            trackEvent('storage_cleared');
             for (const k of KEYS) {
               try {
                 localStorage.removeItem(k);

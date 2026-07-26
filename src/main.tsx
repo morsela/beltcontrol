@@ -4,6 +4,12 @@ import './styles/app.css';
 import { App } from './app.js';
 import { installGuards } from './state/connection.js';
 import { restoreOpenSession, startSessionTracking } from './state/session.js';
+import { setAnalyticsProvider } from './lib/analytics.js';
+import { vercelAnalytics } from './lib/analytics-vercel.js';
+
+// Installed before anything can emit. Only here: everywhere else goes through the
+// vendor-neutral seam in lib/analytics.ts.
+setAnalyticsProvider(vercelAnalytics);
 
 installGuards();
 
