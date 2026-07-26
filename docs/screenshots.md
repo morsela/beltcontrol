@@ -6,7 +6,7 @@ tools/screenshots.sh                              # capture
 tools/screenshots.sh --check                      # are they older than the UI?
 ```
 
-The three images at the top of the README are generated, not staged. Regenerate them
+The two images at the top of the README are generated, not staged. Regenerate them
 whenever a change to `src/routes`, `src/components`, `src/charts` or `src/styles` alters
 something a reader would notice, and commit the PNGs with the change that moved them.
 
@@ -26,7 +26,7 @@ something a browser has lying around. `tools/screenshots.sh` stages both.
 
 [agent-browser](https://agent-browser.dev) drives Chrome over the DevTools protocol.
 It is **deliberately not a dependency of this project**: it ships a browser of its own,
-and three PNGs need it about twice a year. `npm install` here is six devDependencies and
+and two PNGs need it about twice a year. `npm install` here is six devDependencies and
 stays that way. The script takes it from `PATH`, falls back to `npx -y agent-browser`,
 and says which of the two is missing if neither works.
 
@@ -75,15 +75,15 @@ are — change one and the rest move with it:
 
 The protocol is `classic`, because that is the trust map (`src/state/telemetry.ts`) under
 which distance and steps are allowed into a total at all. Under a protocol the app does
-not recognise, every walk here would be excluded from every figure and all three screens
-would read empty.
+not recognise, every walk here would be excluded from every figure and both images
+would come out empty.
 
 ## The thirty-second window
 
 The hero floors its minutes and the goal meter rounds them, so "31m" and "31 of 60 min"
 agree only while today's total is between 31.0 and 31.5 minutes. That is thirty seconds,
 and no pair of numbers makes it wider. The belt is meanwhile still running, because a
-still belt is not what the Now screen is for.
+still belt is not what the Now rail is for.
 
 So the script re-anchors the walk in progress immediately before each shutter: it writes
 a fresh open session and calls `restoreOpenSession()`, which is exactly what the app
@@ -101,21 +101,25 @@ at that line instead of quietly writing a wrong image.
 
 Pinned: the dark scheme, reduced motion (plus a stylesheet that kills every transition,
 because the goal meter animates its width on mount), `en-US` inside the page, `TZ` in the
-environment, and 606×823 at 1×. That size is below the 64rem breakpoint in
-`src/lib/viewport.ts`, which is what makes Now a screen at all rather than the left-hand
-rail — on a desktop width `app.tsx` redirects `#/now` to `#/today`.
+environment, and 1280×900 at 1×. That width is above the 64rem breakpoint in
+`src/lib/viewport.ts`, which is what makes Now the left-hand rail rather than a screen of
+its own — it is in both images, and there is no `now.png`. On a desktop width `app.tsx`
+redirects `#/now` to `#/today`, so the script opens `#/today` directly. The height is the
+shortest at which the running rail — Stop through the Esc hint — ends inside the frame
+rather than mid-button.
 
 Not pinned, and not worth pinning:
 
 - the **clock time** on Today's in-progress row follows the hour you capture at;
 - the **`Jun 26` / `Jul 25`** axis labels on History follow the day you capture on;
-- the **consistency heatmap shifts one column per day**, because `Heatmap.tsx` pads the
-  front of the grid by the weekday of the window's first day.
+- the **consistency heatmap** — only its first rows make it into the frame — **shifts one
+  column per day**, because `Heatmap.tsx` pads the front of the grid by the weekday of
+  the window's first day.
 
-Two runs an hour apart are otherwise near-identical — `now.png` came back byte-for-byte
-identical, `history.png` differed by seventeen bytes. Two runs on different days never
-will, which is the argument against pixel-diffing them in any automated check: a byte
-comparison could only ever say "different".
+Two runs minutes apart are otherwise near-identical — `history.png` came back
+byte-for-byte identical, `today.png` differed only where the clock had moved. Two runs
+on different days never will, which is the argument against pixel-diffing them in any
+automated check: a byte comparison could only ever say "different".
 
 One thing to avoid: **do not regenerate on the weekend the clocks change.** `dailySeries`
 steps back in fixed 86,400,000 ms increments while `dayKey` is local-midnight based, so
@@ -130,8 +134,8 @@ are not the same news.
 
 It is a trip-wire, not a proof, and it errs towards firing:
 
-- Directory granularity is coarse. A change to `AmbientView.tsx`, which appears in none
-  of the three images, fires it. The cost is a two-minute regeneration.
+- Directory granularity is coarse. A change to `AmbientView.tsx`, which appears in
+  neither image, fires it. The cost is a two-minute regeneration.
 - It uses the committer date, so a rebase or an amend makes everything look newer than
   the images. `%at` would survive a rebase and break the other way, and of the two false
   positives this is the one that costs less than a README that lies.
