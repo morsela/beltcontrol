@@ -12,6 +12,7 @@ import {
   lastFrameAt,
 } from './telemetry.js';
 import { log, setStatus, fail } from './log.js';
+import { trackEvent } from '../lib/analytics.js';
 import { settings, updateSettings } from './settings.js';
 import { openDialogs } from './ui.js';
 import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
@@ -133,6 +134,10 @@ export const beltLabel = computed(() => {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** The error *name* only — a DOMException message can quote the device's advertised
+ *  name, and analytics carries nothing identifying. */
+const errName = (e: unknown) => (e instanceof Error && e.name ? e.name : 'Error');
+
 // --- connection ------------------------------------------------------------
 
 export async function connect({ filtered }: { filtered: boolean }) {
@@ -150,6 +155,7 @@ export async function connect({ filtered }: { filtered: boolean }) {
   // cancels, but so does getCharacteristic when a UUID is missing. Catching them together
   // reports real GATT failures as "chooser cancelled" and hides the actual fault.
   let picked: BluetoothDevice;
+  trackEvent('connect_attempted', { filtered });
   try {
     phase.value = 'choosing';
     setStatus('choosing device…');
@@ -169,9 +175,11 @@ export async function connect({ filtered }: { filtered: boolean }) {
     if (err?.name === 'NotFoundError') {
       setStatus('');
       log('device chooser cancelled or nothing matched');
+      trackEvent('connect_cancelled');
     } else {
       setStatus(err.message, 'err');
       log(err.message);
+      trackEvent('connect_failed', { reason: errName(err) });
     }
     return;
   }
@@ -200,6 +208,7 @@ export async function connect({ filtered }: { filtered: boolean }) {
     const err = e as DOMException;
     phase.value = 'error';
     fail(err?.name === 'NotFoundError' ? new Error(`GATT lookup failed: ${err.message}`) : e);
+    trackEvent('connect_failed', { reason: errName(err) });
     await teardown();
   }
 }
@@ -230,6 +239,7 @@ async function wireDriver(
 
   phase.value = 'connected';
   setStatus('connected', 'ok');
+  trackEvent('belt_connected', { protocol: d.id });
 
   restoreOpenSession();
   startSessionTracking();
@@ -285,6 +295,7 @@ async function teardown() {
 function onDisconnected() {
   // Deliberately no auto-reconnect: silently reattaching to a belt that may be moving,
   // with stale UI state, is not a safe default.
+  trackEvent('disconnected', { by: 'device' });
   log('device disconnected', 'err');
   setStatus('disconnected — belt keeps its current state, use its own controls', 'err');
   phase.value = 'error';
@@ -305,6 +316,7 @@ export async function disconnect() {
   await teardown();
   setStatus('disconnected');
   log('disconnected');
+  trackEvent('disconnected', { by: 'user' });
 }
 
 // --- controls --------------------------------------------------------------
@@ -355,6 +367,7 @@ async function begin(kind: 'start' | 'resume') {
       // if that is where it was.
       clearStartWatch();
       running.value = false;
+      trackEvent('control_failed', { command: kind, reason: errName(e) });
       fail(e);
       return;
     }
@@ -374,6 +387,9 @@ async function begin(kind: 'start' | 'resume') {
     holdSession(false);
     if (attempt === 1) {
       log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
+      // Once per press, not per retry: the retries are the app's doing, and counting
+      // them as starts would inflate exactly the number the refusal events divide by.
+      trackEvent('belt_start', { kind });
     }
 
     // `unknown` on every protocol that cannot answer, which is all of them but one, so
@@ -406,6 +422,7 @@ async function begin(kind: 'start' | 'resume') {
   } catch (e) {
     // A failed speed write says nothing about whether the belt started, so `running`
     // and the confirmation watch both stand. Report it and let the watch play out.
+    trackEvent('control_failed', { command: 'speed', reason: errName(e) });
     fail(e);
   }
 }
@@ -513,6 +530,7 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
           : `${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`,
         'err'
       );
+      trackEvent('start_unconfirmed', { kind, refused });
     }
   };
 
@@ -591,6 +609,7 @@ function watchForStop(kind: 'stop' | 'pause' = 'stop') {
         'err'
       );
       log(`${kind} unconfirmed after ${STOP_CONFIRM_MS / 1000}s — ${why}`, 'err');
+      trackEvent('stop_unconfirmed', { kind });
     }
   };
 
@@ -624,15 +643,18 @@ export async function doPause() {
       holdSession(false);
       log('unit rejected pause; stopped instead — hiding the button', 'err');
       setStatus('this treadmill has no pause — belt stopped instead', 'err');
+      trackEvent('pause_rejected');
       watchForStop('stop');
       return;
     }
 
     log(`pause sent at ${toMph(settings.value.targetKmh).toFixed(1)} mph`, 'ok');
+    trackEvent('belt_pause');
     watchForStop('pause');
   } catch (e) {
     clearStopWatch();
     stopPending.value = false;
+    trackEvent('control_failed', { command: 'pause', reason: errName(e) });
     fail(e);
   }
 }
@@ -649,10 +671,12 @@ export async function doStop() {
     paused.value = false;
     holdSession(false);
     log('stop sent', 'ok');
+    trackEvent('belt_stop');
     watchForStop();
   } catch (e) {
     clearStopWatch();
     stopPending.value = false; // nothing went out, so nothing is outstanding
+    trackEvent('control_failed', { command: 'stop', reason: errName(e) });
     fail(e);
   }
 }
@@ -706,6 +730,7 @@ function selfStopped() {
   // button in front of a belt nobody paused.
   setStatus('the belt stopped on its own', 'ok');
   log('belt reports itself stopped — nobody sent a stop', 'ok');
+  trackEvent('belt_self_stopped');
 }
 
 /** File the paused walk now rather than waiting for the hold to lapse. */
@@ -748,6 +773,7 @@ export async function setTarget(kmh: number) {
     setStatus(`speed ${toMph(next).toFixed(1)} mph`, 'ok');
   } catch (e) {
     updateSettings({ targetKmh: prev });
+    trackEvent('control_failed', { command: 'speed', reason: errName(e) });
     fail(e);
   }
 }

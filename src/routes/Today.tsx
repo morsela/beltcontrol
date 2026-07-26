@@ -11,6 +11,7 @@ import { AreaChart } from '../charts/Area.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { isDesktop } from '../lib/viewport.js';
 import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
+import { trackEvent } from '../lib/analytics.js';
 
 export function Today() {
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
@@ -92,6 +93,7 @@ export function Today() {
           tone="danger"
           onConfirm={() => {
             deleteSession(pendingDelete.id);
+            trackEvent('session_deleted');
             setPendingDelete(null);
           }}
           onCancel={() => setPendingDelete(null)}

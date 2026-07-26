@@ -10,6 +10,7 @@ import {
 } from './telemetry.js';
 import { dayKey, startOfDay } from '../lib/format.js';
 import { log } from './log.js';
+import { trackEvent } from '../lib/analytics.js';
 
 const SESSIONS_KEY = 'wp.sessions.v1';
 const OPEN_KEY = 'wp.session.open.v1';
@@ -306,6 +307,11 @@ export function closeSession(reason = 'ended') {
   }
   finalise(s);
   log(`session ${reason}: ${Math.round(s.activeMs / 60000)} min`, 'ok');
+  // Rounded minutes and the protocol id — never the device name or per-sample data.
+  trackEvent('session_recorded', {
+    minutes: Math.round(s.activeMs / 60_000),
+    protocol: s.protocol,
+  });
 }
 
 export interface SessionMeta {

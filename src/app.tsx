@@ -13,6 +13,7 @@ import { Recovery } from './components/Recovery.js';
 import { Disclaimer } from './components/Disclaimer.js';
 import { beltMayBeMoving, connected } from './state/connection.js';
 import { isDesktop } from './lib/viewport.js';
+import { trackEvent } from './lib/analytics.js';
 
 export type Route = 'now' | 'today' | 'history' | 'legal';
 
@@ -30,6 +31,9 @@ export const route = signal<Route>(readHash());
 window.addEventListener('hashchange', () => {
   route.value = readHash();
   window.scrollTo(0, 0);
+  // The landing view is the vendor's ordinary page view; hash navigation is not,
+  // so tab switches would otherwise be invisible.
+  trackEvent('route_viewed', { route: route.value });
 });
 
 export function App() {
@@ -42,6 +46,11 @@ export function App() {
   const desktop = isDesktop.value;
 
   if (error) return <Recovery error={error} onRetry={resetError} />;
+
+  const enterAmbient = () => {
+    trackEvent('ambient_entered');
+    setAmbient(true);
+  };
 
   // Ambient mode is only meaningful while something is actually connected.
   useEffect(() => {
@@ -75,7 +84,7 @@ export function App() {
         <main class="shell shell-desktop">
           <aside class="rail" aria-label="Belt controls">
             {showStop && <StopBar />}
-            <Now onAmbient={() => setAmbient(true)} />
+            <Now onAmbient={enterAmbient} />
           </aside>
 
           <div class="content" tabIndex={-1} ref={contentRef}>
@@ -95,7 +104,7 @@ export function App() {
     <>
       <main class={`shell${showStop ? ' has-stopbar' : ''}`}>
         <DesktopOnlyNotice />
-        {r === 'now' && <Now onAmbient={() => setAmbient(true)} />}
+        {r === 'now' && <Now onAmbient={enterAmbient} />}
         {r === 'today' && <Today />}
         {r === 'history' && <History />}
         {r === 'legal' && <Legal />}
