@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ftmsDriver, parseTreadmillData, UUID } from '../src/lib/drivers.js';
 import type { Telemetry } from '../src/lib/drivers.js';
 import { FakeServer, FakeCharacteristic, toHex } from './ble-mock.js';
@@ -110,6 +110,30 @@ function padServer(opts: { speedRange?: number[] } = {}) {
   return { server: new FakeServer().addService(UUID.ftmsService, chars), data, cp };
 }
 
+/** A pad that answers Request Control and then goes quiet, so a later command hangs. */
+function deafPad() {
+  const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
+    onWrite: (b, ch) => {
+      if (b[0] === 0x00) queueMicrotask(() => ch.emit([0x80, 0x00, 0x01]));
+    },
+  });
+  const server = new FakeServer().addService(UUID.ftmsService, [
+    new FakeCharacteristic(UUID.ftmsTreadmillData),
+    cp,
+  ]);
+  return { server, cp, d: ftmsDriver() };
+}
+
+/** How a promise ended, or `'hung'` if it had not ended at all — never rethrows. */
+const outcomeOf = (p: Promise<unknown>, ms = 50) =>
+  Promise.race([
+    p.then(
+      () => 'resolved',
+      () => 'rejected'
+    ),
+    new Promise((r) => setTimeout(() => r('hung'), ms)),
+  ]);
+
 describe('ftmsDriver', () => {
   let seen: Partial<Telemetry>[];
 
@@ -203,7 +227,21 @@ describe('ftmsDriver', () => {
     const logs: string[] = [];
     d.onLog = (m) => logs.push(m);
     await d.attach(server as unknown as BluetoothRemoteGATTServer); // 0x00 is acked correctly
-    await expect(d.stop()).rejects.toThrow(/timeout/);
+
+    // Fake timers rather than three real seconds of test suite: the ack deadline is the
+    // only thing that can end this stop, and waiting it out for real is dead time.
+    vi.useFakeTimers();
+    try {
+      // Assert first, advance second. The other way round the rejection lands while
+      // nothing is listening for it, which Node reports as an unhandled rejection and
+      // vitest counts as an unhandled error — it fails the run, and warns that it can
+      // make other tests pass for the wrong reason.
+      const stopping = expect(d.stop()).rejects.toThrow(/timeout/);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await stopping;
+    } finally {
+      vi.useRealTimers();
+    }
     expect(logs.join('\n')).toMatch(/does not answer the pending 0x08/);
   });
 
@@ -315,6 +353,82 @@ describe('ftmsDriver', () => {
     const d = ftmsDriver();
     await expect(d.attach(server as unknown as BluetoothRemoteGATTServer)).rejects.toThrow(
       /control not permitted/
+    );
+  });
+
+  // --- partial frames -------------------------------------------------------
+  //
+  // `undefined` and `null` mean different things coming out of parseTreadmillData:
+  // not sent, versus sent as the spec's "not available". Flattening the first into the
+  // second and publishing it blanks `live` — and a null speed is not just a blank
+  // readout, it is a speed `confirmedStopped` refuses to accept, so the stop watcher
+  // can never confirm and reports "it is not reporting speed at all".
+
+  it('leaves the last known speed alone when a frame does not carry one', async () => {
+    const { server, data } = padServer();
+    const d = ftmsDriver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    data.emit([...u16(0x0000), ...u16(320)]); // speed 3.2 km/h
+    data.emit([...u16(0x0401), ...u16(1_800)]); // More Data set: no speed, elapsed time only
+
+    expect(seen[1]!.secs).toBe(1_800);
+    expect(seen[1]).not.toHaveProperty('speedKmh');
+  });
+
+  it('does not blank the fields a truncated frame never reached', async () => {
+    const { server, data } = padServer();
+    const d = ftmsDriver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    data.emit([...u16(0x0004), ...u16(320), ...u24(1_500)]); // speed and distance
+    // Flags claim every optional field; two bytes arrive. Average speed consumes both,
+    // and distance — a u24 — is where the frame runs out.
+    data.emit([...u16(0x1fff), 0x11, 0x22]);
+
+    expect(seen[1]).not.toHaveProperty('distKm');
+  });
+
+  it('still states the fields FTMS never carries, every frame', async () => {
+    // These are facts about the protocol rather than about the frame, so they are
+    // asserted rather than omitted — a step count that went missing would otherwise
+    // keep whatever a previous protocol left in `live`.
+    const { server, data } = padServer();
+    const d = ftmsDriver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    data.emit([...u16(0x0401), ...u16(60)]);
+    expect(seen[0]!.steps).toBeNull();
+    expect(seen[0]!.state).toBeNull();
+  });
+
+  // --- teardown -------------------------------------------------------------
+
+  it('settles a command that was still in flight when the link was torn down', async () => {
+    const { server, d } = deafPad();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+
+    const stopping = d.stop();
+    await d.detach();
+
+    // Not `rejects.toThrow`: before this was fixed the promise never settled at all,
+    // and a test that simply awaited it would fail as a timeout rather than saying so.
+    expect(await outcomeOf(stopping)).toBe('rejected');
+  });
+
+  it('is not wedged for good by a command abandoned at detach', async () => {
+    // Every control-point write goes through one serialiser. A request left waiting on
+    // an ack that can no longer arrive blocks the queue behind it forever, so the next
+    // connection could not take control — nothing after it would ever run.
+    const { server, d } = deafPad();
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    void d.stop().catch(() => {});
+    await d.detach();
+
+    expect(await outcomeOf(d.attach(server as unknown as BluetoothRemoteGATTServer))).toBe(
+      'resolved'
     );
   });
 

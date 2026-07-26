@@ -45,10 +45,26 @@ export const UUID = {
   battery: 0x180f,
 };
 
-const hex = (buf) =>
-  [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+// Takes a buffer, a view of one, or anything array-like. Views are honoured rather than
+// unwrapped: `hex(someDataView.buffer)` would print the whole allocation behind a frame,
+// and passing the view straight to `new Uint8Array` yields an empty string with no error
+// at all — a logged frame that silently vanishes.
+const hex = (buf) => {
+  const bytes = ArrayBuffer.isView(buf)
+    ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+    : new Uint8Array(buf);
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** One decoder pair for the module — these are not free to build per notification. */
+const UTF8 = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
+
+/** Refusing a command outright beats resolving one that never left the building: a
+ *  resolved `stop()` is read upstream as the belt having been told to stop. */
+const NOT_CONNECTED = 'not connected to the pad — command not sent';
 
 // Web Bluetooth runs one GATT operation at a time per device and rejects anything that
 // overlaps ("GATT operation already in progress"). Classic polls on a 1 s timer, so a poll
@@ -89,53 +105,149 @@ export const HARD_MAX_STEP_KMH = 0.5;
 
 const inRange = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : null);
 
+// ---------------------------------------------------------------------------
+// What each protocol can do
+// ---------------------------------------------------------------------------
+//
+// The limits here are where a driver starts, not where it stays: FTMS and 0x1234 both
+// rewrite them from what the device reports (see `adoptSpeedLimits`). They are
+// deliberately conservative, because a pad that says nothing is a pad we know nothing
+// about.
+//
+// One table rather than one per driver because there are two readers. The simulator
+// describes these same four pads so the UI can be exercised without hardware, and it
+// used to do that from its own copy — which had already drifted: every simulated pad
+// offered a 0.1 km/h step, including the classic one, whose step is 0.5. A fake pad
+// that answers differently from the real one is worse than no fake pad at all.
+
+export const PROTOCOLS = {
+  classic: {
+    capabilities: {
+      speed: true,
+      mode: true,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: true,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+  ftms: {
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: true,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+  ks1234: {
+    capabilities: {
+      speed: true,
+      mode: false,
+      incline: false,
+      steps: true,
+      pause: false,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.1 },
+  },
+  fitshow: {
+    capabilities: {
+      speed: false,
+      mode: false,
+      incline: false,
+      steps: false,
+      pause: false,
+      needsPolling: false,
+    },
+    limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.5 },
+  },
+};
+
 /**
- * Fold device-reported limits into the driver, refusing anything outside the envelope.
+ * A driver's starting capabilities and limits, as fresh objects it owns outright.
  *
- * A rejected field keeps the driver's existing (conservative) default and is logged —
- * silently substituting a default would hide a pad that is talking nonsense, and the
- * log is where protocol surprises are meant to surface.
+ * Copied rather than shared: the limits are rewritten per connection from what the
+ * device says about itself, and two drivers built from the same table must not be able
+ * to write over each other — or over the table.
+ */
+export const protocolDefaults = (id) => ({
+  capabilities: { ...PROTOCOLS[id].capabilities },
+  ...PROTOCOLS[id].limits,
+});
+
+/**
+ * Fold device-reported limits into the driver, holding them to the envelope above.
+ *
+ * Two different things can be wrong with a limit, and they get different answers. A
+ * value outside the envelope is a pad talking nonsense: it is refused, the driver keeps
+ * its existing conservative default, and the refusal is logged — silently substituting
+ * a default would hide the pad that said it. A minimum merely *below the floor* is not
+ * nonsense, only slower than this app will drive, so it is raised to the floor instead.
+ *
+ * Either way the pair has to describe a real range at the end of it, so a bound that
+ * would invert the other one is refused however plausible it looked alone.
  */
 export function adoptSpeedLimits(self, { min, max, step }, onLog) {
-  const note = (what, got) =>
-    onLog?.(`ignoring implausible ${what} from device: ${got} km/h (keeping ${
-      what === 'step' ? self.speedStep : what === 'min' ? self.minSpeedKmh : self.maxSpeedKmh
-    })`);
+  const note = (what, got, keeping) =>
+    onLog?.(`ignoring implausible ${what} from device: ${got} km/h (keeping ${keeping})`);
+
+  const wasMin = self.minSpeedKmh;
 
   if (min !== undefined) {
     // A pad asking to crawl below the floor is not talking nonsense, it just wants a
     // speed this app will not drive, so that one is raised rather than refused — a
     // refusal would keep a default the device has just told us is wrong for it.
     const v = inRange(min, 0, HARD_MAX_KMH);
-    if (v == null) note('min speed', min);
+    if (v == null) note('min speed', min, self.minSpeedKmh);
     else if (v < HARD_MIN_KMH) {
-      onLog?.(`device min speed ${min} km/h is below the ${HARD_MIN_KMH} km/h floor — using the floor`);
+      onLog?.(
+        `device min speed ${min} km/h is below the ${HARD_MIN_KMH} km/h floor — using the floor`
+      );
       self.minSpeedKmh = HARD_MIN_KMH;
     } else self.minSpeedKmh = v;
   }
   if (max !== undefined) {
     // A max below the min it is paired with describes no usable range at all.
     const v = inRange(max, Math.max(HARD_MIN_KMH, self.minSpeedKmh), HARD_MAX_KMH);
-    if (v == null) note('max speed', max);
+    if (v == null) note('max speed', max, self.maxSpeedKmh);
     else self.maxSpeedKmh = v;
+  }
+  // The same holds the other way round, and a lone minimum is how it actually arrives:
+  // the 0x1234 pad reports StartSpeed and Max in separate frames, so a min can land
+  // above a max that is still the conservative default. The UI reads that pair as the
+  // belt being at both ends of its range at once and disables the stepper in both
+  // directions, which is a stranger failure than simply not believing the pad.
+  if (self.minSpeedKmh > self.maxSpeedKmh) {
+    note('min speed', min, wasMin);
+    self.minSpeedKmh = wasMin;
   }
   if (step !== undefined) {
     const v = inRange(step, 0.01, HARD_MAX_STEP_KMH);
-    if (v == null) note('step', step);
+    if (v == null) note('step', step, self.speedStep);
     else self.speedStep = v;
   }
   return self;
 }
 
-// Some stacks reject writeValueWithoutResponse; fall back to the with-response form.
+// Some stacks reject writeValueWithoutResponse; fall back to the with-response form —
+// and remember which characteristics did, so the rest of the session does not pay for a
+// rejected GATT operation before every single write. The 0x1234 handshake alone is around
+// thirty 20-byte fragment writes.
+const noWriteWithoutResponse = new WeakSet();
+
 async function writeChar(ch, bytes) {
   const data = new Uint8Array(bytes);
-  if (ch.properties.writeWithoutResponse) {
+  if (ch.properties.writeWithoutResponse && !noWriteWithoutResponse.has(ch)) {
     try {
       await ch.writeValueWithoutResponse(data);
       return;
     } catch (e) {
       if (!ch.properties.write) throw e;
+      noWriteWithoutResponse.add(ch);
     }
   }
   await ch.writeValue(data);
@@ -189,17 +301,7 @@ export function classicDriver() {
   const self = {
     id: 'classic',
     name: 'WalkingPad (classic fe00)',
-    capabilities: {
-      speed: true,
-      mode: true,
-      incline: false,
-      steps: true,
-      pause: false,
-      needsPolling: true,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('classic'),
     onData: null,
     onLog: null,
 
@@ -230,12 +332,21 @@ export function classicDriver() {
 
     _send(cmd, param) {
       return queue(async () => {
+        // Inside the queue, so a dead link comes back as a rejected promise rather than
+        // a synchronous throw — `poll()` is called as `poll().catch(...)` on a timer, and
+        // a throw would sail straight past that. Without this the write below reaches a
+        // characteristic detach() has already nulled and fails as an opaque TypeError.
+        self._requireOpen();
         const frame = classicFrame(cmd, param);
-        self.onLog?.(`tx ${hex(new Uint8Array(frame).buffer)}`);
+        self.onLog?.(`tx ${hex(frame)}`);
         await writeChar(writeCh, frame);
         // The pad drops commands sent back to back.
         await sleep(120);
       });
+    },
+
+    _requireOpen() {
+      if (!writeCh) throw new Error(NOT_CONNECTED);
     },
 
     poll: () => self._send(0, 0),
@@ -270,7 +381,7 @@ export function classicDriver() {
     },
 
     _parse(view) {
-      self.onLog?.(`rx ${hex(view.buffer)}`);
+      self.onLog?.(`rx ${hex(view)}`);
       if (view.byteLength < 3) return;
       const h0 = view.getUint8(0);
       const h1 = view.getUint8(1);
@@ -288,7 +399,7 @@ export function classicDriver() {
           kcal: null, // classic protocol does not report calories
           state,
           stateLabel: BELT_STATE[state] ?? `state ${state}`,
-          raw: hex(view.buffer),
+          raw: hex(view),
         });
         return;
       }
@@ -347,7 +458,7 @@ const FTMS_STATUS = {
 const TRUNCATED = Symbol('truncated frame');
 
 export function parseTreadmillData(view) {
-  const out = { raw: hex(view.buffer) };
+  const out = { raw: hex(view) };
   let o = 0;
 
   // Every read is bounds checked. The flags word is the device's claim about what
@@ -410,6 +521,9 @@ export function parseTreadmillData(view) {
   return out;
 }
 
+/** Telemetry a Treadmill Data frame may or may not carry, per its flags word. */
+const FTMS_FRAME_FIELDS = ['speedKmh', 'distKm', 'secs', 'kcal', 'heartRate', 'inclinePct'];
+
 export function ftmsDriver() {
   let dataCh = null;
   let cpCh = null;
@@ -429,17 +543,7 @@ export function ftmsDriver() {
   const self = {
     id: 'ftms',
     name: 'FTMS (standard 1826)',
-    capabilities: {
-      speed: true,
-      mode: false,
-      incline: false,
-      steps: false,
-      pause: true,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('ftms'),
     onData: null,
     onLog: null,
 
@@ -469,7 +573,7 @@ export function ftmsDriver() {
       try {
         const featCh = await svc.getCharacteristic(UUID.ftmsFeature);
         const f = await featCh.readValue();
-        self.onLog?.(`features ${hex(f.buffer)}`);
+        self.onLog?.(`features ${hex(f)}`);
       } catch {
         /* optional */
       }
@@ -489,18 +593,19 @@ export function ftmsDriver() {
         if (d.truncated) {
           self.onLog?.(`truncated treadmill frame (flags promised more than ${d.raw})`);
         }
-        self.onData?.({
-          speedKmh: d.speedKmh ?? null,
-          distKm: d.distKm ?? null,
-          secs: d.secs ?? null,
-          kcal: d.kcal ?? null,
-          steps: null, // FTMS has no step count
-          heartRate: d.heartRate ?? null,
-          inclinePct: d.inclinePct ?? null,
-          state: null,
-          stateLabel: null,
-          raw: d.raw,
-        });
+        // Facts about the protocol rather than about this frame, so they are asserted
+        // every time.
+        const out = { steps: null, state: null, stateLabel: null, raw: d.raw };
+        // Everything else is only published when the frame actually carried it.
+        // `undefined` here means "not sent" — the flags word said so, or a truncated
+        // frame ran out before reaching it — and flattening that to null blanks whatever
+        // the display already knew. A null speed is worse than a blank readout: it is a
+        // speed `confirmedStopped` refuses to accept, so a stop could never confirm and
+        // the app would report a belt that "is not reporting speed at all" while it was.
+        // A field the pad sent as the spec's "not available" is still a null, and still
+        // published — that is the device saying something, and it survives the check.
+        for (const k of FTMS_FRAME_FIELDS) if (d[k] !== undefined) out[k] = d[k];
+        self.onData?.(out);
       };
       dataCh.addEventListener('characteristicvaluechanged', onData);
       await dataCh.startNotifications();
@@ -543,9 +648,7 @@ export function ftmsDriver() {
           );
           return;
         }
-        const { resolve } = pending;
-        pending = null;
-        resolve({ ok: res === 0x01, result: res });
+        pending.settle({ ok: res === 0x01, result: res });
       };
       cpCh.addEventListener('characteristicvaluechanged', onCp);
       await cpCh.startNotifications();
@@ -568,6 +671,11 @@ export function ftmsDriver() {
         }
       }
       dataCh = cpCh = statusCh = onData = onCp = onStatus = null;
+      // An ack can no longer arrive for whatever was in flight, and every control-point
+      // write shares one serialiser: dropping the request without settling it leaves its
+      // caller waiting forever *and* blocks the queue behind it, so nothing this driver
+      // is ever asked to do again would run.
+      pending?.settle({ ok: false, result: 'disconnected' });
       pending = null;
       haveControl = false;
     },
@@ -577,27 +685,37 @@ export function ftmsDriver() {
     // particular rejection — start's reset-retry, pause's fallback — can tell them apart.
     _cp(bytes, { timeout = 3000 } = {}) {
       return queue(async () => {
-        self.onLog?.(`tx cp ${hex(new Uint8Array(bytes).buffer)}`);
+        const what = hex(bytes);
+        self.onLog?.(`tx cp ${what}`);
         const op = bytes[0];
         const ack = new Promise((resolve) => {
           // Keyed by opcode: FTMS echoes the op it is answering, so an indication only
           // settles this request when that byte matches what was written here.
-          const slot = { op, resolve };
+          //
+          // Everything that can end this request goes through `settle`, which is safe to
+          // call more than once and safe to call on a slot that is no longer the pending
+          // one. That is the point: a request has to be able to end even when the thing
+          // ending it is not the pad answering.
+          const slot = {
+            op,
+            settle(r) {
+              if (pending === slot) pending = null;
+              clearTimeout(slot.timer); // otherwise one live timer per command, all session
+              resolve(r);
+            },
+          };
+          slot.timer = setTimeout(() => slot.settle({ ok: false, result: 'timeout' }), timeout);
           pending = slot;
-          setTimeout(() => {
-            if (pending === slot) {
-              pending = null;
-              resolve({ ok: false, result: 'timeout' });
-            }
-          }, timeout);
         });
         await writeChar(cpCh, bytes);
         const r = await ack;
         if (!r.ok) {
+          // A numeric result is the pad's own verdict; a string is the app giving up on
+          // ever hearing one, which is not the same thing and should not read like it.
           const err = new Error(
-            `treadmill rejected command ${hex(new Uint8Array(bytes).buffer)}: ${
-              FTMS_RESULT[r.result] ?? r.result
-            }`
+            typeof r.result === 'string'
+              ? `command ${what} went unanswered: ${r.result}`
+              : `treadmill rejected command ${what}: ${FTMS_RESULT[r.result] ?? r.result}`
           );
           err.result = r.result;
           throw err;
@@ -705,24 +823,14 @@ export function fitshowDriver() {
   const self = {
     id: 'fitshow',
     name: 'FitShow (fff0) — read-only',
-    capabilities: {
-      speed: false,
-      mode: false,
-      incline: false,
-      steps: false,
-      pause: false,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.5,
+    ...protocolDefaults('fitshow'),
     onData: null,
     onLog: null,
 
     async attach(server) {
       const svc = await server.getPrimaryService(UUID.fitshowService);
       notifyCh = await svc.getCharacteristic(UUID.fitshowNotify);
-      onNotify = (e) => self.onLog?.(`rx ${hex(e.target.value.buffer)}`);
+      onNotify = (e) => self.onLog?.(`rx ${hex(e.target.value)}`);
       notifyCh.addEventListener('characteristicvaluechanged', onNotify);
       await notifyCh.startNotifications();
       self.onLog?.(
@@ -781,7 +889,7 @@ const KS_B64 = 'SaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KZ3
 const STD_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 function ksEncode(text) {
-  const std = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+  const std = btoa(String.fromCharCode(...UTF8.encode(text)));
   let out = '';
   for (const c of std) {
     const i = STD_B64.indexOf(c);
@@ -798,7 +906,7 @@ function ksDecode(cipher) {
   }
   std += '='.repeat((4 - (std.length % 4)) % 4);
   const bin = atob(std);
-  return new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)));
+  return UTF8_DECODER.decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)));
 }
 
 // "props CurrentSpeed 1.1 RunningSteps 11" -> {CurrentSpeed:'1.1', RunningSteps:'11'}
@@ -810,7 +918,15 @@ function parseProps(line) {
   return out;
 }
 
-const num = (v) => (v == null || v === '' ? null : Number(v));
+// Anything that is not a finite number is dropped rather than passed on. NaN survives the
+// absent-key strip below (it is not `== null`), and once it reaches `live` the belt is
+// neither moving nor stopped — isMoving is false and confirmedStopped is false — so both
+// confirmation watchers run out their deadlines and the readout says NaN.
+const num = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 /**
  * A stable, meaningless id for the `props user_id` slot in the handshake.
@@ -835,6 +951,26 @@ export function installId() {
   }
 }
 
+/** Ceiling on the line-reassembly buffer — see `_rx`. */
+const KS_RX_MAX = 4096;
+
+/**
+ * The band this protocol's parent spec — Xiaomi's MIoT serial command set — reserves for
+ * errors the device vendor defines itself: -9999 to -5000 inclusive. Everything above it
+ * (-4001 to -4007) is MIoT's own fixed list, and none of those mean "refused".
+ *
+ * A KS-C2 that will not honour a start answers `props Error ErrorCode -5000` within the
+ * same second. What -5000 means is KingSmith firmware's business and is written down
+ * nowhere public, so the whole band is treated as one thing — the pad saying no — rather
+ * than pinning the reading on a single number that a sibling model may not share.
+ */
+const KS_VENDOR_ERROR_MAX = -5000;
+const KS_VENDOR_ERROR_MIN = -9999;
+
+/** How long to give the pad to answer a start before giving up on hearing either way. On
+ *  a real KS-C2 both the refusal and the acceptance land inside one second. */
+const KS_START_VERDICT_MS = 1500;
+
 export function ks1234Driver() {
   let writeCh = null;
   let notifyCh = null;
@@ -843,20 +979,41 @@ export function ks1234Driver() {
   let closed = false;
   const queue = serialiser();
 
+  /** The pad's answer to the most recent `start()`; null before the first one. */
+  let lastStart = null;
+
+  /**
+   * Open a window for the pad to answer the start that is about to be written.
+   *
+   * Armed *before* the write rather than after it, because the refusal comes back inside
+   * the same second and a listener installed afterwards races it.
+   */
+  function armStartVerdict() {
+    lastStart?.settle('unknown'); // a new start supersedes the old one's window
+    let resolve;
+    const answer = new Promise((r) => {
+      resolve = r;
+    });
+    const record = {
+      answer,
+      open: true,
+      timer: null,
+      settle(verdict) {
+        if (!record.open) return;
+        record.open = false;
+        if (record.timer != null) clearTimeout(record.timer);
+        record.timer = null;
+        resolve(verdict);
+      },
+    };
+    lastStart = record;
+    return record;
+  }
+
   const self = {
     id: 'ks1234',
     name: 'KingSmith 0x1234 (chip:3)',
-    capabilities: {
-      speed: true,
-      mode: false,
-      incline: false,
-      steps: true,
-      pause: false,
-      needsPolling: false,
-    },
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.1,
+    ...protocolDefaults('ks1234'),
     onData: null,
     onLog: null,
 
@@ -877,6 +1034,9 @@ export function ks1234Driver() {
 
     async detach() {
       closed = true;
+      // Nothing is going to answer now, and a caller awaiting the verdict of a start that
+      // was in flight when the link went should not be left holding an unsettled promise.
+      lastStart?.settle('unknown');
       if (notifyCh && onNotify) {
         notifyCh.removeEventListener('characteristicvaluechanged', onNotify);
         try {
@@ -896,8 +1056,13 @@ export function ks1234Driver() {
       return queue(async () => {
         if (closed || !writeCh) return;
         self.onLog?.(`--> ${text}`);
-        const frame = new TextEncoder().encode(ksEncode(text) + '\r');
+        const frame = UTF8.encode(ksEncode(text) + '\r');
         for (let i = 0; i < frame.length; i += 20) {
+          // Re-checked every fragment, not just once on the way in: detach() nulls the
+          // characteristic between two of them, and the write below would then fail as
+          // an opaque TypeError — during the connect handshake, out of attach(). Half a
+          // message is nothing the pad can use, so stopping here loses nothing.
+          if (closed || !writeCh) return;
           await writeChar(writeCh, frame.slice(i, i + 20));
           await sleep(30);
         }
@@ -932,19 +1097,48 @@ export function ks1234Driver() {
     // treats a resolved stop() as the belt having been told to stop, so a silent no-op
     // reports a stop that was never sent. Commands say so instead.
     _requireOpen() {
-      if (closed || !writeCh) throw new Error('not connected to the pad — command not sent');
+      if (closed || !writeCh) throw new Error(NOT_CONNECTED);
     },
 
     // async, so a refusal arrives as a rejected promise like every other failure on this
     // interface rather than as a synchronous throw past a caller's .catch().
     async start() {
       self._requireOpen();
-      // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
-      // is accepted and ignored — the belt simply does not move. The connect handshake sets
-      // ControlMode 1, which is why the first start of a session worked and no later one
-      // did. Re-assert it every time; it is a no-op when the app already holds control.
-      await self._send('props ControlMode 1');
-      await self._send('props runState 1');
+      const verdict = armStartVerdict();
+      try {
+        // Stopping hands control back to the pad's own panel, and in panel mode `runState 1`
+        // is accepted and ignored — the belt simply does not move. The connect handshake sets
+        // ControlMode 1, which is why the first start of a session worked and no later one
+        // did. Re-assert it every time; it is a no-op when the app already holds control.
+        //
+        // Deliberately still written back-to-back, with no wait for the pad to acknowledge
+        // the mode before the run state goes out: that is the exact order and pacing the
+        // capture shows KS+Fit using on a start that worked. The acknowledgement is read
+        // afterwards, by `startVerdict`, so nothing about what goes on the wire changes.
+        await self._send('props ControlMode 1');
+        await self._send('props runState 1');
+      } catch (e) {
+        verdict.settle('unknown');
+        throw e;
+      }
+      // The clock runs from the moment the writes are actually out, not from the call.
+      verdict.timer = setTimeout(() => verdict.settle('unknown'), KS_START_VERDICT_MS);
+    },
+
+    /**
+     * What the pad said about the last start.
+     *
+     * `'refused'` is the pad answering no — either a vendor error code, or its own panel
+     * still reported as holding control, which per the note in `start()` means the run
+     * state was accepted and ignored. `'accepted'` is the mode echo coming back. Silence
+     * is `'unknown'`, which is the only honest reading of a pad that says nothing: the
+     * caller waits for movement, exactly as it does on every other protocol.
+     *
+     * A verdict is not a claim about the belt — only about whether the command was taken.
+     * Movement is still confirmed the one way it can be, by the belt reporting it.
+     */
+    async startVerdict() {
+      return lastStart ? lastStart.answer : 'unknown';
     },
     async stop() {
       self._requireOpen();
@@ -973,7 +1167,7 @@ export function ks1234Driver() {
     },
 
     _rx(view) {
-      rxBuf += new TextDecoder().decode(view.buffer);
+      rxBuf += UTF8_DECODER.decode(view);
       let i;
       while ((i = rxBuf.indexOf('\r')) >= 0) {
         const chunk = rxBuf.slice(0, i);
@@ -987,7 +1181,47 @@ export function ks1234Driver() {
           continue;
         }
         self.onLog?.(`<-- ${line}`);
+        self._noteStartVerdict(line);
         self._apply(line);
+      }
+      // Whatever is left is the start of a line still arriving. A pad talking noise —
+      // or one that never sends the CR — must not grow this without bound; the longest
+      // line in the capture is comfortably under 200 bytes.
+      if (rxBuf.length > KS_RX_MAX) {
+        self.onLog?.(`discarding ${rxBuf.length} B of unterminated input from the pad`);
+        rxBuf = '';
+      }
+    },
+
+    /**
+     * Read the pad's answer to an outstanding start out of an incoming line.
+     *
+     * Kept apart from `_apply` because this is the control plane, not telemetry: none of
+     * it describes the walk, and none of it belongs in the merged reading the UI shows.
+     *
+     * Matched on the raw line rather than through `parseProps`, which pairs tokens off two
+     * at a time and so cannot read the odd-length `props Error ErrorCode -5000` the pad
+     * actually sends. Left that way on purpose — `parseProps` reproduces the captured
+     * even-length frames byte for byte and is not worth disturbing for one control line.
+     */
+    _noteStartVerdict(line) {
+      if (!lastStart?.open) return;
+
+      const err = /\bErrorCode\s+(-?\d+)\b/.exec(line);
+      const code = err ? Number(err[1]) : null;
+      if (code != null && code >= KS_VENDOR_ERROR_MIN && code <= KS_VENDOR_ERROR_MAX) {
+        self.onLog?.(`the pad refused the start (error ${code})`);
+        lastStart.settle('refused');
+        return;
+      }
+
+      const mode = /\bControlMode\s+(\d+)\b/.exec(line);
+      if (!mode) return;
+      if (Number(mode[1]) === 2) {
+        self.onLog?.('the pad kept control on its own panel — the start will be ignored');
+        lastStart.settle('refused');
+      } else if (Number(mode[1]) === 1) {
+        lastStart.settle('accepted');
       }
     },
 
@@ -1036,6 +1270,12 @@ export { ksEncode, ksDecode, parseProps };
 // Detection — probe the GATT table in the order the app itself prefers.
 // ---------------------------------------------------------------------------
 
+/** 16-bit alias to the full form the GATT table reports, so the two can be compared. */
+const canonicalUuid = (u) =>
+  typeof u === 'number'
+    ? `${u.toString(16).padStart(8, '0')}-0000-1000-8000-00805f9b34fb`
+    : String(u).toLowerCase();
+
 export async function detectDriver(server) {
   const candidates = [
     [UUID.classicService, classicDriver],
@@ -1043,6 +1283,23 @@ export async function detectDriver(server) {
     [UUID.ks1234Service, ks1234Driver],
     [UUID.fitshowService, fitshowDriver],
   ];
+
+  // Read the table once and match against it. Probing each candidate in turn costs up to
+  // four GATT round trips on the connect path, and every miss logs an error of its own.
+  try {
+    const present = new Set(
+      (await server.getPrimaryServices()).map((s) => canonicalUuid(s.uuid))
+    );
+    for (const [uuid, factory] of candidates) {
+      if (present.has(canonicalUuid(uuid))) return factory();
+    }
+  } catch {
+    /* not every stack offers it — fall through and probe */
+  }
+
+  // Reached when the stack has no getPrimaryServices, or when nothing matched by name.
+  // Comparing UUID strings is a shortcut, so it is only allowed to save work, never to
+  // be the reason a pad goes unrecognised: ask the device directly before giving up.
   for (const [uuid, factory] of candidates) {
     try {
       await server.getPrimaryService(uuid);

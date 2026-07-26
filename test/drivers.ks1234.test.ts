@@ -142,6 +142,105 @@ describe('ks1234Driver', () => {
     ]);
   });
 
+  // The pad answers a start it will not honour, and it answers within the same second.
+  // Reading that answer is the difference between knowing in one second and guessing
+  // after ten — see the `startVerdict` note in drivers.js.
+  describe('the pad’s answer to a start', () => {
+    async function started() {
+      const { server, write, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await d.start();
+      return { d, write, notify, logs };
+    }
+
+    it('reads a vendor error code as the pad refusing', async () => {
+      const { d, notify } = await started();
+      // Exactly what a real KS-C2 sends. Note the odd token count: `parseProps` pairs
+      // tokens off two at a time and cannot read this line, which is why the driver
+      // matches the raw text instead.
+      push(notify, 'props Error ErrorCode -5000');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+    });
+
+    it('reads the whole vendor band, not just the one code seen on this pad', async () => {
+      // MIoT hands -9999..-5000 to the vendor to define. A sibling model answering -5003
+      // is saying the same thing in its own dialect.
+      for (const code of [-5000, -5003, -9999]) {
+        const { d, notify } = await started();
+        push(notify, `props Error ErrorCode ${code}`);
+        await expect(d.startVerdict!()).resolves.toBe('refused');
+      }
+    });
+
+    it('leaves MIoT’s own error codes alone — none of them mean refused', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props Error ErrorCode -4003'); // "property does not exist"
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    it('reads the pad still holding control on its own panel as a refusal', async () => {
+      // Per `start()`: in panel mode `runState 1` is accepted and ignored. The pad saying
+      // it kept control is the pad saying the start will do nothing.
+      const { d, notify, logs } = await started();
+      push(notify, 'props ControlMode 2 ChildLockSwitch 0 runState 0 CurrentSpeed 0.0');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+      expect(logs.join('\n')).toMatch(/own panel/);
+    });
+
+    it('reads the control-mode echo as the pad taking the command', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    // Real timers, and so a genuinely slow test: the driver paces its own writes with
+    // sleeps, and faking the clock deadlocks `attach` before the pad can say anything.
+    it('says nothing either way when the pad says nothing', async () => {
+      const { d } = await started();
+      // Not 'accepted': silence is not consent. The caller falls back to waiting for the
+      // belt to actually move, exactly as it does on every other protocol.
+      await expect(d.startVerdict!()).resolves.toBe('unknown');
+    }, 10_000);
+
+    it('keeps the first answer, ignoring what the pad says afterwards', async () => {
+      const { d, notify } = await started();
+      push(notify, 'props Error ErrorCode -5000');
+      push(notify, 'props ControlMode 1');
+      await expect(d.startVerdict!()).resolves.toBe('refused');
+    });
+
+    it('settles a start left in flight when the link goes', async () => {
+      // Nothing is going to answer now; a caller awaiting this must not hang on it.
+      const { d } = await started();
+      const verdict = d.startVerdict!();
+      await d.detach();
+      await expect(verdict).resolves.toBe('unknown');
+    });
+
+    it('gives each start its own window', async () => {
+      const { d, notify } = await started();
+      const first = d.startVerdict!();
+      await d.start(); // supersedes it before the pad ever answered
+      push(notify, 'props ControlMode 1');
+      await expect(first).resolves.toBe('unknown');
+      await expect(d.startVerdict!()).resolves.toBe('accepted');
+    });
+
+    it('is not fooled by a control-mode line arriving outside a start', async () => {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      push(notify, 'props ControlMode 1');
+      // No start has been written, so there is nothing for the pad to have accepted.
+      await expect(d.startVerdict!()).resolves.toBe('unknown');
+    });
+  });
+
   it('never interleaves the fragments of two messages', async () => {
     // The pad reassembles one stream and splits it on CR, so a message written into the
     // middle of another one's fragments decodes to garbage and is silently dropped.
@@ -219,6 +318,27 @@ describe('ks1234Driver', () => {
     expect(seen).toHaveLength(0);
   });
 
+  it('drops a value that is not a number rather than publishing NaN', async () => {
+    // NaN survives the absent-key strip, and once it is in `live` the belt is neither
+    // moving nor stopped: isMoving is false and confirmedStopped is false, so a stop
+    // can never confirm and the readout says NaN.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props CurrentSpeed --');
+    expect(seen).toHaveLength(0);
+  });
+
+  it('keeps the readable fields of a line whose other values are junk', async () => {
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props CurrentSpeed n/a RunningSteps 11');
+    expect(Object.keys(seen[0]!).sort()).toEqual(['raw', 'steps']);
+  });
+
   it('adopts the limits the pad reports', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();
@@ -239,6 +359,21 @@ describe('ks1234Driver', () => {
     expect(d.minSpeedKmh).toBe(1); // a start speed under the floor is raised to it
     expect(logs.join('\n')).toMatch(/implausible max speed/);
     expect(logs.join('\n')).toMatch(/below the 1 km\/h floor/);
+  });
+
+  it('refuses a minimum that arrives on its own above the maximum', async () => {
+    // The pad reports StartSpeed and Max in separate frames, so a minimum can land
+    // above a maximum that is still the 6.0 default. SpeedControl then reads the belt
+    // as being at its minimum and its maximum at once and disables both steppers.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    const logs: string[] = [];
+    d.onLog = (m) => logs.push(m);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props StartSpeed 7.0');
+    expect(d.minSpeedKmh).toBeLessThanOrEqual(d.maxSpeedKmh);
+    expect(d.minSpeedKmh).toBe(1.0);
+    expect(logs.join('\n')).toMatch(/implausible min speed/);
   });
 
   it('labels run state', async () => {
@@ -274,6 +409,29 @@ describe('ks1234Driver', () => {
     // would otherwise be reporting a command that never left the building.
     await expect(d.setSpeed(2)).rejects.toThrow(/not connected/);
     expect(write.writes).toHaveLength(0);
+  });
+
+  it('gives up quietly when the link goes away between two fragments of a message', async () => {
+    // A long line is written 20 bytes at a time. Tearing the link down partway through
+    // used to dereference the characteristic that had just been nulled, so a disconnect
+    // during the connect handshake surfaced as "Cannot read properties of null".
+    let d: ReturnType<typeof ks1234Driver>;
+    let torn = false;
+    const write = new FakeCharacteristic(UUID.ks1234Write, {
+      onWrite: (bytes) => {
+        // A full 20 bytes means more fragments of this message are still to come.
+        if (bytes.length === 20 && !torn) {
+          torn = true;
+          void d.detach();
+        }
+      },
+    });
+    const notify = new FakeCharacteristic(UUID.ks1234Notify);
+    const server = new FakeServer().addService(UUID.ks1234Service, [write, notify]);
+    d = ks1234Driver();
+
+    await expect(d.attach(server as unknown as BluetoothRemoteGATTServer)).resolves.toBeUndefined();
+    expect(torn).toBe(true); // the tear-down really did land mid-message
   });
 
   it('refuses stop() on a detached link rather than resolving', async () => {

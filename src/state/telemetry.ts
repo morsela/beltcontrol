@@ -111,7 +111,12 @@ export const beltReportsRest = computed(() => {
  * Speed alone is not enough: a pad spinning up reports `runState 1` with
  * `CurrentSpeed 0.0` for a second or two before the belt has any speed to report, and
  * treating that gap as a failed start would be wrong. Either signal counts.
+ *
+ * The label rather than `state`, because `state` is a raw per-protocol code and means
+ * nothing on its own: 1 is running on the 0x1234 pad but *starting* on a classic one,
+ * whose running code is 2. Every driver normalises the label; none of them agree on
+ * the number.
  */
 export const confirmedRunning = computed(
-  () => isMoving.value || live.value.state === 1
+  () => isMoving.value || live.value.stateLabel === 'running'
 );

@@ -130,3 +130,12 @@ has changed before.
 A Vercel deployment URL is public by default. Nothing sensitive is exposed — the page is inert
 without a treadmill in radio range, and session history never leaves the browser — but you can
 turn on Deployment Protection on the project if you'd rather it not be reachable at all.
+
+What *does* leave the browser is the analytics beacon. `@vercel/analytics` is mounted in
+`app.tsx` and posts page views to Vercel Web Analytics: no cookies, no cross-site tracking, but
+still a request, and Vercel keeps ordinary request logs including IP addresses like any host.
+That is disclosed on the in-app legal page (`#/legal`) under **What is collected**, and the two
+have to stay in step — a privacy claim the deployment quietly contradicts is worse than no claim
+at all. If you fork this and drop the analytics import, edit that section to match; if you add
+anything that talks to a third party, the CSP in `vercel.json` will block it until you widen
+`connect-src`, which is the moment to update the page as well.

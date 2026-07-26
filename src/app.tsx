@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { Now } from './routes/Now.js';
 import { Today } from './routes/Today.js';
 import { History } from './routes/History.js';
+import { Legal } from './routes/Legal.js';
 import { TabBar } from './components/TabBar.js';
 import { StopBar } from './components/StopBar.js';
 import { AmbientView } from './components/AmbientView.js';
@@ -14,9 +15,10 @@ import { beltMayBeMoving, connected } from './state/connection.js';
 import { isDesktop } from './lib/viewport.js';
 import { trackEvent } from './lib/analytics.js';
 
-export type Route = 'now' | 'today' | 'history';
+export type Route = 'now' | 'today' | 'history' | 'legal';
 
-const ROUTES: Route[] = ['now', 'today', 'history'];
+/** Every hash the router will accept. `legal` is reachable but is not a tab — see TabBar. */
+const ROUTES: Route[] = ['now', 'today', 'history', 'legal'];
 
 /** Hash routing in a dozen lines — a router dependency would outweigh three screens. */
 function readHash(): Route {
@@ -87,8 +89,10 @@ export function App() {
 
           <div class="content" tabIndex={-1} ref={contentRef}>
             <DesktopOnlyNotice />
-            {r === 'history' ? <History /> : <Today />}
-            <Disclaimer />
+            {r === 'legal' ? <Legal /> : r === 'history' ? <History /> : <Today />}
+            {/* The footer disclaimer is a pointer at the legal page. On the legal page
+                itself it would be the same statement twice on one screen. */}
+            {r !== 'legal' && <Disclaimer />}
           </div>
         </main>
         <Analytics />
@@ -103,7 +107,8 @@ export function App() {
         {r === 'now' && <Now onAmbient={enterAmbient} />}
         {r === 'today' && <Today />}
         {r === 'history' && <History />}
-        <Disclaimer />
+        {r === 'legal' && <Legal />}
+        {r !== 'legal' && <Disclaimer />}
       </main>
 
       {showStop && <StopBar />}

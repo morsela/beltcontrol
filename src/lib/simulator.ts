@@ -5,11 +5,20 @@
 // This driver implements the same interface as the real ones and is only reachable
 // when import.meta.env.DEV is true, so it is tree-shaken out of a production build.
 
-import type { Driver, DriverId, Telemetry } from './drivers.js';
+import { protocolDefaults } from './drivers.js';
+import type { Driver, DriverId, StartVerdict, Telemetry } from './drivers.js';
 
-export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } = {}): Driver {
+export function simulatedDriver(
+  opts: { id?: DriverId; rejectPause?: boolean; refuseStarts?: number } = {}
+): Driver {
   const id: DriverId = opts.id ?? 'classic';
   const rejectPause = opts.rejectPause ?? false;
+
+  // A real KS-C2 refuses a start out loud and sometimes takes three tries to accept one.
+  // `connectSimulated('ks1234', { refuseStarts: 2 })` plays that back, so the retry path
+  // can be walked through in dev instead of only in front of a treadmill.
+  let startsToRefuse = opts.refuseStarts ?? 0;
+  let lastVerdict: StartVerdict = 'unknown';
 
   let timer: number | null = null;
   let target = 0;
@@ -19,20 +28,14 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
   let steps = 0;
   let kcal = 0;
 
-  const caps: Record<DriverId, Driver['capabilities']> = {
-    classic: { speed: true, mode: true, incline: false, steps: true, pause: false, needsPolling: true },
-    ftms: { speed: true, mode: false, incline: false, steps: false, pause: true, needsPolling: false },
-    ks1234: { speed: true, mode: false, incline: false, steps: true, pause: false, needsPolling: false },
-    fitshow: { speed: false, mode: false, incline: false, steps: false, pause: false, needsPolling: false },
-  };
-
   const self: Driver = {
     id,
     name: `SIMULATED (${id})`,
-    capabilities: caps[id],
-    maxSpeedKmh: 6,
-    minSpeedKmh: 1.0,
-    speedStep: 0.1,
+    // Straight from the real drivers' own table. This used to be a second copy kept by
+    // hand, and it had drifted: every simulated pad claimed a 0.1 km/h step, so the
+    // classic stepper behaved differently here than against hardware — which is the one
+    // thing a simulator must not do.
+    ...protocolDefaults(id),
     onData: null,
     onLog: null,
 
@@ -45,15 +48,30 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
       timer = null;
     },
     async start() {
+      if (startsToRefuse > 0) {
+        startsToRefuse--;
+        lastVerdict = 'refused';
+        self.onLog?.(`simulator: the pad refuses the start (${startsToRefuse} more will be refused)`);
+        return;
+      }
       self.onLog?.('simulator: start');
+      lastVerdict = 'accepted';
       target = Math.max(target, 1.0);
+    },
+
+    // Only the 0x1234 pad answers a start on real hardware; every other protocol is
+    // simulated as saying nothing, which is what its driver would report.
+    async startVerdict() {
+      return id === 'ks1234' ? lastVerdict : 'unknown';
     },
     async stop() {
       self.onLog?.('simulator: stop');
       target = 0;
     },
     async pause() {
-      if (!caps[id].pause) throw new Error(`the simulated ${id} protocol has no pause command`);
+      if (!self.capabilities.pause) {
+        throw new Error(`the simulated ${id} protocol has no pause command`);
+      }
       self.onLog?.('simulator: pause');
       target = 0;
       // A real unit may still answer "op code not supported"; connectSimulated('ftms',
@@ -99,7 +117,7 @@ export function simulatedDriver(opts: { id?: DriverId; rejectPause?: boolean } =
       state: speed > 0 ? 2 : 5,
       stateLabel: speed > 0 ? 'running' : 'stopped',
     };
-    if (caps[id].steps) patch.steps = Math.round(steps);
+    if (self.capabilities.steps) patch.steps = Math.round(steps);
     if (id !== 'fitshow') patch.distKm = Number(distKm.toFixed(3));
     if (id === 'ftms' || id === 'ks1234') patch.kcal = Math.round(kcal);
 

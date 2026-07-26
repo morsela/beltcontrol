@@ -116,6 +116,33 @@ moment Escape has somewhere better to be.
   neither the classic nor the `0x1234` frame carries calories, so a fixed six-tile grid
   guaranteed permanent em dashes on every real device. Availability is resolved once, at
   connect time, from `capabilities` plus the trust map in `src/state/telemetry.ts`.
+- **The tread strip is a readout, not decoration.** A band of slats above the hero number
+  scrolls at the speed the pad reports, driven from the same telemetry the numbers come
+  from — so it holds still when the belt is stopped, holds still when the pad has not
+  reported a speed *at all*, and glides to a halt on its own as a belt coasting down
+  reports smaller numbers. It shares the `MOVING_KMH` floor with `isMoving` rather than
+  picking a threshold of its own, because a still belt under a moving strip and a moving
+  belt under a still one are the same bug. One animation re-timed by `playbackRate`, not
+  restarted per frame: a treadmill reports speed once or twice a second and a restart on
+  each report is visible as a stutter. It is squared off and ruled top and bottom, with
+  wide slats and narrow gaps, so it cannot be mistaken for the rounded goal meter a few
+  rems below — nothing about it reads as a proportion, because it has no end. Reduced
+  motion is honoured in `TreadStrip` rather than in `tokens.css`: that blanket rule
+  reaches declarative animations only, and this one is scripted. Timing constants live in
+  `src/lib/tread.ts`, including the pitch, which the component hands to CSS as
+  `--tread-pitch` so the gradient period and the travel cannot drift apart.
+- **The lifetime odometer counts what it can vouch for.** History leads with one number on
+  mechanical wheels — every session ever stored, the one in progress included, so the last
+  wheel turns over while you are still on the belt. It obeys the same exclusion rule as
+  every other total: an unverified distance never enters it. When *nothing* in the history
+  carries a distance the app can place on a scale, it counts hours instead of miles rather
+  than reading `0.0 mi` over hundreds of walks, and says why. Time is measured here from
+  the wall clock and needs no cooperation from any pad, which makes it the one total that
+  is always honest. The wheels are `aria-hidden` with the value given once as text — ten
+  digits per wheel is ninety characters of noise for a number a screen reader can state in
+  four — and the roll has a timer behind its `requestAnimationFrame`, because rAF does not
+  fire in a background tab and wheels stuck on their seed value would contradict the text
+  beside them.
 - **Three speed presets.** The steppers move 0.2 mph per press to stay inside the
   0.5 km/h safety limit, which makes 1.2 → 3.0 mph nine presses. Desk walkers live at two or
   three fixed speeds, so those get chips.
@@ -144,6 +171,18 @@ moment Escape has somewhere better to be.
   is the wrong thing to park beside someone working — which makes it the one place that
   cannot draw from `--ink`, near-black in the light theme. It has its own
   `--ambient-bg/-ink/-muted` tokens instead, measured at 17:1 and 7:1 in both themes.
+- **The chip's dot carries the radio, not just the belt.** A ring ticks outward once per
+  frame ingested, throttled to about four a second so a burst of reassembled fragments
+  reads as a heartbeat rather than a flicker. The app's least ordinary property is that
+  the link is real and local — browser to treadmill, no server in it — and nothing on
+  screen showed it: the label only moves when the belt's *state* changes, so a pad
+  happily reporting 3.0 mph for twenty minutes left the whole screen still. The ring is
+  deliberately **not** a state and **not** an error. It is drawn in `--muted`, which is
+  outside the status palette, so it cannot be read as a fourth thing the dot is saying;
+  when frames stop it simply stops, before any timeout has run out and without anything
+  being declared wrong. The connection sheet carries the age of the last frame for
+  anyone who wants the number, updated by a clock of its own — nothing in the signal
+  graph moves when a pad goes silent, which is exactly the case that row exists to show.
 - **A failure is never only in the log.** Every status, including one raised while
   connected, renders in a single always-mounted `aria-live` region on Now. A speed write
   that the belt rejects also puts the readout back where it was: the target on screen is
@@ -168,6 +207,10 @@ moment Escape has somewhere better to be.
   Repeat at 192, and against `icon-maskable.svg` for `icon-maskable-512.png`. The maskable
   twin scales the glyph to 75% so Android's mask — the centre circle of 80% diameter — only
   ever cuts background.
+
+  The screenshots in the README are exports too, and a longer story: they need a
+  month of walking history behind them and a belt actually moving in front of them.
+  `tools/screenshots.sh` stages both — see [Screenshots](screenshots.md).
 
 ## Sessions
 
@@ -218,6 +261,41 @@ touches; an unrecognised protocol falls back to an all-`absent` trust map, which
 numbers out of the aggregates. Under-trusting is the safe direction. A file that is not a
 backup at all is refused outright, leaving the stored history untouched, and the count of
 skipped rows is reported next to the button rather than swallowed.
+
+## Feedback to support
+
+There is no feedback endpoint, because there is no server: the app is static files, the
+CSP allows `connect-src 'self'`, and the promise everywhere else in this document is that
+a walk never leaves the browser. **Send feedback** keeps that literally true. It builds
+the report in the page, shows it in the words that will be sent, and hands it to the
+user's own mail client as a `mailto:` addressed to `support@beltcontrol.com`. Nothing is
+transmitted by the page, so there is nothing to consent to and nothing to trust — the
+person writing it is the one who presses send, and can edit or abandon it first.
+
+It is reachable from two places, for two different reports. The footer sits under every
+screen, so a complaint can be made from the screen it is about. The connection sheet has
+its own entry beside the protocol log, which is the report the project actually asks for:
+a pad speaking a protocol nobody has decoded.
+
+The diagnostics block is opt-out, and it is a fixed list — build, browser UA, whether Web
+Bluetooth exists at all, the driver that was selected, the device name, the belt state and
+its speed range, and the *number* of stored sessions. A count, never a session. Without it
+support spends two round trips asking which browser and which protocol; with it, the one
+question a user cannot answer themselves ("Connect does nothing") is already answered. The
+checkbox turns it off, and the preview above it is the real disclosure — a sentence
+claiming what gets sent is a claim, the text itself is the thing.
+
+What this costs is length. A `mailto:` is a URL, it goes through the OS shell, and the
+shell stops carrying it somewhere around 2 KB — so a 400-line log does not fit, and cannot
+be made to. `fitMailto` in `src/lib/feedback.ts` measures the *encoded* URL (every newline
+triples on the way in), then drops log lines oldest-first until it fits, keeping the
+newest — a failure is at the end of a log, and the connect handshake that scrolled off is
+reconstructible from [the protocol reference](protocols.md) while the last four lines are
+not. The typed message is the last thing given up, since it is the part support cannot
+reconstruct at all. Every trim is stated twice: in the sheet, above the buttons, and in
+the mail body itself. **Save report** writes the untrimmed thing to a file to attach, and
+**Copy report** covers a browser with no mail client wired up at all. A log quietly cut in
+half would be worse than no log, because the missing half is where the bug was.
 
 ## Counter resets
 

@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from './Sheet.js';
 import { LogPanel } from './LogPanel.js';
 import {
@@ -11,14 +11,34 @@ import {
   beltLabel,
   beltTone,
 } from '../state/connection.js';
-import { live } from '../state/telemetry.js';
+import { live, lastFrameAt } from '../state/telemetry.js';
 import { status, logLines } from '../state/log.js';
 import { toMph } from '../lib/format.js';
+import { fmtFrameAge } from '../lib/pulse.js';
 
-export function ConnectionSheet({ onClose }: { onClose: () => void }) {
+export function ConnectionSheet({
+  onClose,
+  onFeedback,
+}: {
+  onClose: () => void;
+  /** Hands the caller the job of opening the feedback sheet, so this one can close
+   *  first. Two modals stacked would each trap focus and each paint a backdrop, and
+   *  the second Esc would land on a dialog nobody could see the whole of. */
+  onFeedback: () => void;
+}) {
   const d = driver.value;
   const t = live.value;
   const [copied, setCopied] = useState(false);
+
+  // The age of the last frame only changes because time passes, so it needs a clock of
+  // its own — nothing in the signal graph moves when a pad goes silent, which is
+  // exactly the case this row exists to show. Runs only while the sheet is open.
+  const frameAt = lastFrameAt.value;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, []);
 
   const copyLog = () => {
     const text = logLines.value.map((l) => `${l.t}  ${l.msg}`).join('\n');
@@ -44,6 +64,14 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
 
         <dt>Protocol</dt>
         <dd>{d?.name ?? '—'}</dd>
+
+        {/* The ring on the chip says frames are arriving; this says when the last one
+            did. A link that has gone quiet is the first thing to establish when a pad
+            has stopped answering, and until now the only way to see it was to watch
+            the protocol log stop scrolling. Not styled as an error at any age: an old
+            frame is a fact, not a verdict the app has reached. */}
+        <dt>Last frame</dt>
+        <dd class="tnum">{frameAt == null ? '—' : fmtFrameAge(now - frameAt)}</dd>
 
         <dt>Belt state</dt>
         {/* The raw code stays visible beside the guessed label so a wrong guess is
@@ -113,11 +141,19 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
           Opens by default once something has actually gone wrong. */}
       <LogPanel defaultOpen={status.value.kind === 'err'} />
 
-      {logLines.value.length > 0 && (
-        <button class="table-toggle" onClick={copyLog}>
-          {copied ? 'Copied' : 'Copy log'}
+      {/* Copying the log only helps someone who already knows where to send it. The
+          second button is the answer to "and then what" — it carries the same lines,
+          addressed, with the browser and protocol filled in. */}
+      <div class="log-actions">
+        {logLines.value.length > 0 && (
+          <button class="table-toggle" onClick={copyLog}>
+            {copied ? 'Copied' : 'Copy log'}
+          </button>
+        )}
+        <button class="table-toggle" onClick={onFeedback}>
+          Send to support
         </button>
-      )}
+      </div>
     </Sheet>
   );
 }

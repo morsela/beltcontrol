@@ -36,6 +36,17 @@ export interface Capabilities {
 
 export type DriverId = 'classic' | 'ftms' | 'fitshow' | 'ks1234';
 
+/**
+ * What a pad said about a start, for the protocols that say anything at all.
+ *
+ *   accepted  the unit acknowledged taking the command
+ *   refused   the unit answered no — it will not move
+ *   unknown   the unit said nothing either way inside the window
+ *
+ * Never a statement about the belt: only movement reported by the belt is that.
+ */
+export type StartVerdict = 'accepted' | 'refused' | 'unknown';
+
 export interface Driver {
   readonly id: DriverId;
   readonly name: string;
@@ -50,11 +61,23 @@ export interface Driver {
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
   /** Throws if the write channel is gone, so a command can never resolve without
-   *  having been sent. Present on the 0x1234 driver; harmless elsewhere. */
+   *  having been sent. Present on the drivers that can write at all. */
   _requireOpen?(): void;
   detach(): Promise<void>;
   /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
   start(): Promise<void>;
+  /**
+   * The unit's own answer to the last `start()`, once it has had a moment to give one.
+   *
+   * Optional, and absent on every protocol that cannot answer — a caller must read a
+   * missing method as `'unknown'` and fall back to waiting for the belt to move, which
+   * is what it does anyway. Only the 0x1234 driver implements it: that pad refuses a
+   * start out loud, and a refusal heard in one second beats a silence timed out in ten.
+   *
+   * Safe to call once per start, after `start()` resolves; the window is armed inside
+   * `start()` itself so a fast answer cannot be missed.
+   */
+  startVerdict?(): Promise<StartVerdict>;
   stop(): Promise<void>;
   /**
    * Pause the belt, resumable with `start()`.
@@ -91,6 +114,24 @@ export declare const UUID: {
 };
 
 export declare const CLASSIC_MODE: { auto: 0; manual: 1; standby: 2 };
+
+/** The starting limits a driver carries before a device says otherwise. */
+export type SpeedLimits = Pick<Driver, 'minSpeedKmh' | 'maxSpeedKmh' | 'speedStep'>;
+
+/**
+ * What each protocol can do, and where its driver starts. The single source for both
+ * the real drivers and the simulator — keeping a second copy by hand is how the
+ * simulated classic pad ended up offering a step its driver never had.
+ */
+export declare const PROTOCOLS: Record<
+  DriverId,
+  { capabilities: Capabilities; limits: SpeedLimits }
+>;
+
+/** A driver's share of the table above, as fresh objects it owns and may rewrite. */
+export declare function protocolDefaults(
+  id: DriverId
+): { capabilities: Capabilities } & SpeedLimits;
 
 /** The app's own speed envelope, applied on top of whatever a device reports about
  *  itself — see `adoptSpeedLimits`. */
@@ -143,7 +184,9 @@ export interface TreadmillData extends Partial<Telemetry> {
 }
 
 export declare function parseTreadmillData(view: DataView): TreadmillData;
-export declare function hex(buf: ArrayBuffer | ArrayBufferView): string;
+/** Space-separated hex. A view is formatted as the bytes it covers, not as the whole
+ *  buffer behind it. */
+export declare function hex(buf: ArrayBuffer | ArrayBufferView | ArrayLike<number>): string;
 
 /** Text in, permuted-base64 text out. The alphabet is a KingSmith permutation of
  *  the standard one, so this is not interchangeable with btoa/atob. */

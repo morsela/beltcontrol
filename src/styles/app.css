@@ -56,6 +56,10 @@
 .btn.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--line); }
 .btn.block { width: 100%; }
 .btn.lg { min-height: 60px; font-size: 1.05rem; }
+/* A button that is really a link — `mailto:` is a destination, so it is an anchor and
+   arrives underlined and link-coloured from the base rules. */
+a.btn { text-decoration: none; color: var(--ink); }
+a.btn.primary { color: var(--accent-ink); }
 
 /* --- desktop-only banner -------------------------------------------------- */
 
@@ -171,6 +175,75 @@
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .dot.pulsing { animation: pulse 1.6s ease-in-out infinite; }
+
+/* One ring per frame off the radio — the link's heartbeat, not a belt state. Neutral
+   on purpose: --muted is not in the status palette, so the ring cannot be read as a
+   fourth thing the dot might be saying. It sits on its own layer over the dot, which
+   keeps it clear of the `pulsing` animation the same dot runs while connecting. */
+.link-dot { position: relative; display: inline-flex; flex: none; }
+@keyframes dot-ping {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+.dot-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  pointer-events: none;
+  animation: dot-ping 0.9s var(--ease) forwards;
+}
+
+/* --- tread strip ---------------------------------------------------------- */
+
+/* The deck the number sits on. Squared off and ruled top and bottom on purpose:
+   the goal meter a few rems below is a rounded pill that fills left to right, and
+   two horizontal bars that look alike but mean different things is the one thing
+   this cannot be. Nothing here reads as a proportion — it has no end.
+
+   --tread-pitch is set inline by TreadStrip, from the same constant the animation
+   translates by (src/lib/tread.ts). It is not declared here, so the slats and the
+   travel cannot drift apart. */
+.tread {
+  height: 10px;
+  margin: 0 0 0.9rem;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-block: 1px solid var(--line);
+}
+.tread-belt {
+  height: 100%;
+  /* One pitch wider than the box, so the element can travel a full slat and land
+     back where it started with no gap ever reaching the right edge. */
+  width: calc(100% + var(--tread-pitch));
+  /* Wide slats with narrow gaps, not thin rules with wide gaps: the second reads as a
+     measuring scale, which on a screen showing distance is the wrong thing to suggest.
+     Held well under full --faint so the band is a texture behind the number rather than
+     a second thing competing with it. */
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--faint) 42%, transparent) 0 9px,
+    transparent 9px var(--tread-pitch)
+  );
+}
+
+/* Ambient sits in peripheral vision for hours, which is exactly where a slow-moving
+   texture belongs — it is the one surface where motion is the point rather than a
+   detail. Wider slats, the ambient palette, and no card rules around it. */
+.tread-ambient {
+  width: min(100%, 28rem);
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  border-block-color: color-mix(in srgb, var(--ambient-muted) 35%, transparent);
+}
+.tread-ambient .tread-belt {
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ambient-muted) 45%, transparent) 0 9px,
+    transparent 9px var(--tread-pitch)
+  );
+}
 
 /* --- hero ----------------------------------------------------------------- */
 
@@ -530,6 +603,35 @@
 }
 .field-input:focus-visible { border-color: var(--accent); }
 
+/* A textarea inherits neither the page font nor a useful resize axis. Vertical only:
+   a horizontal drag inside a bottom sheet drags the content out past its own edge. */
+textarea.field-input {
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
+  resize: vertical;
+}
+
+/* Checkbox plus its label as one target. The box cannot be grown to a thumb without
+   redrawing it, so the label carries the tap area instead. */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: var(--tap);
+  padding: 0.7rem 0;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+.check input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
 /* --- skip link ------------------------------------------------------------ */
 
 /* Off-screen until focused: the desktop rail is a dozen controls deep, and the
@@ -589,6 +691,11 @@ details.logbox[open] summary::before { content: '▾ '; }
 }
 .log .err { color: var(--bad); }
 .log .ok { color: var(--accent); }
+/* The feedback preview is one block of text rather than a list of lines, so it is a
+   <pre> — which arrives with a margin of its own that the log div never had. */
+pre.log { margin: 0; }
+
+.log-actions { display: flex; flex-wrap: wrap; gap: 1rem; }
 
 /* --- generic -------------------------------------------------------------- */
 
@@ -628,8 +735,67 @@ a { color: var(--accent); }
   color: var(--muted);
   text-wrap: pretty;
 }
-.disclaimer p { margin: 0; }
+.disclaimer p { margin: 0 0 0.5rem; }
+.disclaimer p:last-child { margin-bottom: 0; }
 .disclaimer sup { font-size: 0.7em; vertical-align: super; line-height: 0; }
+/* The safety sentence leads, so its emphasis carries full ink against the muted
+   block around it rather than inheriting --muted like the trademark text. */
+.disclaimer strong { color: var(--ink); }
+
+/* The two ways out of the footer — the legal page and the feedback sheet — on one
+   row. A gap rather than a separator character: one is a link and the other is a
+   button, and a bullet between them would imply they are the same kind of thing. */
+.disclaimer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+}
+.disclaimer-links .table-toggle { font-size: inherit; }
+
+/* --- legal page ------------------------------------------------------------
+   Long-form prose, which exists nowhere else in this app — every other screen is
+   numbers and controls. Measure is capped well under the desktop content width:
+   a 76rem line of body text is unreadable regardless of how much room there is. */
+
+.legal { max-width: 42rem; }
+.legal h2 {
+  font-size: var(--t-md);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+.legal h3 {
+  font-size: var(--t-body);
+  margin: 1.25rem 0 0.35rem;
+}
+.legal p { margin: 0 0 0.75rem; text-wrap: pretty; }
+.legal p:last-child { margin-bottom: 0; }
+.legal ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.legal li { text-wrap: pretty; }
+.legal code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.legal .note { margin-top: 0.75rem; }
+.legal-foot { margin-top: 1.5rem; text-align: center; }
+
+/* The one block on the page describing a way to get hurt. Warn-toned, matching the
+   existing warn callout: bad/red is reserved for Stop and for failures that already
+   happened, and this is neither. The left rule does the work in both themes, where
+   a tinted fill alone would wash out against --panel in dark. */
+.callout-safety {
+  border-left: 3px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 6%, var(--panel));
+}
+.callout-safety h2 { color: var(--warn); }
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .stat { text-align: center; }
@@ -641,6 +807,74 @@ a { color: var(--accent); }
   color: var(--muted);
   display: block;
   margin-top: 0.15rem;
+}
+
+/* --- lifetime odometer ---------------------------------------------------- */
+
+/* Each wheel is a strip of ten digits behind a one-digit window. --odo-step is that
+   window's height and the strip's travel per digit, so it can only ever land square
+   on one. */
+.odo {
+  --odo-step: 1.12em;
+  display: inline-block;
+  font-size: clamp(2.75rem, 11vw, 4rem);
+  font-weight: 650;
+  line-height: 1;
+}
+/* Every cell is the same box, wheels and punctuation alike: an inline-block with
+   overflow takes its baseline from its bottom edge, so a comma left as ordinary text
+   beside them would sit visibly off the digits' line. */
+.odo-wheels { display: inline-flex; align-items: center; }
+.odo-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--odo-step);
+}
+/* Top-aligned, not centred: the strip's offset *is* the digit, so zero travel has to
+   put 0 in the window. Centring it lands the window between 4 and 5 at rest and makes
+   every subsequent translation show the wrong digit. */
+.odo-wheel {
+  overflow: hidden;
+  align-items: flex-start;
+}
+.odo-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.85s var(--ease);
+}
+.odo-strip > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--odo-step);
+  flex: none;
+}
+/* The decimal mark and the group separator are narrower than a digit; letting them
+   take a full digit's width would open a gap the wheels do not have. */
+.odo-fixed { padding: 0 0.02em; }
+
+.odo-row { display: flex; align-items: flex-end; gap: 0.6rem; }
+.odo-unit {
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 0.45rem;
+}
+
+/* Read out to a screen reader, never drawn. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .session-item {
