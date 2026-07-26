@@ -56,6 +56,10 @@
 .btn.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--line); }
 .btn.block { width: 100%; }
 .btn.lg { min-height: 60px; font-size: 1.05rem; }
+/* A button that is really a link — `mailto:` is a destination, so it is an anchor and
+   arrives underlined and link-coloured from the base rules. */
+a.btn { text-decoration: none; color: var(--ink); }
+a.btn.primary { color: var(--accent-ink); }
 
 /* --- desktop-only banner -------------------------------------------------- */
 
@@ -599,6 +603,35 @@
 }
 .field-input:focus-visible { border-color: var(--accent); }
 
+/* A textarea inherits neither the page font nor a useful resize axis. Vertical only:
+   a horizontal drag inside a bottom sheet drags the content out past its own edge. */
+textarea.field-input {
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
+  resize: vertical;
+}
+
+/* Checkbox plus its label as one target. The box cannot be grown to a thumb without
+   redrawing it, so the label carries the tap area instead. */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: var(--tap);
+  padding: 0.7rem 0;
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+.check input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
 /* --- skip link ------------------------------------------------------------ */
 
 /* Off-screen until focused: the desktop rail is a dozen controls deep, and the
@@ -658,6 +691,11 @@ details.logbox[open] summary::before { content: '▾ '; }
 }
 .log .err { color: var(--bad); }
 .log .ok { color: var(--accent); }
+/* The feedback preview is one block of text rather than a list of lines, so it is a
+   <pre> — which arrives with a margin of its own that the log div never had. */
+pre.log { margin: 0; }
+
+.log-actions { display: flex; flex-wrap: wrap; gap: 1rem; }
 
 /* --- generic -------------------------------------------------------------- */
 
@@ -703,6 +741,17 @@ a { color: var(--accent); }
 /* The safety sentence leads, so its emphasis carries full ink against the muted
    block around it rather than inheriting --muted like the trademark text. */
 .disclaimer strong { color: var(--ink); }
+
+/* The two ways out of the footer — the legal page and the feedback sheet — on one
+   row. A gap rather than a separator character: one is a link and the other is a
+   button, and a bullet between them would imply they are the same kind of thing. */
+.disclaimer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+}
+.disclaimer-links .table-toggle { font-size: inherit; }
 
 /* --- legal page ------------------------------------------------------------
    Long-form prose, which exists nowhere else in this app — every other screen is

@@ -16,7 +16,16 @@ import { status, logLines } from '../state/log.js';
 import { toMph } from '../lib/format.js';
 import { fmtFrameAge } from '../lib/pulse.js';
 
-export function ConnectionSheet({ onClose }: { onClose: () => void }) {
+export function ConnectionSheet({
+  onClose,
+  onFeedback,
+}: {
+  onClose: () => void;
+  /** Hands the caller the job of opening the feedback sheet, so this one can close
+   *  first. Two modals stacked would each trap focus and each paint a backdrop, and
+   *  the second Esc would land on a dialog nobody could see the whole of. */
+  onFeedback: () => void;
+}) {
   const d = driver.value;
   const t = live.value;
   const [copied, setCopied] = useState(false);
@@ -132,11 +141,19 @@ export function ConnectionSheet({ onClose }: { onClose: () => void }) {
           Opens by default once something has actually gone wrong. */}
       <LogPanel defaultOpen={status.value.kind === 'err'} />
 
-      {logLines.value.length > 0 && (
-        <button class="table-toggle" onClick={copyLog}>
-          {copied ? 'Copied' : 'Copy log'}
+      {/* Copying the log only helps someone who already knows where to send it. The
+          second button is the answer to "and then what" — it carries the same lines,
+          addressed, with the browser and protocol filled in. */}
+      <div class="log-actions">
+        {logLines.value.length > 0 && (
+          <button class="table-toggle" onClick={copyLog}>
+            {copied ? 'Copied' : 'Copy log'}
+          </button>
+        )}
+        <button class="table-toggle" onClick={onFeedback}>
+          Send to support
         </button>
-      )}
+      </div>
     </Sheet>
   );
 }

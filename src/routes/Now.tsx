@@ -4,6 +4,7 @@ import { GoalMeter } from '../components/GoalMeter.js';
 import { Tiles } from '../components/Tiles.js';
 import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
+import { FeedbackSheet } from '../components/FeedbackSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
 import { TreadStrip } from '../components/TreadStrip.js';
@@ -29,6 +30,7 @@ import { toMph } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
+  const [feedback, setFeedback] = useState(false);
   // Which kind of "the belt is about to move" is waiting on a yes, if any. Resuming is
   // confirmed exactly like starting: it may not be the person who paused it standing on
   // the belt now.
@@ -176,7 +178,17 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
       {/* The protocol log lives in the connection sheet, not here. It is a
           diagnostic — most people never need it, and it has no place on the
           screen you glance at while walking. */}
-      {sheet && <ConnectionSheet onClose={() => setSheet(false)} />}
+      {sheet && (
+        <ConnectionSheet
+          onClose={() => setSheet(false)}
+          onFeedback={() => {
+            setSheet(false);
+            setFeedback(true);
+          }}
+        />
+      )}
+
+      {feedback && <FeedbackSheet onClose={() => setFeedback(false)} />}
     </>
   );
 }

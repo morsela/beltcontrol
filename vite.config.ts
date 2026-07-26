@@ -1,8 +1,14 @@
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+
+// Stamped into the bundle so a support report can name the build it came from.
+// Read here rather than imported, so package.json's dependency list does not end up
+// in the app just to carry one string.
+const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
 
 /**
  * Give the service worker a cache name that changes when the build does.
@@ -45,6 +51,7 @@ function stampServiceWorker(): Plugin {
 export default defineConfig({
   plugins: [stampServiceWorker()],
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
+  define: { __APP_VERSION__: JSON.stringify(version) },
   resolve: {
     // Lets any stray `react` import resolve to Preact rather than failing the build.
     alias: {

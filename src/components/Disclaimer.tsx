@@ -1,3 +1,5 @@
+import { FeedbackLink } from './FeedbackSheet.js';
+
 /**
  * Sits at the bottom of every screen, not behind an About tab.
  *
@@ -16,6 +18,13 @@
  * A bare anchor like TabBar's, not an onClick — the hash is the router's input and
  * app.tsx already listens for `hashchange`. Setting the signal here as well would
  * both duplicate that and import app.js back into a component app.js imports.
+ *
+ * Feedback shares that last row for the same reason the legal link is in it: the
+ * footer is the one thing under every screen, so there is always a way to say
+ * something is wrong from the screen it is wrong on. It is a button rather than an
+ * anchor because it opens a dialog rather than a page — there is no hash for it to
+ * put in front of the router. Reports about the connection have a second, closer
+ * entry in the connection sheet, beside the log they need.
  */
 export function Disclaimer() {
   return (
@@ -32,8 +41,9 @@ export function Disclaimer() {
         KingSmith<sup>®</sup> are trademarks of that company, used here only to say which
         treadmills this app can talk to.
       </p>
-      <p>
+      <p class="disclaimer-links">
         <a href="#/legal">Safety, terms &amp; privacy</a>
+        <FeedbackLink />
       </p>
     </footer>
   );
