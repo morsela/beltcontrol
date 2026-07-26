@@ -77,6 +77,17 @@ Then hit **Connect**. The protocol the app settled on is shown in the connection
 the status chip at the top of the Now screen) and logged. If your unit exposes none of the
 four known services, the log says so explicitly, naming each one it looked for.
 
+### Telling us about it
+
+**Send feedback** — in the footer of every screen, and beside the log in the connection
+sheet — writes a report to **support@beltcontrol.com**: what you typed, plus the browser,
+the protocol, the belt state and the protocol log if you leave diagnostics ticked. The
+page sends nothing itself; it opens the mail in your own mail app, with the full text
+shown first, so you can read it, edit it or drop it. A log longer than a mail link can
+carry is trimmed to its newest lines and says so — **Save report** writes the whole thing
+to a file worth attaching. No session or history data is included, only a count of them.
+That is the fastest way to get an undecoded pad decoded: the log is the capture.
+
 ### Without a treadmill in reach
 
 In dev builds only, the console exposes a fake pad:
@@ -164,6 +175,7 @@ src/charts/             hand-rolled inline SVG: column, area, heatmap
 src/state/              connection · telemetry · session · settings · backup · log
 src/lib/drivers.js      the protocol drivers — plain JS, deliberately untouched
 src/lib/drivers.d.ts    hand-written types for the above
+src/lib/feedback.ts     the support report, and fitting one into a mailto: link
 src/lib/simulator.ts    fake pad for development (dropped from production builds)
 src/lib/viewport.ts     the 64rem desktop breakpoint, shared by the shell and app.css
 src/lib/links.ts        outbound URLs used in more than one place

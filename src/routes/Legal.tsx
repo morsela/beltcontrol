@@ -10,7 +10,7 @@
  * nav slot spent on legal text is a nav slot not spent on the app, and the footer
  * is already the place a reader looks for this.
  */
-import { REPO_URL } from '../lib/links.js';
+import { REPO_URL, SUPPORT_EMAIL } from '../lib/links.js';
 
 /**
  * Set this to the jurisdiction whose law governs, e.g. 'England and Wales' or
@@ -162,8 +162,8 @@ export function Legal() {
         <h2 id="privacy">Privacy</h2>
 
         <p>
-          There is no account, no sign-up and no email address. The parts of this app that know
-          anything about your walking never leave your browser.
+          There is no account and no sign-up, and the app never asks you for an email address.
+          The parts of this app that know anything about your walking never leave your browser.
         </p>
 
         <h3>Stays on your device</h3>
@@ -192,6 +192,23 @@ export function Legal() {
           Exports are the exception, and only because you asked: Export backup and Export CSV write
           a file wherever you tell your browser to put it. After that it is an ordinary file on
           your machine and this app has no further say in where it goes.
+        </p>
+
+        <h3>If you write to us</h3>
+        <p>
+          <strong>Send feedback</strong> is the other exception, and it works the same way: the
+          page sends nothing itself. It writes an email addressed to{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and opens it in your own mail
+          app, showing you the full text first, so you can read it, edit it or abandon it. There
+          is no endpoint here that could receive it.
+        </p>
+        <p>
+          With diagnostics left ticked it carries the app version, your browser's user-agent
+          string, whether Web Bluetooth is available, which protocol was selected, the treadmill's
+          Bluetooth name, its reported state and speed range, the protocol log, and the{' '}
+          <em>number</em> of sessions stored. A count, never a session — no history, no totals, no
+          speed samples. Untick the box and none of it goes. Once you send it we hold what you
+          sent, and your email address along with it, for as long as it takes to answer you.
         </p>
 
         <h3>What is collected</h3>

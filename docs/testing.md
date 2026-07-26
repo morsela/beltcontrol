@@ -23,6 +23,7 @@ protocol decoding and the arithmetic behind the totals.
 | `test/session.test.ts` | counter-reset rebasing, per-protocol trust exclusions, day aggregates, streaks, CSV export |
 | `test/backup.test.ts` | the JSON backup round trip, import merging and idempotence, and what a hand-edited or foreign file is allowed to do to the stored history |
 | `test/download.test.ts` | export filenames stamped with the local day, not the UTC one |
+| `test/feedback.test.ts` | what a support report contains, and how it degrades into a `mailto:` too small to hold it — measured on the encoded URL, newest log lines kept, typed message surrendered last |
 | `test/telemetry.test.ts` | merge-never-replace ingest, movement detection, the trust table |
 | `test/format.test.ts` | duration and unit formatting, local-midnight day keys, a DST boundary |
 | `test/metrics.test.ts` | which metrics each protocol may honestly display, and hero cycling |

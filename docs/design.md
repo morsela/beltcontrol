@@ -238,6 +238,41 @@ numbers out of the aggregates. Under-trusting is the safe direction. A file that
 backup at all is refused outright, leaving the stored history untouched, and the count of
 skipped rows is reported next to the button rather than swallowed.
 
+## Feedback to support
+
+There is no feedback endpoint, because there is no server: the app is static files, the
+CSP allows `connect-src 'self'`, and the promise everywhere else in this document is that
+a walk never leaves the browser. **Send feedback** keeps that literally true. It builds
+the report in the page, shows it in the words that will be sent, and hands it to the
+user's own mail client as a `mailto:` addressed to `support@beltcontrol.com`. Nothing is
+transmitted by the page, so there is nothing to consent to and nothing to trust — the
+person writing it is the one who presses send, and can edit or abandon it first.
+
+It is reachable from two places, for two different reports. The footer sits under every
+screen, so a complaint can be made from the screen it is about. The connection sheet has
+its own entry beside the protocol log, which is the report the project actually asks for:
+a pad speaking a protocol nobody has decoded.
+
+The diagnostics block is opt-out, and it is a fixed list — build, browser UA, whether Web
+Bluetooth exists at all, the driver that was selected, the device name, the belt state and
+its speed range, and the *number* of stored sessions. A count, never a session. Without it
+support spends two round trips asking which browser and which protocol; with it, the one
+question a user cannot answer themselves ("Connect does nothing") is already answered. The
+checkbox turns it off, and the preview above it is the real disclosure — a sentence
+claiming what gets sent is a claim, the text itself is the thing.
+
+What this costs is length. A `mailto:` is a URL, it goes through the OS shell, and the
+shell stops carrying it somewhere around 2 KB — so a 400-line log does not fit, and cannot
+be made to. `fitMailto` in `src/lib/feedback.ts` measures the *encoded* URL (every newline
+triples on the way in), then drops log lines oldest-first until it fits, keeping the
+newest — a failure is at the end of a log, and the connect handshake that scrolled off is
+reconstructible from [the protocol reference](protocols.md) while the last four lines are
+not. The typed message is the last thing given up, since it is the part support cannot
+reconstruct at all. Every trim is stated twice: in the sheet, above the buttons, and in
+the mail body itself. **Save report** writes the untrimmed thing to a file to attach, and
+**Copy report** covers a browser with no mail client wired up at all. A log quietly cut in
+half would be worse than no log, because the missing half is where the bug was.
+
 ## Counter resets
 
 The pads report cumulative-since-power-on counters that reset without warning. Differencing
