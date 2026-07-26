@@ -928,6 +928,13 @@ const num = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** num() over a thousandth-unit field. Null-safe on purpose: `null / 1000` is 0, which
+ *  would turn an absent field into a real zero and blank the merged value. */
+const milli = (v) => {
+  const n = num(v);
+  return n == null ? null : n / 1000;
+};
+
 /**
  * A stable, meaningless id for the `props user_id` slot in the handshake.
  *
@@ -1245,10 +1252,12 @@ export function ks1234Driver() {
         speedKmh: num(p.CurrentSpeed),
         secs: num(p.RunningTotalTime),
         steps: num(p.RunningSteps),
-        // Scaling for these two was never exercised in the capture (both stayed 0 over a
-        // short walk), so they are passed through raw rather than guessed at.
-        distKm: num(p.RunningDistance),
-        kcal: num(p.BurnCalories),
+        // Both are metric-milli units: RunningDistance counts metres and BurnCalories
+        // counts gram-calories, so each is a thousandth of the unit the app carries.
+        // Established from a capture long enough for them to move — see
+        // docs/protocols.md, "Distance and calorie scaling".
+        distKm: milli(p.RunningDistance),
+        kcal: milli(p.BurnCalories),
         state,
         stateLabel: state == null ? null : state === 0 ? 'stopped' : state === 1 ? 'running' : `state ${state}`,
         raw: line,

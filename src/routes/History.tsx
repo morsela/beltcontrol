@@ -241,10 +241,12 @@ export function History() {
 
       {anyExcluded && (
         <p class="note" style="margin-bottom:var(--gap)">
-          Some sessions are excluded from the distance totals above. The KingSmith
-          0x1234 protocol reports distance and calories on a scale this project never
-          established, so those values are kept raw on the session and left out of every
-          aggregate rather than presented as a distance in miles.
+          Some sessions are excluded from the distance totals above. They were recorded
+          on a protocol whose distance scale this project had not established at the
+          time — KingSmith 0x1234 walks logged before that pad's distance was confirmed
+          to be metres. Each session keeps the trust it was recorded with, so those
+          numbers stay raw and out of every aggregate rather than being converted now on
+          an assumption about what they meant then.
         </p>
       )}
 

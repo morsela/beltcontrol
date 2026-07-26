@@ -90,7 +90,11 @@ describe('round trip', () => {
   });
 
   it('preserves the trust map, so an unverified number stays unverified after a restore', () => {
-    sessions.value = [session({ protocol: 'ks1234' })];
+    // Stated outright: the point is that a restore carries the stored map through, not
+    // that any particular protocol is unverified this week.
+    sessions.value = [
+      session({ protocol: 'classic', trust: { distKm: 'unverified', steps: 'ok', kcal: 'absent' } }),
+    ];
     const file = exportJson();
     sessions.value = [];
     importBackup(file);

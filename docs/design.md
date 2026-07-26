@@ -313,11 +313,14 @@ otherwise. Each session records a trust map, derived from its protocol:
 |---|---|---|---|
 | classic `fe00` | ok | ok | absent |
 | FTMS `1826` | ok | **absent** | ok |
-| KingSmith `0x1234` | **unverified** | ok | **unverified** |
+| KingSmith `0x1234` | ok | ok | **unverified** |
 | FitShow `fff0` | absent | absent | absent |
 
 - `ok` — the device reports this in real units.
-- `unverified` — the device sends a number whose scaling was never established (see
+- `unverified` — the device sends a number that cannot be believed. Usually that means its
+  scaling was never established; for the `0x1234` calorie field it means the pad derives the
+  figure from distance at a flat 62.5 kcal/km rather than measuring it, so the scale is known
+  and the number still is not worth totalling (see
   [Driver 4](protocols.md#driver-4--kingsmith-0x1234-chip3)). Kept raw on the session, flagged
   with an amber marker in the UI, and **excluded from every aggregate**.
 - `absent` — the protocol carries no such field at all. Shown as an em dash, never as `0`.
@@ -325,3 +328,11 @@ otherwise. Each session records a trust map, derived from its protocol:
 The exclusion rule is the point: a history screen that quietly sums unscaled numbers as if
 they were kilometres is worse than no history at all. Where a screen drops values for this
 reason, it says so in plain text rather than showing a quietly wrong total.
+
+**The map is a snapshot, not a lookup.** Each session stores the trust it was recorded with,
+and `sanitizeSession` keeps that stored map instead of re-deriving it from the protocol on
+load. This matters when a field is promoted: the `0x1234` distance became `ok` once a capture
+established it was metres, and from then on the driver divides by 1000. Walks logged before
+that carry raw metres in a `distKm` field, so re-deriving their trust would convert numbers
+that were never kilometres and inflate every total a thousandfold. Promotions apply from the
+capture forward; old sessions stay excluded, which is what the History note explains.

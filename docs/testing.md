@@ -52,9 +52,11 @@ reachable, and the attach/handshake/ack paths — where the real bugs live — w
 - **The real BLE round trip.** No amount of mocking can vouch for it. `test/drivers.*.test.ts`
   encodes what the captures showed, not what a pad in the room does. If a driver is wrong
   about the hardware, these tests will agree with it.
-- **The `0x1234` distance and calorie scaling**, which was never established — see
-  [Field trust](design.md#field-trust). The tests assert those values pass through raw,
-  which is the honest behaviour, not that they are correct.
+- **The `0x1234` distance and calorie scaling.** Both are now divided by 1000, established
+  from a capture where the counters moved (see
+  [Driver 4](protocols.md#driver-4--kingsmith-0x1234-chip3)). The tests assert the driver
+  applies that scale; they cannot vouch for the derivation, which rests on the pad's own
+  reported speed as ground truth. An odometer disagreeing with the app would settle it.
 
 The `0x1234` driver tests take ~10 s of the run: the driver sleeps between fragments to match
 the pad's tolerance, and the handshake is nine messages. That delay is real protocol
