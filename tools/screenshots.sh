@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Regenerates the three screenshots README.md embeds, against the built-in simulator and
+# Regenerates the two screenshots README.md embeds, against the built-in simulator and
 # a fixed fixture, so they can be reproduced rather than re-staged. The originals were
 # captured by hand, and carried a mouse cursor in the top-right corner to prove it.
 #
-#   tools/screenshots.sh            capture docs/images/{now,today,history}.png
+# They are desktop captures, because that is what the app is: the README tells phone
+# users up front that they are on the wrong device. Now is not an image of its own —
+# at desktop width it is the rail, so it appears in both.
+#
+#   tools/screenshots.sh            capture docs/images/{today,history}.png
 #   tools/screenshots.sh --check    fail if docs/images is older than the UI it shows
 #
 # Needs agent-browser, which is deliberately not a dependency of this project — it ships
-# a browser of its own, and three PNGs need it about twice a year:
+# a browser of its own, and two PNGs need it about twice a year:
 #
 #   npm i -g agent-browser && agent-browser install
 #
@@ -164,10 +168,10 @@ ab close >/dev/null 2>&1 || true
 # --- viewport and fixture, both before the app's first byte ---------------------------
 
 # Launch on a blank page, so the viewport and the fixture are both in place before the
-# app's first byte. Setting the viewport afterwards would flash the desktop layout, and
-# app.tsx:53 rewrites #/now to #/today the moment it sees a desktop width. It is
-# about:blank rather than a bare `open` because the bare form only launches when no
-# daemon has ever run for this session, and fails against a closed one.
+# app's first byte. Setting the viewport afterwards would boot the app in the mobile
+# layout and reflow it mid-load. It is about:blank rather than a bare `open` because
+# the bare form only launches when no daemon has ever run for this session, and fails
+# against a closed one.
 #
 # Retried because it races: the close above tears a daemon's socket down, and a launch
 # that arrives while that is still happening fails with "Failed to connect". It is
@@ -190,14 +194,20 @@ done
   exit 1
 }
 
-# 606x823 is the size of the images already in docs/images, and it is under the 64rem
-# breakpoint in src/lib/viewport.ts — which is what makes #/now a screen at all rather
-# than the left-hand rail. Scale stays 1: a 2x capture would be sharper, and would also
-# double the bytes and make every future regeneration a whole-file rewrite in history.
-ab set viewport 606 823
+# 1280 is over the 64rem breakpoint in src/lib/viewport.ts — which is what makes Now
+# the left-hand rail rather than a screen of its own — and over --maxw-desktop (76rem,
+# 1216px), so the shell renders at its full width with a sliver of margin rather than
+# squeezed against the edges. 900 tall is the shortest height at which the running
+# rail — Stop, hero, speed, the mode row and the Esc hint — ends inside the frame
+# instead of mid-button. Scale stays 1: a 2x capture would be sharper, and would also
+# quadruple the bytes and make every future regeneration a whole-file rewrite in
+# history.
+ab set viewport 1280 900
 ab set media dark reduced-motion
 
-ab open "$ORIGIN/#/now"
+# #/today directly, not #/now: at this width app.tsx would only redirect there anyway,
+# and a capture should not lean on a redirect to land where it means to be.
+ab open "$ORIGIN/#/today"
 ab wait --load networkidle
 
 # __wp is assigned after two dynamic imports resolve (src/main.tsx:22), so it is not
@@ -244,7 +254,7 @@ ab wait --fn "document.querySelector('.chip')?.innerText.replace(/\s+/g,' ').tri
 #
 # Keep the ramp in step with tools/screenshots/seed.js, which builds the same array.
 # Wrapped in an IIFE because every eval lands in the same global scope, and this one is
-# called three times: a bare top-level `const` is a redeclaration on the second shot.
+# called once per shot: a bare top-level `const` is a redeclaration on the second.
 pin_session() {
   ab eval --stdin >/dev/null <<'JS'
 (() => {
@@ -275,21 +285,18 @@ JS
 
 mkdir -p "$OUT"
 
-echo "capturing Now…"
-ab wait --fn "document.querySelector('.hero .value')?.textContent.trim() === '31m'"
-pin_session
-ab screenshot "$OUT/now.png" >/dev/null
-
 echo "capturing Today…"
-# location.hash, not a fresh open: the init script re-seeds on every navigation, and a
-# navigation here would throw away the walk in progress. app.tsx:28 scrolls to the top
-# on hashchange, so there is no scrolling to undo either.
-ab eval -b "$(printf %s "location.hash='#/today'" | base64)" >/dev/null
+# The hero lives in the rail now, so both waits are on the same screen: one for the
+# rail, one for the content column beside it.
+ab wait --fn "document.querySelector('.hero .value')?.textContent.trim() === '31m'"
 ab wait --fn "document.querySelector('.page-sub')?.textContent.trim() === '2 sessions · 52% of goal'"
 pin_session
 ab screenshot "$OUT/today.png" >/dev/null
 
 echo "capturing History…"
+# location.hash, not a fresh open: the init script re-seeds on every navigation, and a
+# navigation here would throw away the walk in progress. app.tsx:28 scrolls to the top
+# on hashchange, so there is no scrolling to undo either.
 ab eval -b "$(printf %s "location.hash='#/history'" | base64)" >/dev/null
 ab wait --fn "document.querySelectorAll('.stat .v')[0]?.textContent.trim() === '22h 26m'"
 ab wait --fn "document.querySelectorAll('.stat .v')[2]?.textContent.trim() === '21'"
@@ -297,9 +304,9 @@ pin_session
 ab screenshot "$OUT/history.png" >/dev/null
 
 echo
-for f in now today history; do
+for f in today history; do
   printf '  %-24s %s\n' "docs/images/$f.png" "$(file -b "$OUT/$f.png")"
 done
 echo
-echo "Look at all three before committing. docs/screenshots.md says what is expected to"
+echo "Look at both before committing. docs/screenshots.md says what is expected to"
 echo "have changed between two runs and what is not."
