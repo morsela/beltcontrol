@@ -9,9 +9,11 @@ import type { DriverId, Telemetry } from '../lib/drivers.js';
  *              so it is shown raw and excluded from every aggregate
  *   absent     the protocol carries no such field at all
  *
- * Sourced from the protocol notes in README.md: the 0x1234 family's RunningDistance
- * and BurnCalories scaling is not known, FTMS carries no step count, and the classic
- * frame has no calorie field.
+ * Sourced from the protocol notes in README.md: FTMS carries no step count, and the
+ * classic frame has no calorie field.
+ *
+ * `unverified` is about whether a number can be believed, which is not only a question
+ * of scale — see the 0x1234 calorie note below.
  */
 export type Trust = 'ok' | 'unverified' | 'absent';
 export type TrustedField = 'distKm' | 'steps' | 'kcal';
@@ -20,7 +22,12 @@ export type TrustMap = Record<TrustedField, Trust>;
 const TRUST: Record<DriverId, TrustMap> = {
   classic: { distKm: 'ok', steps: 'ok', kcal: 'absent' },
   ftms: { distKm: 'ok', steps: 'absent', kcal: 'ok' },
-  ks1234: { distKm: 'unverified', steps: 'ok', kcal: 'unverified' },
+  // The 0x1234 pad's distance is metres, confirmed against its own reported speed over a
+  // walk long enough to move the counter. Its calorie figure now has a known scale too,
+  // but it stays `unverified`: the pad derives it from distance at a flat 62.5 kcal/km
+  // rather than measuring anything, and that factor most likely tracks the profile weight
+  // sent at handshake. A number that is a formula's output is not one to total up.
+  ks1234: { distKm: 'ok', steps: 'ok', kcal: 'unverified' },
   fitshow: { distKm: 'absent', steps: 'absent', kcal: 'absent' },
 };
 

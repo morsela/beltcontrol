@@ -61,7 +61,7 @@ describe('trustFor', () => {
   it('matches the documented per-protocol capability table', () => {
     expect(trustFor('classic')).toEqual({ distKm: 'ok', steps: 'ok', kcal: 'absent' });
     expect(trustFor('ftms')).toEqual({ distKm: 'ok', steps: 'absent', kcal: 'ok' });
-    expect(trustFor('ks1234')).toEqual({ distKm: 'unverified', steps: 'ok', kcal: 'unverified' });
+    expect(trustFor('ks1234')).toEqual({ distKm: 'ok', steps: 'ok', kcal: 'unverified' });
     expect(trustFor('fitshow')).toEqual({ distKm: 'absent', steps: 'absent', kcal: 'absent' });
   });
 

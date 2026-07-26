@@ -271,10 +271,35 @@ The connect-time config dump also yields `Max` (6.0 on the C2 — matching the p
 an independent confirmation the decode is correct), `StartSpeed`, `ChildLockSwitch`,
 `VelocitySensitivity`, `PanelDisplay`, `unit`, `initial` and `mcu_version`.
 
-Scaling for `RunningDistance` and `BurnCalories` is **not established** — both stayed at 0
-through the short capture. `drivers.js` passes them through raw rather than guessing, and the
-app marks them `unverified` so they never enter a total. See
-[Field trust](design.md#field-trust).
+**Distance and calorie scaling.** Both fields are thousandths: `RunningDistance` counts
+**metres** and `BurnCalories` counts **gram-calories**, so `drivers.js` divides each by 1000.
+The first capture left this open — both stayed at 0 through a walk too short to move them —
+and a later one settled it. Two lines carried them:
+
+```
+19:54:40  <-- props RunningTotalTime 27 RunningDistance 10 BurnCalories 630
+19:54:54  <-- props RunningTotalTime 41 RunningDistance 20 BurnCalories 1250
+```
+
+`RunningTotalTime` advanced 14 against 14 s of wall clock, confirming it is seconds. Across
+that window the pad reported `CurrentSpeed` 2.5–2.9 km/h with no speed command issued after
+19:54:33, so ~2.65 km/h held: **10.3 m travelled** against Δ`RunningDistance` of **10**.
+Integrating the whole speed trace gives ≈10.8 m at 19:54:40 and ≈20.9 m at 19:54:54 against
+the reported 10 and 20 — agreement within measurement noise on a 20-metre walk, and the next
+decade in either direction is off by 10×.
+
+Calories are **derived, not measured**: 630/10 and 1250/20 give a constant 62.5 units per
+metre (62.5 = 1000/16 exactly), so the pad computes them from distance. Only one decade is
+physically possible — 1250 gram-calories over 41 s at 2.6 km/h is ≈110 kcal/h, right for a
+slow walk, where ÷100 would imply 1100 kcal/h. The scale is therefore known, but the app still
+marks calories `unverified`: a flat 62.5 kcal/km is a formula's output, and the factor most
+likely tracks the profile weight implied by the `props user_id` sent at handshake. Distance is
+`ok`. See [Field trust](design.md#field-trust).
+
+Caveat worth keeping: the ground truth above is the pad's *own* `CurrentSpeed`. It is
+corroborated — the config dump's `Max 6.0` matches the KS-C2 catalog, and commanded speeds
+echo back — but a systematic error in `CurrentSpeed` would propagate into distance unseen.
+Distance also appears to be pushed only every ~10 m, so a short walk reads 0 for a while.
 
 Verification: `ksEncode()` reproduces the official app's ciphertext **byte-for-byte** for
 `shake`, `get_pk`, `props runState 1`, `props runState 0`, `props CurrentSpeed 1.1` and

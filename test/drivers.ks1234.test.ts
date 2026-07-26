@@ -199,6 +199,30 @@ describe('ks1234Driver', () => {
     expect(seen).toHaveLength(2);
   });
 
+  it('reads distance as metres and calories as gram-calories', async () => {
+    // From the 19:54 KS-C2 capture: RunningDistance 20 after 41s at ~2.6 km/h is
+    // 20 metres, not 20 km. Calories share the thousandth scale.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props RunningTotalTime 41 RunningSteps 58 RunningDistance 20 BurnCalories 1250');
+    expect(seen[0]!.distKm).toBe(0.02);
+    expect(seen[0]!.kcal).toBe(1.25);
+  });
+
+  it('leaves a thousandth-scaled field absent rather than zero when unmentioned', async () => {
+    // `null / 1000` is 0, so a careless scale would turn "this frame said nothing about
+    // distance" into a real zero and blank the merged value.
+    const { server, notify } = padServer();
+    const d = ks1234Driver();
+    d.onData = (t) => seen.push(t);
+    await d.attach(server as unknown as BluetoothRemoteGATTServer);
+    push(notify, 'props RunningSteps 3');
+    expect(seen[0]).not.toHaveProperty('distKm');
+    expect(seen[0]).not.toHaveProperty('kcal');
+  });
+
   it('drops absent keys so a partial frame cannot blank the display', async () => {
     // The pad sends updates like "props RunningSteps 3"; every other field must
     // be left off entirely rather than sent as null.

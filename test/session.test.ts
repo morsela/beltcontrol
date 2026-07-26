@@ -64,6 +64,13 @@ describe('Counter', () => {
 
 const HOUR = 3_600_000;
 
+/**
+ * Stated outright rather than borrowed from a protocol that happens to carry an
+ * unverified distance today. What these tests check is the exclusion mechanism, and
+ * the trust table moves as captures settle scaling — as the 0x1234 distance did.
+ */
+const UNVERIFIED_DIST = { distKm: 'unverified', steps: 'ok', kcal: 'absent' } as const;
+
 function session(over: Partial<Session> & { protocol: DriverId }): Session {
   const startedAt = over.startedAt ?? Date.now() - HOUR;
   return {
@@ -122,14 +129,16 @@ describe('todayTotals', () => {
     // kilometres is worse than no history at all.
     sessions.value = [
       session({ protocol: 'classic', distKm: 2 }),
-      session({ protocol: 'ks1234', distKm: 999 }),
+      session({ protocol: 'classic', distKm: 999, trust: UNVERIFIED_DIST }),
     ];
     expect(todayTotals.value.distKm).toBe(2);
     expect(todayTotals.value.excluded).toBe(1);
   });
 
   it('still counts time and steps from a pad whose distance is unverified', () => {
-    sessions.value = [session({ protocol: 'ks1234', activeMs: 20 * 60_000, steps: 2_500 })];
+    sessions.value = [
+      session({ protocol: 'classic', activeMs: 20 * 60_000, steps: 2_500, trust: UNVERIFIED_DIST }),
+    ];
     expect(todayTotals.value.minutes).toBe(20);
     expect(todayTotals.value.steps).toBe(2_500);
   });
@@ -314,7 +323,9 @@ function countCsvFields(row: string): number {
 
 describe('exportCsv', () => {
   it('carries the trust columns, so a raw number is never mistaken for a real one', () => {
-    sessions.value = [session({ protocol: 'ks1234', distKm: 12.5, steps: 3_000 })];
+    sessions.value = [
+      session({ protocol: 'classic', distKm: 12.5, steps: 3_000, trust: UNVERIFIED_DIST }),
+    ];
     const [header, row] = exportCsv().split('\n');
     expect(header).toContain('distance_trust');
     expect(row!.split(',')).toContain('unverified');

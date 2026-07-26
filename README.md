@@ -31,7 +31,7 @@ name. What you get depends on which protocol your unit speaks:
 |---|---|---|---|---|---|
 | Classic `fe00` — A1, C1, C2, P1, R1/R2, K12, T1, … | full | — | yes | yes | — |
 | FTMS `1826` — Z1, Z3, P1E, MT1, W1, X21, G2, … | full | yes | yes | — | yes |
-| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | not yet | unverified | yes | unverified |
+| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | not yet | yes | yes | unverified |
 | FitShow `fff0` — some OEM units | detect only | — | — | — | — |
 
 **Pause** is a resumable stop, and FTMS is the only protocol that has one — `08 02`, resumed
@@ -40,9 +40,11 @@ withdraws if the unit turns out to reject it. The `0x1234` family has a pause in
 its wire format has not been captured yet; the classic command set has none at all. Details
 in [the protocol reference](docs/protocols.md).
 
-`unverified` means the pad sends a number whose scaling was never established. Those are shown
-raw, flagged, and excluded from every total rather than quietly summed as if they were
-kilometres — see [Field trust](docs/design.md#field-trust).
+`unverified` means the pad sends a number that cannot be believed — usually because its
+scaling was never established, and in the `0x1234` calorie case because the pad computes it
+from distance at a flat rate rather than measuring it. Those are shown raw, flagged, and
+excluded from every total rather than quietly summed — see
+[Field trust](docs/design.md#field-trust).
 
 **Browser support** is the real constraint. Verified against MDN browser-compat-data for
 `Bluetooth.requestDevice`:
