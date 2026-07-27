@@ -32,14 +32,15 @@ name. What you get depends on which protocol your unit speaks:
 |---|---|---|---|---|---|
 | Classic `fe00` — A1, C1, C2, P1, R1/R2, K12, T1, … | full | — | yes | yes | — |
 | FTMS `1826` — Z1, Z3, P1E, MT1, W1, X21, G2, … | full | yes | yes | — | yes |
-| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | not yet | yes | yes | unverified |
+| KingSmith `0x1234` — **KS-C2**, G1, MX16, K12 Pro, … | full | yes | yes | yes | unverified |
 | FitShow `fff0` — some OEM units | detect only | — | — | — | — |
 
-**Pause** is a resumable stop, and FTMS is the only protocol that has one — `08 02`, resumed
-by the same op code that starts the belt. The button only appears on a pad that has it, and
-withdraws if the unit turns out to reject it. The `0x1234` family has a pause in KS+Fit but
-its wire format has not been captured yet; the classic command set has none at all. Details
-in [the protocol reference](docs/protocols.md).
+**Pause** is a resumable stop. FTMS has a dedicated one — `08 02`, resumed by the same op
+code that starts the belt; the button withdraws if the unit turns out to reject it. On the
+`0x1234` family a capture of KS+Fit finally settled it: pause is `runState 0`, the same
+bytes as stop, and what makes it a pause is that the pad keeps the session counters across
+it and picks the walk back up on the next start. The classic command set has none at all.
+Details in [the protocol reference](docs/protocols.md).
 
 `unverified` means the pad sends a number that cannot be believed — usually because its
 scaling was never established, and in the `0x1234` calorie case because the pad computes it

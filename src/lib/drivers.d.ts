@@ -27,8 +27,9 @@ export interface Capabilities {
   incline: boolean;
   steps: boolean;
   /** The protocol carries a real pause — a stop the belt can be resumed from, rather
-   *  than a full stop dressed up as one. FTMS only, so far. Whether the individual
-   *  unit honours it is a separate question, answered by `pause()`'s result. */
+   *  than a full stop dressed up as one. FTMS and 0x1234 (where the pad itself keeps
+   *  the session counters across it). Whether the individual unit honours it is a
+   *  separate question, answered by `pause()`'s result. */
   pause: boolean;
   /** Classic pads never push status; the caller must poll on a timer. */
   needsPolling: boolean;

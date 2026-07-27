@@ -149,7 +149,7 @@ export const PROTOCOLS = {
       mode: false,
       incline: false,
       steps: true,
-      pause: false,
+      pause: true,
       needsPolling: false,
     },
     limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.1 },
@@ -1156,15 +1156,16 @@ export function ks1234Driver() {
       await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
     },
     async pause() {
-      // KS+Fit does have one for this family — its BLE layer carries setPause alongside
-      // setStart/setStop, and it warns "speed adjustment is not supported when the device
-      // is paused" — but the capture only ever exercised runState 0 and 1, so the payload
-      // is unknown. `props runState 2` is the obvious guess and guessing a control command
-      // at a treadmill is not something this driver does. See docs/protocols.md.
-      throw new Error(
-        'no pause for the KingSmith 0x1234 protocol yet — KS+Fit has one, but its wire ' +
-          'format has not been captured'
-      );
+      // Captured at last: KS+Fit's pause IS `props runState 0`, byte for byte the stop
+      // above — a play–pause–play–pause capture on a real KS-C2 shows nothing else on the
+      // wire, and the disassembly agrees (startOrStop can only ever emit 0 or 1). What
+      // makes it a pause rather than a stop lives on the pad: the session counters
+      // survive it (RunningTotalTime held across the gap in the same capture) and a later
+      // `runState 1` picks the walk back up. So this resolves 'paused' unconditionally —
+      // there is no rejection path a stop does not also have. See docs/protocols.md.
+      self._requireOpen();
+      await self._send('props runState 0');
+      return 'paused';
     },
     async setMode() {
       throw new Error('this protocol has no mode switch');
