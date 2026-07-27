@@ -287,6 +287,61 @@ describe('ks1234Driver', () => {
     });
   });
 
+  // fed8 carries more than the text protocol: interleaved with the props lines, the pad
+  // pushes short raw binary frames. Both of these are byte for byte from the play–pause
+  // capture — a time-sync request and, after KS+Fit answered on a third characteristic,
+  // its ack. See "Binary sidecar" in docs/protocols.md.
+  describe('binary sidecar frames on fed8', () => {
+    const REQUEST = [0x1f, 0x04, 0x08, 0x03, 0x05, 0x00];
+    const ACK = [0x13, 0x05, 0xfa, 0x5f, 0x65, 0x0a, 0x00];
+
+    async function attached() {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      d.onData = (t) => seen.push(t);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      return { d, notify, logs };
+    }
+
+    it('does not let a binary frame eat the text line that follows it', async () => {
+      // Appended to the line buffer, these bytes glue onto the next line and ksDecode
+      // refuses the lot — in the capture that dropped `props CurrentSpeed 0.5`.
+      const { notify } = await attached();
+      notify.emit(REQUEST);
+      notify.emit(ACK);
+      push(notify, 'props CurrentSpeed 0.5');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.speedKmh).toBe(0.5);
+    });
+
+    it('leaves a text line alone when a binary frame lands between its fragments', async () => {
+      // The sidecar is its own stream, not part of this one: a frame arriving between
+      // two 20-byte fragments of a props line must not break the reassembly.
+      const { notify } = await attached();
+      const line = new TextEncoder().encode(ksEncode('props CurrentSpeed 0.5') + '\r');
+      notify.emit(line.slice(0, 7));
+      notify.emit(REQUEST);
+      notify.emit(line.slice(7));
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.speedKmh).toBe(0.5);
+    });
+
+    it('publishes no telemetry for a binary frame', async () => {
+      const { notify } = await attached();
+      notify.emit(REQUEST);
+      notify.emit(ACK);
+      expect(seen).toHaveLength(0);
+    });
+
+    it('logs the frame as hex, so it is on record for decoding one day', async () => {
+      const { notify, logs } = await attached();
+      notify.emit(REQUEST);
+      expect(logs.join('\n')).toMatch(/binary sidecar frame 1f 04 08 03 05 00/);
+    });
+  });
+
   it('never interleaves the fragments of two messages', async () => {
     // The pad reassembles one stream and splits it on CR, so a message written into the
     // middle of another one's fragments decodes to garbage and is silently dropped.

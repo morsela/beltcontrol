@@ -961,6 +961,19 @@ export function installId() {
 /** Ceiling on the line-reassembly buffer — see `_rx`. */
 const KS_RX_MAX = 4096;
 
+// The text protocol's entire byte repertoire: the permuted-base64 alphabet, its '='
+// padding, and the CR terminator. Nothing else can appear in a ksBase64 line — which is
+// what makes the pad's other traffic on the same characteristic recognisable.
+//
+// That other traffic is real: fed8 also carries short raw binary frames, interleaved
+// with the text. In the play–pause capture the pad pushed `1f 04 08 03 05 00` right
+// after a pause — a time-sync request KS+Fit answers on a third characteristic — and
+// acked the answer with `13 05 fa 5f 65 0a 00`. See "Binary sidecar" in
+// docs/protocols.md.
+const KS_TEXT_BYTES = new Uint8Array(256);
+for (const c of KS_B64 + '=\r') KS_TEXT_BYTES[c.charCodeAt(0)] = 1;
+const isKsTextByte = (b) => KS_TEXT_BYTES[b] === 1;
+
 /**
  * The band this protocol's parent spec — Xiaomi's MIoT serial command set — reserves for
  * errors the device vendor defines itself: -9999 to -5000 inclusive. Everything above it
@@ -1175,6 +1188,17 @@ export function ks1234Driver() {
     },
 
     _rx(view) {
+      // A binary sidecar frame is answered by keeping it out of the line buffer. Fed to
+      // the buffer, its bytes glue onto the next text line, ksDecode refuses the line,
+      // and real telemetry goes down with it — in the capture that ate the pad's
+      // `props CurrentSpeed 0.5`. Logged as hex rather than parsed: the framing is
+      // opcode/length/payload by the look of it, but two observed frames are not a
+      // protocol, and nothing in the app needs what they carry.
+      const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+      if (!bytes.every(isKsTextByte)) {
+        self.onLog?.(`<-- binary sidecar frame ${hex(bytes)} — ignored`);
+        return;
+      }
       rxBuf += UTF8_DECODER.decode(view);
       let i;
       while ((i = rxBuf.indexOf('\r')) >= 0) {
