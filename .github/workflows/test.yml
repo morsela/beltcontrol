@@ -1,0 +1,41 @@
+name: test
+
+# The job name below ("test") is the status check that main's branch protection
+# requires, so renaming the job silently un-gates the branch — update the
+# required context in repo settings at the same time if you ever do.
+on:
+  pull_request:
+    branches: [main]
+  # Also on main itself: PRs are squash-merged, so the commit that lands is not
+  # the commit CI saw on the branch. This gives that squashed commit its own run.
+  push:
+    branches: [main]
+
+# A force-push to a PR branch makes the in-flight run answer a question nobody
+# is asking any more.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches the Node the app is developed against; vite 8 and vitest 4
+          # both want a current runtime.
+          node-version: 24
+          cache: npm
+
+      # ci, not install: the lockfile is committed, and a gate that quietly
+      # resolves different dependencies than the developer has is not a gate.
+      - run: npm ci
+
+      - run: npm test
