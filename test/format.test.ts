@@ -7,6 +7,7 @@ import {
   EM_DASH,
   fmtTime,
   fmtDuration,
+  fmtGoalProgress,
   fmt,
   fmtInt,
   fmtMph,
@@ -70,6 +71,43 @@ describe('fmtDuration', () => {
 
   it('renders an em dash for null', () => {
     expect(fmtDuration(null)).toBe(EM_DASH);
+  });
+});
+
+describe('fmtGoalProgress', () => {
+  it('leads with what is left before the first walk', () => {
+    expect(fmtGoalProgress(0, 45)).toBe('45m to go');
+    expect(fmtGoalProgress(0, 90)).toBe('1h 30m to go');
+  });
+
+  it('trims the empty minutes off a whole hour', () => {
+    // The default goal is exactly 60 minutes, so "1h 00m" is the first thing a
+    // new install would otherwise show.
+    expect(fmtGoalProgress(0, 60)).toBe('1h to go');
+    expect(fmtGoalProgress(30, 120)).toBe('30m · 1h 30m to go');
+  });
+
+  it('counts a walk under a minute as not started', () => {
+    // Rounding it would print "0m", which is the wording this replaced.
+    expect(fmtGoalProgress(0.4, 45)).toBe('45m to go');
+  });
+
+  it('shows both halves mid-walk', () => {
+    expect(fmtGoalProgress(18, 60)).toBe('18m · 42m to go');
+    expect(fmtGoalProgress(65, 90)).toBe('1h 05m · 25m to go');
+  });
+
+  it('never says zero left while the goal is still short', () => {
+    expect(fmtGoalProgress(59.7, 60)).toBe('59m · 1m to go');
+  });
+
+  it('drops the countdown once the goal is met', () => {
+    expect(fmtGoalProgress(60, 60)).toBe('1h walked');
+    expect(fmtGoalProgress(65, 60)).toBe('1h 05m walked');
+  });
+
+  it('has nothing to count down to without a goal', () => {
+    expect(fmtGoalProgress(18, 0)).toBe('18m walked');
   });
 });
 

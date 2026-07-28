@@ -3,6 +3,7 @@ import { settings, updateSettings } from '../state/settings.js';
 import { todayTotals } from '../state/session.js';
 import { Sheet } from './Sheet.js';
 import { trackEvent } from '../lib/analytics.js';
+import { fmtGoalProgress } from '../lib/format.js';
 
 /**
  * One ratio against one limit. A meter on a same-ramp track — not a ring, not a
@@ -17,17 +18,20 @@ export function GoalMeter() {
   return (
     <div class="meter">
       <div class="meter-head">
-        <span>{Math.round(done)} of {goal} min</span>
+        <span>{fmtGoalProgress(done, goal)}</span>
         <button class="meter-goal-btn" onClick={() => setEditing(true)}>
           {pct >= 100 ? 'goal met' : 'edit goal'}
         </button>
       </div>
+      {/* aria-valuetext because the caption above is abbreviated ("18m · 42m to go"),
+          which a screen reader reads out letter by letter. Words here instead. */}
       <div
         class="meter-track"
         role="progressbar"
         aria-valuenow={Math.round(done)}
         aria-valuemin={0}
         aria-valuemax={goal}
+        aria-valuetext={`${Math.round(done)} of ${goal} minutes`}
         aria-label="Progress toward today's walking goal"
       >
         <div class="meter-fill" style={`width:${pct}%`} />

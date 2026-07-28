@@ -214,7 +214,7 @@ describe('lifetimeTotals', () => {
     // was no number" — the note on the screen would otherwise accuse a pad of
     // reporting something it never sent.
     sessions.value = [
-      session({ protocol: 'ks1234', distKm: 0 }),
+      session({ protocol: 'ks1234', distKm: 0, trust: UNVERIFIED_DIST }),
       session({ protocol: 'fitshow', distKm: 0 }),
     ];
     expect(lifetimeTotals.value.excluded).toBe(0);
