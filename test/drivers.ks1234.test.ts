@@ -241,6 +241,52 @@ describe('ks1234Driver', () => {
     });
   });
 
+  // Settled by the play–pause–play–pause capture: KS+Fit's pause is `props runState 0`,
+  // byte for byte the stop, and the pad itself is what makes it resumable — its session
+  // counters survive the gap. See "Pause is runState 0" in docs/protocols.md.
+  describe('pause', () => {
+    it('is offered — the wire format is captured now', () => {
+      expect(ks1234Driver().capabilities.pause).toBe(true);
+    });
+
+    it('sends runState 0 and reports paused', async () => {
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await expect(d.pause()).resolves.toBe('paused');
+      expect(lines(write)).toEqual(['props runState 0']);
+    });
+
+    it('resumes through start(), re-taking control the pause handed back', async () => {
+      // Stopping — and pause is a stop on the wire — hands control back to the pad's own
+      // panel, where a bare `runState 1` is accepted and ignored. The resume has to
+      // re-assert ControlMode exactly as any start does.
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await d.pause();
+      await d.start();
+      expect(lines(write)).toEqual([
+        'props runState 0',
+        'props ControlMode 1',
+        'props runState 1',
+      ]);
+    });
+
+    it('refuses on a detached link rather than resolving', async () => {
+      // A resolved pause() is read upstream as the belt having been told to pause.
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      await d.detach();
+      write.writes.length = 0;
+      await expect(d.pause()).rejects.toThrow(/not connected/);
+      expect(write.writes).toHaveLength(0);
+    });
+  });
+
   it('never interleaves the fragments of two messages', async () => {
     // The pad reassembles one stream and splits it on CR, so a message written into the
     // middle of another one's fragments decodes to garbage and is silently dropped.

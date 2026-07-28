@@ -244,6 +244,8 @@ real account.
 |---|---|
 | Start | `props ControlMode 1` → `props runState 1` |
 | Stop | `props runState 0` |
+| Pause | `props runState 0` — the same bytes as Stop; see below |
+| Resume | `props runState 1` (KS+Fit sends it bare; this app re-asserts `ControlMode 1` first, as on any start) |
 | Set speed | `props CurrentSpeed 1.1` (km/h, one decimal) |
 
 Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
@@ -287,25 +289,36 @@ verdict is only ever about the command; movement is still confirmed the one way 
 the belt reporting it. The retry sends nothing new and changes no ordering — it is the same two
 writes the capture shows, and it stops the moment a stop, pause or disconnect arrives.
 
-**Pause exists on this family but has not been captured.** KS+Fit's BLE layer for these
-pads — the `Wilink*` classes, whose property names (`ControlMode`, `ChildLockSwitch`,
-`VelocitySensitivity`, `runState`) are exactly the ones above — carries a pause alongside
-start and stop, and the app has a paused device state to go with it:
+**Pause is `runState 0` — the same bytes as stop.** For a long time this was open:
+KS+Fit's BLE layer visibly carries a `setPause` alongside `setStart`/`setStop` and warns
+that *"speed adjustment is not supported when the device is paused"*, but the command
+templates are built at runtime and the early captures only ever exercised `runState 1`.
+`props runState 2` was the obvious guess, and `pause()` threw rather than aim a guess at a
+treadmill. Two things have since settled it, independently:
 
-```
-WilinkDeviceActionExt|setStart    WilinkDeviceActionExt|setStop
-WilinkDeviceActionExt|setPause    WilinkDeviceActionExt|startOrStop
-KsTreadmillDevice startOrPause mode:
-Speed adjustment is not supported when the device is paused.
-```
+- The arm64 build disassembles where the v7a one would not, and
+  `BlueDualModule::startOrStop` converts its argument to a Smi of exactly `0` or `1`
+  before storing it under `"runState"` — the send path is structurally incapable of
+  emitting a `2`.
+- A capture of KS+Fit doing *reconnect → play → pause → play → pause* on a real KS-C2
+  shows exactly four control writes: `runState 1`, `runState 0`, `runState 1`,
+  `runState 0`. Nothing else. Pause on the wire **is** stop.
 
-The payload is not recoverable from the binary — the command templates are built at runtime,
-which is the same reason the protocol needed a capture in the first place, and `blutter` is
-still arm64-only against this v7a build. The capture itself only ever exercised `runState`
-`0` and `1`. `props runState 2` is the obvious guess and it stays a guess: `ks1234Driver.pause()`
-throws rather than aim an unverified control command at a treadmill. Settling it needs one
-more HCI trace — start a walk in KS+Fit, press pause, press resume — through the same
-pipeline as above.
+What makes it a pause lives on the pad, not in the command: **the session counters
+survive it.** In the same capture `RunningTotalTime` read 3 before the first pause and
+resumed at 5 → 6 after — it held still through the ~10 s gap rather than resetting — and
+the next `runState 1` picked the walk back up. (`BurnCalories` read 20 before that pause
+and 10 after, so the derived calorie figure does *not* reliably survive one; distance and
+steps were both still 0 on a walk this short, so they are unconfirmed either way.)
+
+`ks1234Driver.pause()` therefore sends `props runState 0` and resolves `'paused'`
+unconditionally — there is no rejection path a stop does not also have — and resume is
+the ordinary `start()`, ControlMode re-assertion, verdict and retries included. The app
+already refuses to write speed while paused, which is the one thing KS+Fit warns about.
+
+Worth knowing from the same capture: tapping **Stop** and **End** in KS+Fit after a pause
+put *nothing* on the wire. There is no distinct stop or end-workout command in this
+protocol — ending a workout is app bookkeeping, exactly as it is here.
 
 **Telemetry** arrives on `fed8` as `props` lines, often **partial** — `props RunningSteps 3` on
 its own is normal, so merge updates rather than replacing state:
