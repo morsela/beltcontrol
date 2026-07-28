@@ -241,6 +241,107 @@ describe('ks1234Driver', () => {
     });
   });
 
+  // Settled by the play–pause–play–pause capture: KS+Fit's pause is `props runState 0`,
+  // byte for byte the stop, and the pad itself is what makes it resumable — its session
+  // counters survive the gap. See "Pause is runState 0" in docs/protocols.md.
+  describe('pause', () => {
+    it('is offered — the wire format is captured now', () => {
+      expect(ks1234Driver().capabilities.pause).toBe(true);
+    });
+
+    it('sends runState 0 and reports paused', async () => {
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await expect(d.pause()).resolves.toBe('paused');
+      expect(lines(write)).toEqual(['props runState 0']);
+    });
+
+    it('resumes through start(), re-taking control the pause handed back', async () => {
+      // Stopping — and pause is a stop on the wire — hands control back to the pad's own
+      // panel, where a bare `runState 1` is accepted and ignored. The resume has to
+      // re-assert ControlMode exactly as any start does.
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      write.writes.length = 0;
+      await d.pause();
+      await d.start();
+      expect(lines(write)).toEqual([
+        'props runState 0',
+        'props ControlMode 1',
+        'props runState 1',
+      ]);
+    });
+
+    it('refuses on a detached link rather than resolving', async () => {
+      // A resolved pause() is read upstream as the belt having been told to pause.
+      const { server, write } = padServer();
+      const d = ks1234Driver();
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      await d.detach();
+      write.writes.length = 0;
+      await expect(d.pause()).rejects.toThrow(/not connected/);
+      expect(write.writes).toHaveLength(0);
+    });
+  });
+
+  // fed8 carries more than the text protocol: interleaved with the props lines, the pad
+  // pushes short raw binary frames. Both of these are byte for byte from the play–pause
+  // capture — a time-sync request and, after KS+Fit answered on a third characteristic,
+  // its ack. See "Binary sidecar" in docs/protocols.md.
+  describe('binary sidecar frames on fed8', () => {
+    const REQUEST = [0x1f, 0x04, 0x08, 0x03, 0x05, 0x00];
+    const ACK = [0x13, 0x05, 0xfa, 0x5f, 0x65, 0x0a, 0x00];
+
+    async function attached() {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      d.onData = (t) => seen.push(t);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      return { d, notify, logs };
+    }
+
+    it('does not let a binary frame eat the text line that follows it', async () => {
+      // Appended to the line buffer, these bytes glue onto the next line and ksDecode
+      // refuses the lot — in the capture that dropped `props CurrentSpeed 0.5`.
+      const { notify } = await attached();
+      notify.emit(REQUEST);
+      notify.emit(ACK);
+      push(notify, 'props CurrentSpeed 0.5');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.speedKmh).toBe(0.5);
+    });
+
+    it('leaves a text line alone when a binary frame lands between its fragments', async () => {
+      // The sidecar is its own stream, not part of this one: a frame arriving between
+      // two 20-byte fragments of a props line must not break the reassembly.
+      const { notify } = await attached();
+      const line = new TextEncoder().encode(ksEncode('props CurrentSpeed 0.5') + '\r');
+      notify.emit(line.slice(0, 7));
+      notify.emit(REQUEST);
+      notify.emit(line.slice(7));
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.speedKmh).toBe(0.5);
+    });
+
+    it('publishes no telemetry for a binary frame', async () => {
+      const { notify } = await attached();
+      notify.emit(REQUEST);
+      notify.emit(ACK);
+      expect(seen).toHaveLength(0);
+    });
+
+    it('logs the frame as hex, so it is on record for decoding one day', async () => {
+      const { notify, logs } = await attached();
+      notify.emit(REQUEST);
+      expect(logs.join('\n')).toMatch(/binary sidecar frame 1f 04 08 03 05 00/);
+    });
+  });
+
   it('never interleaves the fragments of two messages', async () => {
     // The pad reassembles one stream and splits it on CR, so a message written into the
     // middle of another one's fragments decodes to garbage and is silently dropped.
@@ -409,6 +510,50 @@ describe('ks1234Driver', () => {
     expect(seen[0]!.stateLabel).toBe('running');
     push(notify, 'props runState 0');
     expect(seen[1]!.stateLabel).toBe('stopped');
+  });
+
+  // Device identity, published on the driver rather than in telemetry: neither field
+  // describes the walk, but both answer the first questions behind a bug report — and
+  // the lock is the one thing the vendor's own advice checks when a start is refused.
+  describe('what the pad says about itself', () => {
+    async function attached() {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      d.onData = (t) => seen.push(t);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      return { d, notify, logs };
+    }
+
+    it('tracks the child lock, so a refused start can point at it', async () => {
+      const { d, notify, logs } = await attached();
+      expect(d.childLockOn).toBeNull(); // the pad has not said yet
+      push(notify, 'props ControlMode 1 ChildLockSwitch 0 runState 0'); // real config dump shape
+      expect(d.childLockOn).toBe(false);
+      push(notify, 'props ChildLockSwitch 1');
+      expect(d.childLockOn).toBe(true);
+      expect(logs.join('\n')).toMatch(/child lock is ON/);
+    });
+
+    it('assembles firmware identity from the two replies that carry it', async () => {
+      const { d, notify, logs } = await attached();
+      expect(d.firmware).toBeNull();
+      push(notify, 'version 0014'); // the version command's reply — module firmware
+      expect(d.firmware).toBe('module 0014');
+      push(notify, 'props mcu_version "0005"'); // from the config dump
+      expect(d.firmware).toBe('MCU 0005, module 0014');
+      expect(logs.join('\n')).toMatch(/pad firmware: MCU 0005, module 0014/);
+    });
+
+    it('publishes neither as telemetry', async () => {
+      // Device state stays on the driver; a frame carrying only identity must not
+      // reach `live`, where its absent keys would say nothing and its presence would
+      // still bump the frame clock.
+      const { notify } = await attached();
+      push(notify, 'props ChildLockSwitch 1 mcu_version "0005"');
+      expect(seen).toHaveLength(0);
+    });
   });
 
   it('logs an undecodable chunk instead of throwing', async () => {

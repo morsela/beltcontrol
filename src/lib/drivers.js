@@ -149,7 +149,7 @@ export const PROTOCOLS = {
       mode: false,
       incline: false,
       steps: true,
-      pause: false,
+      pause: true,
       needsPolling: false,
     },
     limits: { minSpeedKmh: HARD_MIN_KMH, maxSpeedKmh: 6, speedStep: 0.1 },
@@ -961,6 +961,19 @@ export function installId() {
 /** Ceiling on the line-reassembly buffer — see `_rx`. */
 const KS_RX_MAX = 4096;
 
+// The text protocol's entire byte repertoire: the permuted-base64 alphabet, its '='
+// padding, and the CR terminator. Nothing else can appear in a ksBase64 line — which is
+// what makes the pad's other traffic on the same characteristic recognisable.
+//
+// That other traffic is real: fed8 also carries short raw binary frames, interleaved
+// with the text. In the play–pause capture the pad pushed `1f 04 08 03 05 00` right
+// after a pause — a time-sync request KS+Fit answers on a third characteristic — and
+// acked the answer with `13 05 fa 5f 65 0a 00`. See "Binary sidecar" in
+// docs/protocols.md.
+const KS_TEXT_BYTES = new Uint8Array(256);
+for (const c of KS_B64 + '=\r') KS_TEXT_BYTES[c.charCodeAt(0)] = 1;
+const isKsTextByte = (b) => KS_TEXT_BYTES[b] === 1;
+
 /**
  * The band this protocol's parent spec — Xiaomi's MIoT serial command set — reserves for
  * errors the device vendor defines itself: -9999 to -5000 inclusive. Everything above it
@@ -985,6 +998,25 @@ export function ks1234Driver() {
   let rxBuf = '';
   let closed = false;
   const queue = serialiser();
+
+  // Firmware identity arrives in two different replies — `version` answers with the
+  // network module's build, the config dump carries `mcu_version` — so it is assembled
+  // here and published as one field. Worth the bookkeeping: when a sibling model
+  // misbehaves, "which firmware" is the first question a bug report has to answer.
+  let fwMcu = null;
+  let fwModule = null;
+  function noteFirmware({ mcu, module: mod }) {
+    fwMcu = mcu ?? fwMcu;
+    fwModule = mod ?? fwModule;
+    const parts = [];
+    if (fwMcu != null) parts.push(`MCU ${fwMcu}`);
+    if (fwModule != null) parts.push(`module ${fwModule}`);
+    const label = parts.join(', ');
+    if (label && label !== self.firmware) {
+      self.firmware = label;
+      self.onLog?.(`pad firmware: ${label}`);
+    }
+  }
 
   /** The pad's answer to the most recent `start()`; null before the first one. */
   let lastStart = null;
@@ -1023,6 +1055,12 @@ export function ks1234Driver() {
     ...protocolDefaults('ks1234'),
     onData: null,
     onLog: null,
+    /** Firmware identity as the pad reports it, e.g. "MCU 0005, module 0014". */
+    firmware: null,
+    /** The pad's own child-lock switch: true is engaged, null until the pad has said.
+     *  Surfaced because KS+Fit's own advice for a refused start points at the lock
+     *  first — see `watchForStart` in state/connection.ts. */
+    childLockOn: null,
 
     async attach(server) {
       closed = false;
@@ -1156,15 +1194,16 @@ export function ks1234Driver() {
       await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
     },
     async pause() {
-      // KS+Fit does have one for this family — its BLE layer carries setPause alongside
-      // setStart/setStop, and it warns "speed adjustment is not supported when the device
-      // is paused" — but the capture only ever exercised runState 0 and 1, so the payload
-      // is unknown. `props runState 2` is the obvious guess and guessing a control command
-      // at a treadmill is not something this driver does. See docs/protocols.md.
-      throw new Error(
-        'no pause for the KingSmith 0x1234 protocol yet — KS+Fit has one, but its wire ' +
-          'format has not been captured'
-      );
+      // Captured at last: KS+Fit's pause IS `props runState 0`, byte for byte the stop
+      // above — a play–pause–play–pause capture on a real KS-C2 shows nothing else on the
+      // wire, and the disassembly agrees (startOrStop can only ever emit 0 or 1). What
+      // makes it a pause rather than a stop lives on the pad: the session counters
+      // survive it (RunningTotalTime held across the gap in the same capture) and a later
+      // `runState 1` picks the walk back up. So this resolves 'paused' unconditionally —
+      // there is no rejection path a stop does not also have. See docs/protocols.md.
+      self._requireOpen();
+      await self._send('props runState 0');
+      return 'paused';
     },
     async setMode() {
       throw new Error('this protocol has no mode switch');
@@ -1174,6 +1213,17 @@ export function ks1234Driver() {
     },
 
     _rx(view) {
+      // A binary sidecar frame is answered by keeping it out of the line buffer. Fed to
+      // the buffer, its bytes glue onto the next text line, ksDecode refuses the line,
+      // and real telemetry goes down with it — in the capture that ate the pad's
+      // `props CurrentSpeed 0.5`. Logged as hex rather than parsed: the framing is
+      // opcode/length/payload by the look of it, but two observed frames are not a
+      // protocol, and nothing in the app needs what they carry.
+      const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+      if (!bytes.every(isKsTextByte)) {
+        self.onLog?.(`<-- binary sidecar frame ${hex(bytes)} — ignored`);
+        return;
+      }
       rxBuf += UTF8_DECODER.decode(view);
       let i;
       while ((i = rxBuf.indexOf('\r')) >= 0) {
@@ -1233,8 +1283,23 @@ export function ks1234Driver() {
     },
 
     _apply(line) {
+      // `version 0014` is the version command's reply — module firmware, not a props line.
+      const ver = /^version\s+(\S+)$/.exec(line.trim());
+      if (ver) noteFirmware({ module: ver[1] });
+
       const p = parseProps(line);
       if (!p) return;
+
+      if (p.mcu_version != null) noteFirmware({ mcu: p.mcu_version });
+
+      // Device state rather than telemetry, so it lives on the driver, not in `live`.
+      if (p.ChildLockSwitch != null) {
+        const on = Number(p.ChildLockSwitch) === 1;
+        if (on && self.childLockOn !== true) {
+          self.onLog?.('the pad reports its child lock is ON — starts are likely to be refused');
+        }
+        self.childLockOn = on;
+      }
 
       if (p.StartSpeed != null || p.Max != null) {
         adoptSpeedLimits(

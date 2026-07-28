@@ -195,10 +195,13 @@ describe('lifetimeTotals', () => {
   });
 
   it('keeps an unverified distance out of the total and counts what it dropped', () => {
+    // Sessions carry their trust as a snapshot, so walks recorded before a scale was
+    // established keep their `unverified` verdict — the 0x1234 distance is trusted now,
+    // but sessions filed while it was not still have to stay out of the total.
     sessions.value = [
       session({ protocol: 'classic', distKm: 2 }),
-      session({ protocol: 'classic', distKm: 999, trust: UNVERIFIED_DIST }),
-      session({ protocol: 'classic', distKm: 500, trust: UNVERIFIED_DIST }),
+      session({ protocol: 'ks1234', distKm: 999, trust: UNVERIFIED_DIST }),
+      session({ protocol: 'ks1234', distKm: 500, trust: UNVERIFIED_DIST }),
     ];
     expect(lifetimeTotals.value.distKm).toBe(2);
     expect(lifetimeTotals.value.excluded).toBe(2);
@@ -211,7 +214,7 @@ describe('lifetimeTotals', () => {
     // was no number" — the note on the screen would otherwise accuse a pad of
     // reporting something it never sent.
     sessions.value = [
-      session({ protocol: 'classic', distKm: 0, trust: UNVERIFIED_DIST }),
+      session({ protocol: 'ks1234', distKm: 0, trust: UNVERIFIED_DIST }),
       session({ protocol: 'fitshow', distKm: 0 }),
     ];
     expect(lifetimeTotals.value.excluded).toBe(0);

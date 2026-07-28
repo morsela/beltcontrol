@@ -244,6 +244,8 @@ real account.
 |---|---|
 | Start | `props ControlMode 1` → `props runState 1` |
 | Stop | `props runState 0` |
+| Pause | `props runState 0` — the same bytes as Stop; see below |
+| Resume | `props runState 1` (KS+Fit sends it bare; this app re-asserts `ControlMode 1` first, as on any start) |
 | Set speed | `props CurrentSpeed 1.1` (km/h, one decimal) |
 
 Stopping hands control back to the pad's own panel, and in panel mode `runState 1` is accepted
@@ -287,25 +289,36 @@ verdict is only ever about the command; movement is still confirmed the one way 
 the belt reporting it. The retry sends nothing new and changes no ordering — it is the same two
 writes the capture shows, and it stops the moment a stop, pause or disconnect arrives.
 
-**Pause exists on this family but has not been captured.** KS+Fit's BLE layer for these
-pads — the `Wilink*` classes, whose property names (`ControlMode`, `ChildLockSwitch`,
-`VelocitySensitivity`, `runState`) are exactly the ones above — carries a pause alongside
-start and stop, and the app has a paused device state to go with it:
+**Pause is `runState 0` — the same bytes as stop.** For a long time this was open:
+KS+Fit's BLE layer visibly carries a `setPause` alongside `setStart`/`setStop` and warns
+that *"speed adjustment is not supported when the device is paused"*, but the command
+templates are built at runtime and the early captures only ever exercised `runState 1`.
+`props runState 2` was the obvious guess, and `pause()` threw rather than aim a guess at a
+treadmill. Two things have since settled it, independently:
 
-```
-WilinkDeviceActionExt|setStart    WilinkDeviceActionExt|setStop
-WilinkDeviceActionExt|setPause    WilinkDeviceActionExt|startOrStop
-KsTreadmillDevice startOrPause mode:
-Speed adjustment is not supported when the device is paused.
-```
+- The arm64 build disassembles where the v7a one would not, and
+  `BlueDualModule::startOrStop` converts its argument to a Smi of exactly `0` or `1`
+  before storing it under `"runState"` — the send path is structurally incapable of
+  emitting a `2`.
+- A capture of KS+Fit doing *reconnect → play → pause → play → pause* on a real KS-C2
+  shows exactly four control writes: `runState 1`, `runState 0`, `runState 1`,
+  `runState 0`. Nothing else. Pause on the wire **is** stop.
 
-The payload is not recoverable from the binary — the command templates are built at runtime,
-which is the same reason the protocol needed a capture in the first place, and `blutter` is
-still arm64-only against this v7a build. The capture itself only ever exercised `runState`
-`0` and `1`. `props runState 2` is the obvious guess and it stays a guess: `ks1234Driver.pause()`
-throws rather than aim an unverified control command at a treadmill. Settling it needs one
-more HCI trace — start a walk in KS+Fit, press pause, press resume — through the same
-pipeline as above.
+What makes it a pause lives on the pad, not in the command: **the session counters
+survive it.** In the same capture `RunningTotalTime` read 3 before the first pause and
+resumed at 5 → 6 after — it held still through the ~10 s gap rather than resetting — and
+the next `runState 1` picked the walk back up. (`BurnCalories` read 20 before that pause
+and 10 after, so the derived calorie figure does *not* reliably survive one; distance and
+steps were both still 0 on a walk this short, so they are unconfirmed either way.)
+
+`ks1234Driver.pause()` therefore sends `props runState 0` and resolves `'paused'`
+unconditionally — there is no rejection path a stop does not also have — and resume is
+the ordinary `start()`, ControlMode re-assertion, verdict and retries included. The app
+already refuses to write speed while paused, which is the one thing KS+Fit warns about.
+
+Worth knowing from the same capture: tapping **Stop** and **End** in KS+Fit after a pause
+put *nothing* on the wire. There is no distinct stop or end-workout command in this
+protocol — ending a workout is app bookkeeping, exactly as it is here.
 
 **Telemetry** arrives on `fed8` as `props` lines, often **partial** — `props RunningSteps 3` on
 its own is normal, so merge updates rather than replacing state:
@@ -316,6 +329,15 @@ its own is normal, so merge updates rather than replacing state:
 The connect-time config dump also yields `Max` (6.0 on the C2 — matching the product catalog,
 an independent confirmation the decode is correct), `StartSpeed`, `ChildLockSwitch`,
 `VelocitySensitivity`, `PanelDisplay`, `unit`, `initial` and `mcu_version`.
+
+Two of those are surfaced beyond the log. `ChildLockSwitch` is tracked on the driver
+(`childLockOn`), and a refused start whose pad has reported the lock engaged says so
+instead of the generic panel advice — KS+Fit's own tip for the `-5000` error checks the
+safety lock first, though a locked pad refusing starts remains the vendor's reading
+rather than something yet observed on the wire. `mcu_version`, together with the build
+the `version` reply carries (`0014` on this C2), is assembled into `driver.firmware`
+("MCU 0005, module 0014") and included in the feedback diagnostics — which firmware is
+the first question when a sibling model misbehaves.
 
 **Distance and calorie scaling.** Both fields are thousandths: `RunningDistance` counts
 **metres** and `BurnCalories` counts **gram-calories**, so `drivers.js` divides each by 1000.
@@ -365,6 +387,40 @@ service 00001234-0000-1000-8000-00805f9b34fb
 `fed8` notifies about once a second even before the handshake, but carries an empty status
 until the pad is woken. Reading `fed7` returns `get_pk` in encoded form — a leftover, and the
 red herring that cost the most time here.
+
+**A binary sidecar shares `fed8` — and the GATT table above is not the whole story.**
+Interleaved with the text stream, the pad occasionally pushes short raw binary frames:
+no ksBase64, no CR, control bytes a text line can never contain. The play–pause capture
+holds one full exchange, seconds after the first pause (~15 s into the session):
+
+```
+<-  fed8 (0x0012)    1f 04 08 03 05 00                  the pad asks
+->  handle 0x0015    12 09 cb e6 67 6a 00 00 00 00 f2   KS+Fit answers — write WITH response
+<-  fed8 (0x0012)    13 05 fa 5f 65 0a 00               the pad acks
+```
+
+`cb e6 67 6a` is little-endian POSIX time — 1785194187, the capture's own clock, fifteen
+seconds after the handshake's `time_posix` — so this reads as a time-sync request:
+opcode, payload length, payload, and what is presumably a check byte on the answer. The
+shape matches MIoT's other habit of the MCU asking the network module for the time; the
+`time_posix 0` reply in the handshake may even be this same machinery's other face.
+
+The answer went to **ATT handle `0x0015` — a third characteristic**, beyond `fed7`
+(handle `0x000d`) and `fed8` (value `0x0012`, CCCD `0x0013`). Its UUID is not in the
+capture: iOS had the discovery cached from a previous bond, so no discovery PDUs were
+exchanged. The `00011234`/`00021234` pair that appears alongside `fed7`/`fed8` in
+`libapp.so` is the obvious suspect; the next GATT dump against a live pad should
+enumerate *every* service rather than stopping at `0x1234`.
+
+The driver recognises a sidecar frame by its bytes (anything outside the base64
+alphabet + `=` + CR), logs it as hex, and drops it. It used to do something worse by
+accident: the bytes went into the line buffer, glued onto the next text line, and made
+`ksDecode` refuse the lot — in the capture that silently ate a real
+`props CurrentSpeed 0.5`. Answering the request is out of reach for now: Web Bluetooth
+addresses characteristics by UUID, which is the one thing the capture cannot supply.
+What a pad does about an unanswered request is unobserved — this app has never answered
+one, knowingly or otherwise, and its sessions against a real KS-C2 have held their
+links — so the logged hex is also the early warning if that ever turns out to matter.
 
 **How this was captured.** iOS HCI trace: Apple's *Bluetooth for iOS/iPadOS* logging profile
 (developer.apple.com/bug-reporting/profiles-and-logs) plus PacketLogger from Additional Tools

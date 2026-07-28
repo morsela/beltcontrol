@@ -514,11 +514,22 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
       // A pad that refused out loud gets told back what it said, rather than the softer
       // "never reported movement" — it did not fail to answer, it answered no, and every
       // retry it had was spent. Saying so is what points at the panel as the thing to fix.
+      //
+      // And when the pad has said its child lock is on, point there instead: the
+      // vendor's own advice for this exact error checks the lock before anything else.
+      // It stays a hint, not a diagnosis — a locked pad refusing starts is KS+Fit's
+      // reading, not something yet observed on the wire — but it is the one message
+      // here that ends in a switch the user can actually flip.
+      const lock = driver.value?.childLockOn === true;
       setStatus(
         refused
-          ? `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
-              "each one — its own panel still has control. Use the treadmill's own " +
-              'controls, or disconnect and reconnect.'
+          ? lock
+            ? `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
+                'each one — and the pad reports its child lock is on. Unlock it from the ' +
+                'panel, then try again.'
+            : `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
+                "each one — its own panel still has control. Use the treadmill's own " +
+                'controls, or disconnect and reconnect.'
           : `${capitalise(kind)} was sent but the belt never reported movement — it may ` +
               "have handed control back to its own panel. Use the treadmill's own " +
               'controls, or disconnect and reconnect.',
@@ -526,11 +537,12 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
       );
       log(
         refused
-          ? `${kind} refused ${MAX_START_ATTEMPTS} times — the belt never moved`
+          ? `${kind} refused ${MAX_START_ATTEMPTS} times — the belt never moved` +
+              (lock ? " (the pad's child lock is on)" : '')
           : `${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`,
         'err'
       );
-      trackEvent('start_unconfirmed', { kind, refused });
+      trackEvent('start_unconfirmed', { kind, refused, childLock: lock });
     }
   };
 

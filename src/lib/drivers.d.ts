@@ -27,8 +27,9 @@ export interface Capabilities {
   incline: boolean;
   steps: boolean;
   /** The protocol carries a real pause — a stop the belt can be resumed from, rather
-   *  than a full stop dressed up as one. FTMS only, so far. Whether the individual
-   *  unit honours it is a separate question, answered by `pause()`'s result. */
+   *  than a full stop dressed up as one. FTMS and 0x1234 (where the pad itself keeps
+   *  the session counters across it). Whether the individual unit honours it is a
+   *  separate question, answered by `pause()`'s result. */
   pause: boolean;
   /** Classic pads never push status; the caller must poll on a timer. */
   needsPolling: boolean;
@@ -58,6 +59,14 @@ export interface Driver {
 
   onData: ((d: Partial<Telemetry>) => void) | null;
   onLog: ((msg: string) => void) | null;
+
+  /** Firmware identity as the pad reports it, e.g. "MCU 0005, module 0014". Absent on
+   *  protocols that never say; null until the pad has said. */
+  firmware?: string | null;
+  /** The pad's own child-lock switch: `true` is engaged — the first thing the vendor's
+   *  own advice points at when a start is refused — `null` until the pad has said.
+   *  Absent on protocols that carry no such switch. */
+  childLockOn?: boolean | null;
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
   /** Throws if the write channel is gone, so a command can never resolve without
