@@ -67,14 +67,25 @@ file above it and a test pins the constant.
 | Region | Holds |
 |---|---|
 | Top bar | Wordmark, Today, History — *not* Now |
-| Left rail (sticky, own scroll) | Stop, connection, hero, speed, mode |
+| Left rail (sticky, own scroll) | Stop, connection, tread strip, speed, mode |
 | Content column | Today or History, and the disclaimer |
 
 Now is not in the nav because it is never absent — a nav entry for something already on
 screen is a control that cannot report a state. `#/now` is rewritten to `#/today` rather
 than rendered as a page nothing in the nav is current for.
 
-The rail exists so the live numbers hold still while History scrolls, which is the entire
+**The rail is the hands; the column is the numbers.** The two were built separately and
+both concluded they were the summary, which put five figures on screen two or three times
+each: the day's minutes as the hero, again in the goal meter, again as a stat; the open
+session's duration and distance three times apiece; `3.0` twice within eighty pixels
+meaning two different things — the speed the belt is doing, and the speed it has been
+told to reach. So the rail gives up every number that is not a control's own setpoint —
+the hero, the goal meter and the tiles are all rendered by `Now` only below the
+breakpoint — and Today leads with the day's minutes at `--t-hero` instead, with distance
+and steps subordinate beside it and the goal meter under it. See
+[Each region reports once](#design-decisions).
+
+The rail exists so the controls hold still while History scrolls, which is the entire
 argument for two columns. It is its own scroll container so a short window cannot strand
 Stop below the fold. Note that `position: sticky` creates a stacking context whatever its
 z-index, and every dialog in the app is born inside the rail — hence the explicit
@@ -111,13 +122,34 @@ moment Escape has somewhere better to be.
 
 ## Design decisions
 
+- **Each region reports once.** No figure is stated twice in one viewport. The desktop
+  layout broke this for a while because the rail and the content column were designed
+  apart and each took itself for the summary — thirteen restatements across five numbers,
+  every one of them individually defensible. The rule that settles it is a division of
+  labour rather than a tally: **the rail is what you touch, the column is what you have
+  done.** Live state — belt running or not, the speed it reports, the tread strip that
+  moves at it — belongs to the rail, because that is the region that never scrolls away.
+  Accumulated state — the day's minutes, distance, steps, the goal ratio, the register of
+  sessions — belongs to the column, once each. That is why Today's open session gets no
+  live line above its own row in the session list, and why the page subtitle says "2
+  sessions, one still running" rather than restating minutes the meter under it already
+  carries. It is also why the phone layout is left alone: `Now` and `Today` are separate
+  screens down there, so a number on each is not a repetition, it is the only copy on the
+  screen you are looking at.
+- **Mode is behind a disclosure.** `Auto / Manual / Standby` is the pad's own operating
+  switch, set once if ever, and it was carrying the same visual weight as the speed
+  presets, which are pressed several times a walk. It is closed by default and its summary
+  is the bare word `Mode` — no protocol reports the current mode back, so a summary
+  reading "Manual" would be a claim the app cannot support.
 - **The hero number cycles.** Tapping it moves between time, distance, steps and calories —
   *skipping whatever the connected protocol cannot report*. FTMS carries no step count and
   neither the classic nor the `0x1234` frame carries calories, so a fixed six-tile grid
   guaranteed permanent em dashes on every real device. Availability is resolved once, at
   connect time, from `capabilities` plus the trust map in `src/state/telemetry.ts`.
-- **The tread strip is a readout, not decoration.** A band of slats above the hero number
-  scrolls at the speed the pad reports, driven from the same telemetry the numbers come
+- **The tread strip is a readout, not decoration.** A band of slats — above the hero
+  number on a phone, and flush along the top of the speed card in the desktop rail, where
+  the hero no longer is — scrolls at the speed the pad reports, driven from the same
+  telemetry the numbers come
   from — so it holds still when the belt is stopped, holds still when the pad has not
   reported a speed *at all*, and glides to a halt on its own as a belt coasting down
   reports smaller numbers. It shares the `MOVING_KMH` floor with `isMoving` rather than

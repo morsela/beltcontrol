@@ -230,6 +230,20 @@ a.btn.primary { color: var(--accent-ink); }
 /* Ambient sits in peripheral vision for hours, which is exactly where a slow-moving
    texture belongs — it is the one surface where motion is the point rather than a
    detail. Wider slats, the ambient palette, and no card rules around it. */
+/* Flush against the top edge of the card it leads — the speed card in the desktop
+   rail, which is where the strip lives once the hero has moved to the content column.
+   Negative margins rather than a padding-less card: everything below it in that card
+   still wants the card's own padding. */
+.tread-lead {
+  margin: calc(var(--pad) * -1) calc(var(--pad) * -1) var(--pad);
+  width: auto;
+  border-top: 0;
+  /* One pixel in from the card's own radius, which is what it sits inside — an exact
+     --radius here overshoots the corner and the slats poke out past the card edge. */
+  border-top-left-radius: calc(var(--radius) - 1px);
+  border-top-right-radius: calc(var(--radius) - 1px);
+}
+
 .tread-ambient {
   width: min(100%, 28rem);
   height: 20px;
@@ -439,7 +453,12 @@ a.btn.primary { color: var(--accent-ink); }
   color: var(--muted);
 }
 
-.mode-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.9rem; flex-wrap: wrap; }
+/* The pad's operating switch, not a walking control — set once, if ever, against speed
+   presets pressed several times a walk. Behind a disclosure so it stops claiming the
+   same weight, and closed by default. */
+details.mode { margin: 0 0 var(--gap); padding-inline: 0.25rem; }
+
+.mode-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; }
 .mode-row .btn { flex: 1; min-height: 44px; padding: 0.4rem 0.6rem; }
 
 .hint { font-size: var(--t-sm); color: var(--muted); margin: 0.75rem 0 0; }
@@ -667,16 +686,23 @@ dl.meta dd { margin: 0; word-break: break-word; text-align: right; }
 /* --- log ------------------------------------------------------------------ */
 
 details.logbox { margin-bottom: var(--gap); }
-details.logbox summary {
+
+/* Shared by the protocol log and the mode switch: both are things most people never
+   open, and a second set of these rules would drift from the first. */
+details.logbox > summary,
+details.mode > summary {
   cursor: pointer;
   color: var(--muted);
   font-size: var(--t-sm);
   padding: 0.5rem 0;
   list-style: none;
 }
-details.logbox summary::-webkit-details-marker { display: none; }
-details.logbox summary::before { content: '▸ '; }
-details.logbox[open] summary::before { content: '▾ '; }
+details.logbox > summary::-webkit-details-marker,
+details.mode > summary::-webkit-details-marker { display: none; }
+details.logbox > summary::before,
+details.mode > summary::before { content: '▸ '; }
+details.logbox[open] > summary::before,
+details.mode[open] > summary::before { content: '▾ '; }
 
 .log {
   font: 12px / 1.45 var(--mono);
@@ -796,6 +822,43 @@ a { color: var(--accent); }
   background: color-mix(in srgb, var(--warn) 6%, var(--panel));
 }
 .callout-safety h2 { color: var(--warn); }
+
+/* The day's lead, on the desktop Today screen only — rendered by Today behind an
+   isDesktop check, so these rules need no media query of their own. One number at hero
+   size with two subordinates beside it, rather than three equal thirds under a hero in
+   the rail saying the first of them over again. Baseline-aligned on the bottom edge:
+   72px and 32px figures centred against each other read as a mistake. */
+/* Spread rather than a three-column grid: an `auto` first column ends exactly where the
+   lead number does, which left the first subordinate figure crowding it by a gap's width
+   while the second floated off on its own. Space-between keeps the old stat row's rhythm
+   with one of the three now three times the size of the others. */
+.day-lead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 2.5rem;
+}
+.day-primary .v {
+  display: block;
+  font-size: var(--t-hero);
+  font-weight: 650;
+  line-height: 1;
+}
+.day-primary .k {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+/* The two beside it hang left off the lead rather than centring in their columns,
+   which would leave the row reading as three unrelated things. */
+.day-lead .stat { text-align: left; }
+/* The meter under the lead is the same ratio the page used to state twice; it needs
+   room from the figures above it. */
+.day-lead + .meter { margin-top: 1.25rem; }
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .stat { text-align: center; }

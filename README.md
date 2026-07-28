@@ -15,7 +15,7 @@ server only ships static files and never sees any telemetry. Session history liv
 `localStorage` and is never uploaded — History exports it as a JSON backup you can import
 into another browser, or as a CSV for a spreadsheet.
 
-![Today at desktop width. In the left rail: belt running at 3.0 mph, hero reading 31m walked today, speed presets and a pinned Stop button. Beside it: today's totals, a speed trace for the session in progress, and the day's sessions listed](docs/images/today.png)
+![Today at desktop width. In the left rail, controls only: a pinned Stop button, the belt reported as running, a target of 3.0 mph with the belt now at 3.0, and speed presets. Beside it, the day's numbers: 31m walked today with 1.15 mi and 2,491 steps, a goal meter reading 29m to go, a speed trace for the session in progress, and the day's sessions listed](docs/images/today.png)
 
 ![History beside the same rail: a lifetime odometer, 30-day totals, and minutes-per-day columns against the dashed goal line](docs/images/history.png)
 

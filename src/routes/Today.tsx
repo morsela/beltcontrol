@@ -9,6 +9,7 @@ import {
 import { settings } from '../state/settings.js';
 import { AreaChart } from '../charts/Area.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
+import { GoalMeter } from '../components/GoalMeter.js';
 import { isDesktop } from '../lib/viewport.js';
 import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
 import { trackEvent } from '../lib/analytics.js';
@@ -19,6 +20,25 @@ export function Today() {
   const open = currentSession.value;
   const list = sessionsOn(dayKey(Date.now()));
   const goal = settings.value.goalMinutes;
+  // On desktop this screen leads with the day and carries the goal meter, which states
+  // the ratio in full. On a phone the meter is over on Now, so the percentage has to be
+  // said in the subtitle here or it is not on this screen at all.
+  const dayLead = isDesktop.value;
+
+  // The same two figures either way; only the first of the three changes size and
+  // label between the layouts.
+  const supporting = (
+    <>
+      <div class="stat">
+        <span class="v tnum">{day.distKm > 0 ? fmtMiles(day.distKm) : EM_DASH}</span>
+        <span class="k">mi</span>
+      </div>
+      <div class="stat">
+        <span class="v tnum">{day.steps > 0 ? fmtInt(day.steps) : EM_DASH}</span>
+        <span class="k">steps</span>
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -26,26 +46,43 @@ export function Today() {
       <p class="page-sub">
         {list.length === 0
           ? 'No walking recorded yet.'
-          : `${list.length} session${list.length === 1 ? '' : 's'} · ${Math.round(
-              (day.minutes / goal) * 100
-            )}% of goal`}
+          : `${list.length} session${list.length === 1 ? '' : 's'}${
+              dayLead
+                ? open
+                  ? ', one still running'
+                  : ''
+                : ` · ${Math.round((day.minutes / goal) * 100)}% of goal`
+            }`}
       </p>
 
+      {/* The day, stated once. On desktop the rail beside this is controls only, so
+          the minutes lead at hero size here rather than being a third of a stat row
+          under a hero saying the same thing a few hundred pixels to the left. */}
       <div class="card">
-        <div class="stat-row">
-          <div class="stat">
-            <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
-            <span class="k">walked</span>
+        {dayLead ? (
+          <div class="day-lead">
+            <div class="day-primary">
+              <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
+              <span class="k">walked today</span>
+            </div>
+            {supporting}
           </div>
-          <div class="stat">
-            <span class="v tnum">{day.distKm > 0 ? fmtMiles(day.distKm) : EM_DASH}</span>
-            <span class="k">mi</span>
+        ) : (
+          <div class="stat-row">
+            <div class="stat">
+              <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
+              <span class="k">walked</span>
+            </div>
+            {supporting}
           </div>
-          <div class="stat">
-            <span class="v tnum">{day.steps > 0 ? fmtInt(day.steps) : EM_DASH}</span>
-            <span class="k">steps</span>
-          </div>
-        </div>
+        )}
+
+        {dayLead && <GoalMeter />}
+
+        {/* No live line here, deliberately. The walk in progress has two homes already —
+            the rail says what the belt is doing this second, and the session list below
+            is the register every session is entered in, open one included. A third
+            statement of the same minutes is the habit this layout exists to break. */}
 
         {day.excluded > 0 && (
           <p class="note" style="margin-top:.9rem">

@@ -17,7 +17,7 @@ import { treadRate, TREAD_PITCH_PX, TREAD_CYCLE_MS } from '../lib/tread.js';
  * chip's label, and a scrolling texture announced to a screen reader is noise rather
  * than a third statement of it.
  */
-export function TreadStrip({ variant }: { variant?: 'ambient' }) {
+export function TreadStrip({ variant }: { variant?: 'ambient' | 'lead' }) {
   const belt = useRef<HTMLDivElement>(null);
   const anim = useRef<Animation | null>(null);
   const rate = treadRate(live.value.speedKmh);
@@ -56,7 +56,7 @@ export function TreadStrip({ variant }: { variant?: 'ambient' }) {
 
   return (
     <div
-      class={`tread${variant === 'ambient' ? ' tread-ambient' : ''}`}
+      class={`tread${variant ? ` tread-${variant}` : ''}`}
       // The gradient period and the animation's travel are the same number by
       // construction, handed to CSS from the module that owns it. Two constants that
       // must agree and are declared apart eventually stop agreeing.
