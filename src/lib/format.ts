@@ -28,6 +28,35 @@ export function fmtDuration(s: number | null | undefined): string {
   return `${Math.floor(s)}s`;
 }
 
+/** Whole minutes in the app's duration idiom, with "1h 00m" trimmed to "1h" — the
+ *  default goal is exactly an hour, and its zero minutes are noise. */
+const span = (min: number): string =>
+  min > 0 && min % 60 === 0 ? `${min / 60}h` : fmtDuration(min * 60);
+
+/**
+ * The caption over the daily goal meter.
+ *
+ * It used to read "0 of 60 min" — a fraction of nothing before the day's first
+ * walk, and never the number a walker is actually after, which is how much is
+ * left. Each state is phrased as something a person would say out loud: "1h to go"
+ * cold, "18m · 42m to go" mid-walk, "1h 05m walked" once the goal is behind them
+ * (the meter's own button says "goal met", so this does not repeat it).
+ */
+export function fmtGoalProgress(doneMin: number, goalMin: number): string {
+  const walked = `${span(Math.round(doneMin))} walked`;
+  // A goal of zero or less is not a goal; there is nothing to be a fraction of.
+  if (!(goalMin > 0)) return walked;
+
+  // Ceil what is left and floor what is done, so the two halves can never add up
+  // past the goal and claim "1h · 1m to go" at 59 minutes and change.
+  const left = Math.ceil(goalMin - doneMin);
+  if (left <= 0) return walked;
+  const done = Math.floor(doneMin);
+  // Under a minute in, the walked half would read "0m" — the wording this replaced.
+  if (done < 1) return `${span(Math.round(goalMin))} to go`;
+  return `${span(done)} · ${span(left)} to go`;
+}
+
 export const fmt = (
   v: number | null | undefined,
   digits = 0,
