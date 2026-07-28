@@ -294,6 +294,36 @@ describe('doStart', () => {
       expect(status.value.text).not.toMatch(/never reported movement/);
     });
 
+    it('points at the child lock when the pad has said it is on', async () => {
+      // KS+Fit's own advice for this error checks the safety lock first. When the pad
+      // has reported the lock engaged, the generic "its own panel still has control"
+      // gives way to the one instruction that names a switch the user can flip.
+      const { d } = answeringPad(['refused', 'refused', 'refused'], { childLockOn: true });
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(status.value.kind).toBe('err');
+      expect(status.value.text).toMatch(/child lock is on/);
+      expect(status.value.text).toMatch(/unlock it from the panel/i);
+    });
+
+    it('keeps the panel advice when the pad reports the lock off', async () => {
+      const { d } = answeringPad(['refused', 'refused', 'refused'], { childLockOn: false });
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(status.value.text).toMatch(/own panel still has control/);
+      expect(status.value.text).not.toMatch(/child lock/);
+    });
+
     it('does not re-send it to a belt that is moving anyway', async () => {
       // The refusal is the pad's account of the command, not of the belt. A belt that is
       // under way outranks it, and a second start is the one retry with a person on it.
