@@ -379,6 +379,40 @@ service 00001234-0000-1000-8000-00805f9b34fb
 until the pad is woken. Reading `fed7` returns `get_pk` in encoded form — a leftover, and the
 red herring that cost the most time here.
 
+**A binary sidecar shares `fed8` — and the GATT table above is not the whole story.**
+Interleaved with the text stream, the pad occasionally pushes short raw binary frames:
+no ksBase64, no CR, control bytes a text line can never contain. The play–pause capture
+holds one full exchange, seconds after the first pause (~15 s into the session):
+
+```
+<-  fed8 (0x0012)    1f 04 08 03 05 00                  the pad asks
+->  handle 0x0015    12 09 cb e6 67 6a 00 00 00 00 f2   KS+Fit answers — write WITH response
+<-  fed8 (0x0012)    13 05 fa 5f 65 0a 00               the pad acks
+```
+
+`cb e6 67 6a` is little-endian POSIX time — 1785194187, the capture's own clock, fifteen
+seconds after the handshake's `time_posix` — so this reads as a time-sync request:
+opcode, payload length, payload, and what is presumably a check byte on the answer. The
+shape matches MIoT's other habit of the MCU asking the network module for the time; the
+`time_posix 0` reply in the handshake may even be this same machinery's other face.
+
+The answer went to **ATT handle `0x0015` — a third characteristic**, beyond `fed7`
+(handle `0x000d`) and `fed8` (value `0x0012`, CCCD `0x0013`). Its UUID is not in the
+capture: iOS had the discovery cached from a previous bond, so no discovery PDUs were
+exchanged. The `00011234`/`00021234` pair that appears alongside `fed7`/`fed8` in
+`libapp.so` is the obvious suspect; the next GATT dump against a live pad should
+enumerate *every* service rather than stopping at `0x1234`.
+
+The driver recognises a sidecar frame by its bytes (anything outside the base64
+alphabet + `=` + CR), logs it as hex, and drops it. It used to do something worse by
+accident: the bytes went into the line buffer, glued onto the next text line, and made
+`ksDecode` refuse the lot — in the capture that silently ate a real
+`props CurrentSpeed 0.5`. Answering the request is out of reach for now: Web Bluetooth
+addresses characteristics by UUID, which is the one thing the capture cannot supply.
+What a pad does about an unanswered request is unobserved — this app has never answered
+one, knowingly or otherwise, and its sessions against a real KS-C2 have held their
+links — so the logged hex is also the early warning if that ever turns out to matter.
+
 **How this was captured.** iOS HCI trace: Apple's *Bluetooth for iOS/iPadOS* logging profile
 (developer.apple.com/bug-reporting/profiles-and-logs) plus PacketLogger from Additional Tools
 for Xcode. Then:
