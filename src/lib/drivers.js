@@ -986,6 +986,25 @@ export function ks1234Driver() {
   let closed = false;
   const queue = serialiser();
 
+  // Firmware identity arrives in two different replies — `version` answers with the
+  // network module's build, the config dump carries `mcu_version` — so it is assembled
+  // here and published as one field. Worth the bookkeeping: when a sibling model
+  // misbehaves, "which firmware" is the first question a bug report has to answer.
+  let fwMcu = null;
+  let fwModule = null;
+  function noteFirmware({ mcu, module: mod }) {
+    fwMcu = mcu ?? fwMcu;
+    fwModule = mod ?? fwModule;
+    const parts = [];
+    if (fwMcu != null) parts.push(`MCU ${fwMcu}`);
+    if (fwModule != null) parts.push(`module ${fwModule}`);
+    const label = parts.join(', ');
+    if (label && label !== self.firmware) {
+      self.firmware = label;
+      self.onLog?.(`pad firmware: ${label}`);
+    }
+  }
+
   /** The pad's answer to the most recent `start()`; null before the first one. */
   let lastStart = null;
 
@@ -1023,6 +1042,12 @@ export function ks1234Driver() {
     ...protocolDefaults('ks1234'),
     onData: null,
     onLog: null,
+    /** Firmware identity as the pad reports it, e.g. "MCU 0005, module 0014". */
+    firmware: null,
+    /** The pad's own child-lock switch: true is engaged, null until the pad has said.
+     *  Surfaced because KS+Fit's own advice for a refused start points at the lock
+     *  first — see `watchForStart` in state/connection.ts. */
+    childLockOn: null,
 
     async attach(server) {
       closed = false;
@@ -1234,8 +1259,23 @@ export function ks1234Driver() {
     },
 
     _apply(line) {
+      // `version 0014` is the version command's reply — module firmware, not a props line.
+      const ver = /^version\s+(\S+)$/.exec(line.trim());
+      if (ver) noteFirmware({ module: ver[1] });
+
       const p = parseProps(line);
       if (!p) return;
+
+      if (p.mcu_version != null) noteFirmware({ mcu: p.mcu_version });
+
+      // Device state rather than telemetry, so it lives on the driver, not in `live`.
+      if (p.ChildLockSwitch != null) {
+        const on = Number(p.ChildLockSwitch) === 1;
+        if (on && self.childLockOn !== true) {
+          self.onLog?.('the pad reports its child lock is ON — starts are likely to be refused');
+        }
+        self.childLockOn = on;
+      }
 
       if (p.StartSpeed != null || p.Max != null) {
         adoptSpeedLimits(

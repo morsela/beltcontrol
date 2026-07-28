@@ -46,6 +46,7 @@ export function FeedbackSheet({ onClose }: { onClose: () => void }) {
         protocol: d?.name ?? null,
         device,
         beltState: t.stateLabel != null ? `${t.stateLabel} (${t.state})` : null,
+        firmware: d?.firmware ?? null,
         speedRange: d ? `${d.minSpeedKmh}–${d.maxSpeedKmh} km/h` : null,
         sessionCount: sessions.value.length,
       })

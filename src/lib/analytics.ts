@@ -51,8 +51,10 @@ export interface AnalyticsEvents {
   belt_pause: undefined;
   /** Command written, belt never reported movement. Confirmed starts are `belt_start`
    *  minus these. `refused` separates a pad that answered no to every retry from one
-   *  that said nothing at all — the two failure modes some units are known for. */
-  start_unconfirmed: { kind: 'start' | 'resume'; refused: boolean };
+   *  that said nothing at all — the two failure modes some units are known for.
+   *  `childLock` is whether the pad had reported its lock engaged, which is how often
+   *  the lock actually explains these — the hypothesis the hint in the UI rests on. */
+  start_unconfirmed: { kind: 'start' | 'resume'; refused: boolean; childLock: boolean };
   stop_unconfirmed: { kind: 'stop' | 'pause' };
   /** Unit answered pause with "op code not supported" and was stopped instead. */
   pause_rejected: undefined;

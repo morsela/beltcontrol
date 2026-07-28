@@ -330,6 +330,15 @@ The connect-time config dump also yields `Max` (6.0 on the C2 — matching the p
 an independent confirmation the decode is correct), `StartSpeed`, `ChildLockSwitch`,
 `VelocitySensitivity`, `PanelDisplay`, `unit`, `initial` and `mcu_version`.
 
+Two of those are surfaced beyond the log. `ChildLockSwitch` is tracked on the driver
+(`childLockOn`), and a refused start whose pad has reported the lock engaged says so
+instead of the generic panel advice — KS+Fit's own tip for the `-5000` error checks the
+safety lock first, though a locked pad refusing starts remains the vendor's reading
+rather than something yet observed on the wire. `mcu_version`, together with the build
+the `version` reply carries (`0014` on this C2), is assembled into `driver.firmware`
+("MCU 0005, module 0014") and included in the feedback diagnostics — which firmware is
+the first question when a sibling model misbehaves.
+
 **Distance and calorie scaling.** Both fields are thousandths: `RunningDistance` counts
 **metres** and `BurnCalories` counts **gram-calories**, so `drivers.js` divides each by 1000.
 The first capture left this open — both stayed at 0 through a walk too short to move them —

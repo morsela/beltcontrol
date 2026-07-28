@@ -457,6 +457,50 @@ describe('ks1234Driver', () => {
     expect(seen[1]!.stateLabel).toBe('stopped');
   });
 
+  // Device identity, published on the driver rather than in telemetry: neither field
+  // describes the walk, but both answer the first questions behind a bug report — and
+  // the lock is the one thing the vendor's own advice checks when a start is refused.
+  describe('what the pad says about itself', () => {
+    async function attached() {
+      const { server, notify } = padServer();
+      const d = ks1234Driver();
+      const logs: string[] = [];
+      d.onLog = (m) => logs.push(m);
+      d.onData = (t) => seen.push(t);
+      await d.attach(server as unknown as BluetoothRemoteGATTServer);
+      return { d, notify, logs };
+    }
+
+    it('tracks the child lock, so a refused start can point at it', async () => {
+      const { d, notify, logs } = await attached();
+      expect(d.childLockOn).toBeNull(); // the pad has not said yet
+      push(notify, 'props ControlMode 1 ChildLockSwitch 0 runState 0'); // real config dump shape
+      expect(d.childLockOn).toBe(false);
+      push(notify, 'props ChildLockSwitch 1');
+      expect(d.childLockOn).toBe(true);
+      expect(logs.join('\n')).toMatch(/child lock is ON/);
+    });
+
+    it('assembles firmware identity from the two replies that carry it', async () => {
+      const { d, notify, logs } = await attached();
+      expect(d.firmware).toBeNull();
+      push(notify, 'version 0014'); // the version command's reply — module firmware
+      expect(d.firmware).toBe('module 0014');
+      push(notify, 'props mcu_version "0005"'); // from the config dump
+      expect(d.firmware).toBe('MCU 0005, module 0014');
+      expect(logs.join('\n')).toMatch(/pad firmware: MCU 0005, module 0014/);
+    });
+
+    it('publishes neither as telemetry', async () => {
+      // Device state stays on the driver; a frame carrying only identity must not
+      // reach `live`, where its absent keys would say nothing and its presence would
+      // still bump the frame clock.
+      const { notify } = await attached();
+      push(notify, 'props ChildLockSwitch 1 mcu_version "0005"');
+      expect(seen).toHaveLength(0);
+    });
+  });
+
   it('logs an undecodable chunk instead of throwing', async () => {
     const { server, notify } = padServer();
     const d = ks1234Driver();

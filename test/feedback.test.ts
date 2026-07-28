@@ -17,6 +17,7 @@ const ENV = {
   protocol: 'KingSmith 0x1234',
   device: 'KS-C2',
   beltState: 'running (3)',
+  firmware: 'MCU 0005, module 0014',
   speedRange: '1.0–6.0 km/h',
   sessionCount: 12,
 };
@@ -36,6 +37,13 @@ describe('diagnosticLines', () => {
     expect(lines).toContain('Device: not connected');
     expect(lines).toContain('Protocol: none — not connected');
     expect(lines).toContain('Belt state: —');
+  });
+
+  it('carries the firmware the pad reported, and an em dash when it never said', () => {
+    // The first question behind "my model behaves differently" — answered in the
+    // report itself instead of over a round trip.
+    expect(diagnosticLines(ENV)).toContain('Firmware: MCU 0005, module 0014');
+    expect(diagnosticLines({ ...ENV, firmware: null })).toContain('Firmware: —');
   });
 
   it('reports whether the browser has Web Bluetooth at all', () => {

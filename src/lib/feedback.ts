@@ -41,6 +41,9 @@ export interface DiagEnv {
   device: string | null;
   /** Belt-state label and raw code, already formatted by the caller. */
   beltState: string | null;
+  /** Firmware identity the pad reported, e.g. "MCU 0005, module 0014" — the first
+   *  question behind "my model behaves differently", answered without a round trip. */
+  firmware: string | null;
   speedRange: string | null;
   sessionCount: number;
 }
@@ -58,6 +61,7 @@ export function diagnosticLines(env: DiagEnv): string[] {
     `Protocol: ${env.protocol ?? 'none — not connected'}`,
     `Device: ${env.device ?? 'not connected'}`,
     `Belt state: ${env.beltState ?? '—'}`,
+    `Firmware: ${env.firmware ?? '—'}`,
     `Speed range: ${env.speedRange ?? '—'}`,
     `Sessions stored: ${env.sessionCount}`,
   ];

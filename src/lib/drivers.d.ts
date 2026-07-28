@@ -60,6 +60,14 @@ export interface Driver {
   onData: ((d: Partial<Telemetry>) => void) | null;
   onLog: ((msg: string) => void) | null;
 
+  /** Firmware identity as the pad reports it, e.g. "MCU 0005, module 0014". Absent on
+   *  protocols that never say; null until the pad has said. */
+  firmware?: string | null;
+  /** The pad's own child-lock switch: `true` is engaged — the first thing the vendor's
+   *  own advice points at when a start is refused — `null` until the pad has said.
+   *  Absent on protocols that carry no such switch. */
+  childLockOn?: boolean | null;
+
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
   /** Throws if the write channel is gone, so a command can never resolve without
    *  having been sent. Present on the drivers that can write at all. */
