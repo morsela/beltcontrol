@@ -197,9 +197,10 @@ done
 # 1280 is over the 64rem breakpoint in src/lib/viewport.ts — which is what makes Now
 # the left-hand rail rather than a screen of its own — and over --maxw-desktop (76rem,
 # 1216px), so the shell renders at its full width with a sliver of margin rather than
-# squeezed against the edges. 900 tall is the shortest height at which the running
-# rail — Stop, hero, speed, the mode row and the Esc hint — ends inside the frame
-# instead of mid-button. Scale stays 1: a 2x capture would be sharper, and would also
+# squeezed against the edges. 900 tall was the shortest height at which the running rail
+# ended inside the frame instead of mid-button; the rail has since given up the hero, the
+# meter and the tiles, so it clears that comfortably and the height is now set by the
+# content column beside it. Scale stays 1: a 2x capture would be sharper, and would also
 # quadruple the bytes and make every future regeneration a whole-file rewrite in
 # history.
 ab set viewport 1280 900
@@ -235,7 +236,11 @@ ab eval "window.__wp.doStart()" >/dev/null
 # moves one of these strings the script fails at the point of failure, rather than
 # quietly writing a wrong image.
 echo "waiting for the belt to reach 3.0 mph…"
-ab wait --fn "document.querySelector('.tile .v')?.textContent.trim() === '3.0'"
+# `.speed-readout .actual`, not the old `.tile .v`: at this width the "mph now" tile is
+# gone with the rest of the rail's reporting, and the speed the belt reports is written
+# down beside the target it is climbing towards. Still the belt's own number, so this is
+# still an assertion that the pad got there rather than that the app drew something.
+ab wait --fn "document.querySelector('.speed-readout .actual')?.textContent.trim() === 'now 3.0'"
 ab wait --fn "document.querySelector('.chip')?.innerText.replace(/\s+/g,' ').trim() === 'Running · Simulated classic'"
 
 # --- re-anchoring the walk immediately before each shutter ----------------------------
@@ -286,10 +291,12 @@ JS
 mkdir -p "$OUT"
 
 echo "capturing Today…"
-# The hero lives in the rail now, so both waits are on the same screen: one for the
-# rail, one for the content column beside it.
-ab wait --fn "document.querySelector('.hero .value')?.textContent.trim() === '31m'"
-ab wait --fn "document.querySelector('.page-sub')?.textContent.trim() === '2 sessions · 52% of goal'"
+# Both waits are on the content column, because at this width that is where every number
+# is: the rail is controls only. `.day-primary` is the day's minutes at hero size — the
+# same figure the hero in the rail used to carry, in the one place that now states it.
+# The subtitle no longer carries a percentage either; the meter under the lead does.
+ab wait --fn "document.querySelector('.day-primary .v')?.textContent.trim() === '31m'"
+ab wait --fn "document.querySelector('.page-sub')?.textContent.trim() === '2 sessions, one still running'"
 pin_session
 ab screenshot "$OUT/today.png" >/dev/null
 
