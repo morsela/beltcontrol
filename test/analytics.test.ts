@@ -20,9 +20,9 @@ describe('analytics seam', () => {
   it('hands the event name and properties to the installed provider', () => {
     const track = vi.fn();
     setAnalyticsProvider({ track });
-    trackEvent('belt_connected', { protocol: 'ftms' });
+    trackEvent('belt_connected', { protocol: 'ftms', simulated: false });
     trackEvent('belt_stop');
-    expect(track).toHaveBeenCalledWith('belt_connected', { protocol: 'ftms' });
+    expect(track).toHaveBeenCalledWith('belt_connected', { protocol: 'ftms', simulated: false });
     expect(track).toHaveBeenCalledWith('belt_stop', undefined);
   });
 

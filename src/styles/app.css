@@ -86,6 +86,56 @@ a.btn.primary { color: var(--accent-ink); }
   color: var(--muted);
 }
 
+/* --- connect panel -------------------------------------------------------- */
+
+/* The two-sentence orientation a first visit gets in place of a zeroed dashboard,
+   and the answer a Bluetooth-less browser gets in place of disabled buttons. Both
+   are prose surfaces: a heading that states the fact, a paragraph that carries it. */
+.intro strong,
+.unsupported strong {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35rem;
+}
+.intro p,
+.unsupported p {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+/* Warn-toned like the mobile banner, and for the same reason: the app still loads
+   and half of it still works, so this is the wrong browser, not an error. */
+.unsupported {
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  padding: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+/* "Which treadmills work?" — closed by default inside the connect card, ruled off
+   from the buttons above it so it reads as a footnote to them. */
+details.compat {
+  border-top: 1px solid var(--line);
+  margin-top: 0.85rem;
+  padding-top: 0.35rem;
+}
+details.compat p {
+  margin: 0.25rem 0 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+details.compat ul {
+  margin: 0.5rem 0 0.25rem;
+  padding-left: 1.1rem;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+details.compat li { margin-bottom: 0.35rem; }
+details.compat b { color: var(--ink); font-weight: 600; }
+
 /* --- brand ---------------------------------------------------------------- */
 
 /* Mark and name as one lockup, so they cannot drift apart or wrap between. */
@@ -687,10 +737,12 @@ dl.meta dd { margin: 0; word-break: break-word; text-align: right; }
 
 details.logbox { margin-bottom: var(--gap); }
 
-/* Shared by the protocol log and the mode switch: both are things most people never
-   open, and a second set of these rules would drift from the first. */
+/* Shared by the protocol log, the mode switch and the compatibility note: all are
+   things most people never open, and a second set of these rules would drift from
+   the first. */
 details.logbox > summary,
-details.mode > summary {
+details.mode > summary,
+details.compat > summary {
   cursor: pointer;
   color: var(--muted);
   font-size: var(--t-sm);
@@ -698,11 +750,14 @@ details.mode > summary {
   list-style: none;
 }
 details.logbox > summary::-webkit-details-marker,
-details.mode > summary::-webkit-details-marker { display: none; }
+details.mode > summary::-webkit-details-marker,
+details.compat > summary::-webkit-details-marker { display: none; }
 details.logbox > summary::before,
-details.mode > summary::before { content: '▸ '; }
+details.mode > summary::before,
+details.compat > summary::before { content: '▸ '; }
 details.logbox[open] > summary::before,
-details.mode[open] > summary::before { content: '▾ '; }
+details.mode[open] > summary::before,
+details.compat[open] > summary::before { content: '▾ '; }
 
 .log {
   font: 12px / 1.45 var(--mono);

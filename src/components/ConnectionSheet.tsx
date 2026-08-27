@@ -3,6 +3,7 @@ import { Sheet } from './Sheet.js';
 import { LogPanel } from './LogPanel.js';
 import {
   connect,
+  connectSimulated,
   disconnect,
   driver,
   deviceName,
@@ -29,6 +30,7 @@ export function ConnectionSheet({
   const d = driver.value;
   const t = live.value;
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // The age of the last frame only changes because time passes, so it needs a clock of
   // its own — nothing in the signal graph moves when a pad goes silent, which is
@@ -105,11 +107,10 @@ export function ConnectionSheet({
         >
           Disconnect
         </button>
-      ) : (
+      ) : supported.value ? (
         <div style="display:grid;gap:.5rem">
           <button
             class="btn primary block"
-            disabled={!supported.value}
             onClick={() => {
               void connect({ filtered: true });
               onClose();
@@ -119,13 +120,43 @@ export function ConnectionSheet({
           </button>
           <button
             class="btn block"
-            disabled={!supported.value}
             onClick={() => {
               void connect({ filtered: false });
               onClose();
             }}
           >
             Show all devices
+          </button>
+        </div>
+      ) : (
+        // No disabled buttons: this browser will never connect, and a control that
+        // cannot work should not be on screen looking broken. What replaces them is
+        // what actually works here — take the link elsewhere, or run the simulator.
+        <div style="display:grid;gap:.5rem">
+          <button
+            class="btn primary block"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(location.href)
+                .then(() => {
+                  setLinkCopied(true);
+                  window.setTimeout(() => setLinkCopied(false), 1500);
+                })
+                .catch(() => {
+                  /* clipboard refused — the address bar still has the URL */
+                });
+            }}
+          >
+            {linkCopied ? 'Link copied' : 'Copy link to open in Chrome'}
+          </button>
+          <button
+            class="btn block"
+            onClick={() => {
+              void connectSimulated();
+              onClose();
+            }}
+          >
+            Try it with a simulated pad
           </button>
         </div>
       )}

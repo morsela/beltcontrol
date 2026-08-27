@@ -4,6 +4,7 @@ import { GoalMeter } from '../components/GoalMeter.js';
 import { Tiles } from '../components/Tiles.js';
 import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
+import { ConnectPanel } from '../components/ConnectPanel.js';
 import { FeedbackSheet } from '../components/FeedbackSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
@@ -11,8 +12,6 @@ import { TreadStrip } from '../components/TreadStrip.js';
 import { Brand } from '../components/Logo.js';
 import {
   connected,
-  connect,
-  supported,
   driver,
   doStart,
   doResume,
@@ -25,6 +24,7 @@ import {
 } from '../state/connection.js';
 import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
+import { sessions } from '../state/session.js';
 import { isDesktop } from '../lib/viewport.js';
 import { toMph } from '../lib/format.js';
 
@@ -51,6 +51,26 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
   // to false and the button returns.
   const canStart = !isMoving.value && !running.value;
 
+  // Whether this browser has anything real behind the numbers: a pad it has reached,
+  // or recorded walks (its own or imported). Decides where the stats card goes while
+  // disconnected — and on a true first run, whether it appears at all: a zeroed hero
+  // over em-dash tiles reads as a broken app, not an empty one.
+  const hasRecord = settings.value.lastDeviceName != null || sessions.value.length > 0;
+
+  // The day's numbers, stated once. Connected, they lead the screen — that is the
+  // glance-from-the-belt layout. Disconnected, Connect is the page's one job, so
+  // they drop below it.
+  const numbers = !rail && (
+    <div class="card">
+      {/* Only once something is connected: with no pad there is no speed to report,
+          and a still strip over "Not connected" would be a readout of nothing. */}
+      {connected.value && <TreadStrip />}
+      <Hero onLongPress={onAmbient} />
+      <GoalMeter />
+      <Tiles />
+    </div>
+  );
+
   return (
     <>
       {/* Only on a phone. On desktop this route is the rail, and the top bar above it
@@ -70,16 +90,7 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
         )}
       </div>
 
-      {!rail && (
-        <div class="card">
-          {/* Only once something is connected: with no pad there is no speed to report,
-              and a still strip over "Not connected" would be a readout of nothing. */}
-          {connected.value && <TreadStrip />}
-          <Hero onLongPress={onAmbient} />
-          <GoalMeter />
-          <Tiles />
-        </div>
-      )}
+      {connected.value && numbers}
 
       {connected.value ? (
         <>
@@ -132,23 +143,10 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           )}
         </>
       ) : (
-        <div class="card">
-          <button
-            class="btn primary block lg"
-            disabled={!supported.value}
-            onClick={() => void connect({ filtered: true })}
-          >
-            Connect to pad
-          </button>
-          <button
-            class="btn block"
-            style="margin-top:.5rem"
-            disabled={!supported.value}
-            onClick={() => void connect({ filtered: false })}
-          >
-            Show all devices
-          </button>
-        </div>
+        <>
+          <ConnectPanel />
+          {hasRecord && numbers}
+        </>
       )}
 
       {connected.value && (
