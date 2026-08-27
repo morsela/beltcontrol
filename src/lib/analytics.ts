@@ -42,7 +42,9 @@ export interface AnalyticsEvents {
    *  "no compatible pad nearby" shows up. */
   connect_cancelled: undefined;
   connect_failed: { reason: string };
-  belt_connected: { protocol: string };
+  /** `simulated` separates demo connections (the "try it" walkthrough) from pads in
+   *  the field, so the protocol mix stays a statement about real hardware. */
+  belt_connected: { protocol: string; simulated: boolean };
   disconnected: { by: 'user' | 'device' };
 
   // --- belt commands and what the belt did about them ------------------------

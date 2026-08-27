@@ -11,6 +11,10 @@ export interface Settings {
   heroMetric: 'time' | 'distance' | 'steps' | 'kcal';
   /** Last target speed, in km/h. The old app reset this to 2.0 on every load. */
   targetKmh: number;
+  /** The advertised name of the last pad a real connection reached, so the connect
+   *  panel can offer that pad back by name. Local-only, like everything here — device
+   *  names can identify a household, which is why they never leave for analytics. */
+  lastDeviceName: string | null;
 }
 
 const DEFAULTS: Settings = {
@@ -21,6 +25,7 @@ const DEFAULTS: Settings = {
   // slowest the app will drive one. Starting anywhere else means the first press of
   // Start is a speed change nobody asked for.
   targetKmh: 1.0,
+  lastDeviceName: null,
 };
 
 function load(): Settings {

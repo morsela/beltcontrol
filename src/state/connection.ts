@@ -140,7 +140,12 @@ const errName = (e: unknown) => (e instanceof Error && e.name ? e.name : 'Error'
 
 // --- connection ------------------------------------------------------------
 
-export async function connect({ filtered }: { filtered: boolean }) {
+/**
+ * `name` narrows the chooser to one exact advertised name — the Reconnect path. The
+ * chooser still opens: Web Bluetooth grants nothing without a gesture through it, so
+ * "reconnect" is honestly "the same chooser, pre-filtered to the pad you had".
+ */
+export async function connect({ filtered, name }: { filtered: boolean; name?: string }) {
   if (!navigator.bluetooth) {
     fail(
       new Error(
@@ -159,12 +164,14 @@ export async function connect({ filtered }: { filtered: boolean }) {
   try {
     phase.value = 'choosing';
     setStatus('choosing device…');
-    const options: RequestDeviceOptions = filtered
-      ? {
-          filters: NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
-          optionalServices: OPTIONAL_SERVICES,
-        }
-      : { acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES };
+    const options: RequestDeviceOptions = name
+      ? { filters: [{ name }], optionalServices: OPTIONAL_SERVICES }
+      : filtered
+        ? {
+            filters: NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
+            optionalServices: OPTIONAL_SERVICES,
+          }
+        : { acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES };
     picked = await navigator.bluetooth.requestDevice(options);
   } catch (e) {
     const err = e as DOMException;
@@ -203,6 +210,11 @@ export async function connect({ filtered }: { filtered: boolean }) {
     }
 
     await wireDriver(d, server, picked.name ?? null);
+
+    // Only after the whole handshake: a name remembered from a connect that failed
+    // protocol detection would offer back a pad the app cannot drive. Stored even
+    // when null — the truth about the last pad beats a stale name for a different one.
+    updateSettings({ lastDeviceName: picked.name ?? null });
   } catch (e) {
     // Anything from here on is a GATT/protocol failure, not a cancelled chooser.
     const err = e as DOMException;
@@ -217,7 +229,8 @@ export async function connect({ filtered }: { filtered: boolean }) {
 async function wireDriver(
   d: Driver,
   server: BluetoothRemoteGATTServer | null,
-  name: string | null
+  name: string | null,
+  simulated = false
 ) {
   d.onLog = (m) => log(m);
   d.onData = (patch) => ingest(patch);
@@ -239,7 +252,7 @@ async function wireDriver(
 
   phase.value = 'connected';
   setStatus('connected', 'ok');
-  trackEvent('belt_connected', { protocol: d.id });
+  trackEvent('belt_connected', { protocol: d.id, simulated });
 
   restoreOpenSession();
   startSessionTracking();
@@ -248,17 +261,22 @@ async function wireDriver(
 }
 
 /**
- * Development only: attach a fake pad so the UI can be exercised without hardware.
- * `import.meta.env.DEV` is statically false in a production build, so both this and
- * the simulator module are dropped by the bundler.
+ * Attach a fake pad so the UI can be exercised without hardware.
+ *
+ * No longer dev-only: the connect panel offers it as a walkthrough to first-time
+ * visitors and to browsers with no Web Bluetooth at all, where it is the only way to
+ * see the app do anything. The dynamic import keeps the simulator out of the main
+ * bundle either way, and nothing about the connection pretends: the chip names the
+ * device "Simulated …", every session it records carries that name, and analytics
+ * carries a `simulated` flag so demo connections never count as pads in the field.
+ * `lastDeviceName` is untouched — Reconnect only ever names a real pad.
  */
 export async function connectSimulated(
   id?: 'classic' | 'ftms' | 'ks1234' | 'fitshow',
   opts: { rejectPause?: boolean; refuseStarts?: number } = {}
 ) {
-  if (!import.meta.env.DEV) return;
   const { simulatedDriver } = await import('../lib/simulator.js');
-  await wireDriver(simulatedDriver({ id, ...opts }), null, `Simulated ${id ?? 'classic'}`);
+  await wireDriver(simulatedDriver({ id, ...opts }), null, `Simulated ${id ?? 'classic'}`, true);
 }
 
 function startPolling() {
