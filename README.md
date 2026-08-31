@@ -1,8 +1,9 @@
 # Belt Control
 
-An independent web app that connects to a treadmill speaking the KingSmith / WalkingPad
-Bluetooth protocols to start it, stop it, set speed, read live telemetry, and keep a private
-history of every walk — without the KS+Fit phone app.
+**Control a WalkingPad from your browser.** An independent web app that connects to a
+treadmill speaking the KingSmith / WalkingPad Bluetooth protocols over Web Bluetooth to
+start it, stop it, set speed, read live telemetry, and keep a private history of every
+walk — without the KS+Fit phone app, an account, or anything to install.
 
 **[beltcontrol.com](https://beltcontrol.com)**
 
@@ -205,6 +206,26 @@ NOTICE                  attribution, independence and safety notice carried by f
 
 Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
 km/h — so miles are a display concern only.
+
+## Related projects
+
+Belt Control is not the only way to drive one of these pads without KS+Fit, and the others
+solve different halves of the problem. If you want a script, a local server, or just to
+check that your pad answers at all, start here:
+
+- **[ph4r05/ph4-walkingpad](https://github.com/ph4r05/ph4-walkingpad)** — a Python
+  controller for the classic `fe00` protocol, and the reference this project's frame
+  layout was cross-checked against.
+- **[CodeJawn/walkingpad](https://github.com/CodeJawn/walkingpad)** — a self-hosted web UI
+  that drives the pad over BLE from a server on your own network, reachable from any
+  device on it.
+- **[Duttke's WalkingPad Bluetooth connection test](https://www.duttke.de/en/walkingpad/)**
+  — a single page for checking whether a pad responds over Web Bluetooth at all.
+
+What is different here: no install, no server, and no Python — the browser is the client,
+so the only moving part is a tab. Sessions are recorded locally and never uploaded, and the
+`0x1234` family behind the KS-C2 is driven rather than merely detected. See
+[the protocol reference](docs/protocols.md) for what that took.
 
 ## Licence
 
