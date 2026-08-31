@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- One URL, because there is one URL: the three screens are hash routes off the shell. -->
+<!-- One URL, because there is one URL: the three screens are hash routes off the shell.
+
+     __LASTMOD__ is stamped with the last commit date at build time by the stamp-sitemap
+     plugin in vite.config.ts. A hand-written date is wrong from the next commit onwards,
+     and a lastmod found stale teaches a crawler to ignore the field on this host. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://beltcontrol.com/</loc>
+    <lastmod>__LASTMOD__</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>

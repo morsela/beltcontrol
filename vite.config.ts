@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -46,10 +47,49 @@ function stampServiceWorker(): Plugin {
   };
 }
 
+/**
+ * Date-stamp `<lastmod>` in the sitemap at build time.
+ *
+ * A hand-written date is a date that is wrong from the second commit onwards, and a wrong
+ * `lastmod` is worse than none — a crawler that finds one stale learns to ignore the field
+ * on this host. The commit date is the honest answer: it is exactly when the content last
+ * changed, and it cannot drift from what was deployed.
+ *
+ * `%cs` is the committer date as a bare `YYYY-MM-DD`, which is a legal W3C datetime and
+ * the only precision a sitemap needs. Falls back to the build date where git is not around
+ * — a shallow clone, or a tarball.
+ */
+function stampSitemap(): Plugin {
+  return {
+    name: 'stamp-sitemap',
+    apply: 'build',
+    // closeBundle for the same reason as the service worker: public/ is copied after the
+    // bundle is written, so an earlier hook would stamp a file about to be overwritten.
+    async closeBundle() {
+      let date: string;
+      try {
+        date = execFileSync('git', ['log', '-1', '--format=%cs'], { encoding: 'utf8' }).trim();
+      } catch {
+        date = new Date().toISOString().slice(0, 10);
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = new Date().toISOString().slice(0, 10);
+
+      const sitemap = join('dist', 'sitemap.xml');
+      try {
+        const src = await readFile(sitemap, 'utf8');
+        await writeFile(sitemap, src.replaceAll('__LASTMOD__', date));
+      } catch {
+        /* no sitemap in this build */
+      }
+    },
+  };
+}
+
 // No plugin needed for Preact: oxc handles the JSX transform via tsconfig's
-// jsxImportSource. Keeping the plugin list empty keeps `npm install` to four packages.
+// jsxImportSource. Keeping the plugin list to the two local ones above — nothing
+// installed — keeps `npm install` to four packages.
 export default defineConfig({
-  plugins: [stampServiceWorker()],
+  plugins: [stampServiceWorker(), stampSitemap()],
   oxc: { jsx: { runtime: 'automatic', importSource: 'preact' } },
   define: { __APP_VERSION__: JSON.stringify(version) },
   resolve: {

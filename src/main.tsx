@@ -20,7 +20,15 @@ restoreOpenSession();
 startSessionTracking();
 
 const root = document.getElementById('app');
-if (root) render(<App />, root);
+if (root) {
+  // The static intro in index.html has done its two jobs by now — something on screen
+  // before the bundle arrived, and prose in the served document for anything that reads
+  // this page without running it. Removed rather than hidden: it repeats what the app is
+  // about to say properly, and a duplicate <h1> left in the DOM is a second heading for
+  // both a screen reader and a crawler.
+  document.getElementById('intro')?.remove();
+  render(<App />, root);
+}
 
 if (import.meta.env.DEV) {
   // Hook for driving the UI without a treadmill in reach:
