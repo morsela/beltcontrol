@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The WalkingPad and KingSmith Bluetooth Protocols</title>
+<meta name="description" content="The four BLE protocols KingSmith and WalkingPad treadmills speak, frame by frame: the classic fe00 command set, FTMS, FitShow, and the previously undocumented KingSmith 0x1234 family.">
+<link rel="canonical" href="https://beltcontrol.com/walkingpad-bluetooth-protocol">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Belt Control">
+<meta property="og:url" content="https://beltcontrol.com/walkingpad-bluetooth-protocol">
+<meta property="og:title" content="The WalkingPad and KingSmith Bluetooth protocols">
+<meta property="og:description" content="Four BLE protocols, frame by frame — including the previously undocumented KingSmith 0x1234 family.">
+<meta property="og:image" content="https://beltcontrol.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/content.css">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <a class="brand" href="/">Belt Control <span>— treadmill control in the browser</span></a>
+</header>
+
+<main>
+<h1>How WalkingPad treadmills speak Bluetooth</h1>
+<p class="lede">
+  Four protocol families, three of them controllable, one of them — the KingSmith
+  <code>0x1234</code> family behind the KS-C2 — not documented anywhere before this work.
+  Everything here was recovered from BLE traffic and a publicly distributed binary, and
+  every frame is exercised by a test suite.
+</p>
+
+<h2>The four families</h2>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Family</th><th>Service</th><th>Notify</th><th>Write</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Classic "WalkingPad"</td><td><code>0000fe00</code></td><td><code>fe01</code></td><td><code>fe02</code></td><td class="yes">Implemented</td></tr>
+    <tr><td>FTMS (Bluetooth SIG standard)</td><td><code>00001826</code></td><td><code>2acd</code>, <code>2ada</code></td><td><code>2ad9</code></td><td class="yes">Implemented</td></tr>
+    <tr><td>FitShow</td><td><code>0000fff0</code></td><td><code>fff1</code></td><td><code>fff2</code></td><td class="partial">Detect only</td></tr>
+    <tr><td>KingSmith <code>0x1234</code></td><td><code>00001234</code></td><td><code>fed8</code></td><td><code>fed7</code></td><td class="yes">Implemented</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  None of these UUIDs sit on the W3C Web Bluetooth blocklist, which is what makes a browser
+  a legal client for all of them.
+</p>
+
+<div class="note">
+  The official app selects a protocol from a <code>chip</code> field in a catalogue of 83
+  products, matched against advertised name prefixes. Do not copy that approach — the
+  mapping is not what it looks like, and the <code>0x1234</code> family was initially
+  missed here precisely because of an assumption about it. Detect from the GATT table
+  instead. It is both more robust and shorter.
+</div>
+
+<h2>Classic WalkingPad — <code>fe00</code></h2>
+<p>Commands are six-byte frames written to <code>fe02</code>:</p>
+<pre><code>F7 A2 &lt;cmd&gt; &lt;param&gt; &lt;crc&gt; FD        crc = (0xA2 + cmd + param) &amp; 0xFF</code></pre>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Action</th><th>Frame</th></tr></thead>
+  <tbody>
+    <tr><td>Ask stats</td><td><code>F7 A2 00 00 A2 FD</code></td></tr>
+    <tr><td>Set speed</td><td><code>F7 A2 01 &lt;0.1 km/h&gt; &lt;crc&gt; FD</code> — param <code>0</code> stops the belt</td></tr>
+    <tr><td>Set mode</td><td><code>F7 A2 02 &lt;0 auto / 1 manual / 2 standby&gt; &lt;crc&gt; FD</code></td></tr>
+    <tr><td>Start belt</td><td><code>F7 A2 04 01 A7 FD</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Starting is a sequence, not a command: ask stats, set manual mode, start, set speed.
+  Frames sent back to back get dropped, so they need spacing — roughly 120 ms apart, with
+  about 400 ms after the mode byte before the start.
+</p>
+<p>
+  The leading <em>ask stats</em> is the part that looks like decoration and is not.
+  Standby parks the same app-control path that has to be woken before anything works, so a
+  start sent straight after a stop arrives at a pad that is not listening. Without it, only
+  the first start of a session lands.
+</p>
+<p>
+  Status notifications arrive on <code>fe01</code> with header <code>F8 A2</code>, 18 bytes,
+  integers <strong>big-endian</strong>: belt state at <code>[2]</code>, speed ÷10 km/h at
+  <code>[3]</code>, mode at <code>[4]</code>, elapsed seconds <code>[5..7]</code>, distance
+  ÷100 km <code>[8..10]</code>, steps <code>[11..13]</code>. The pad does not push status on
+  its own — poll once a second.
+</p>
+<p>
+  There is <strong>no pause</strong> in this command set. Not in the vendor's app, not in
+  any published reverse-engineering of it. Speed 0 without the standby that follows it in a
+  stop is the obvious candidate, and whether the belt resumes from there has never been
+  checked on real hardware, so it stays unimplemented rather than guessed.
+</p>
+
+<h2>FTMS — <code>1826</code></h2>
+<p>
+  The Bluetooth SIG's standard Fitness Machine Service, so this half is spec-driven rather
+  than reverse engineered. Control Point <code>2ad9</code>, <strong>little-endian</strong>:
+</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Action</th><th>Bytes</th></tr></thead>
+  <tbody>
+    <tr><td>Request Control — must be first</td><td><code>00</code></td></tr>
+    <tr><td>Reset</td><td><code>01</code></td></tr>
+    <tr><td>Set Target Speed</td><td><code>02 &lt;uint16 lo&gt; &lt;hi&gt;</code>, 0.01 km/h</td></tr>
+    <tr><td>Start / Resume</td><td><code>07</code></td></tr>
+    <tr><td>Stop</td><td><code>08 01</code></td></tr>
+    <tr><td>Pause</td><td><code>08 02</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Acknowledgements come back as indications <code>80 &lt;reqOpCode&gt; &lt;result&gt;</code>,
+  where <code>0x01</code> is success. Gate every command on its ack — rejection is normal in
+  practice, not exceptional. Most units drop control permission on stop, so control has to
+  be re-requested, including when the stop itself was rejected: a unit that refused to stop
+  has certainly not handed control back.
+</p>
+<p>
+  <strong>Pause is real here, and only here.</strong> One op code covers start-or-resume and
+  one covers stop-or-pause, so resuming needs no command of its own. Support cannot be
+  discovered in advance — there is no pause bit in the Feature characteristic or anywhere
+  else — so the spec's own answer is to send it and read the result. A unit that cannot
+  pause replies <code>02</code> op-code-not-supported or <code>03</code> invalid-parameter,
+  and the right response is to stop the belt and retire the button.
+</p>
+<p>
+  Treadmill Data on <code>2acd</code> is a <code>uint16</code> flag field followed by only
+  the fields that are present, in spec order. Layout varies per device, so walk the flags
+  with a cursor — fixed offsets will be wrong on somebody's pad. Note that FTMS carries
+  <strong>no step count</strong> at all.
+</p>
+
+<h2>KingSmith <code>0x1234</code> — the undocumented one</h2>
+<p>
+  Decoded from an iOS Bluetooth HCI capture of the official app driving a real KS-C2. As
+  far as I can establish, this protocol had not been published anywhere before.
+</p>
+<pre><code>transport : write -> fed7 (write-without-response),  notify &lt;- fed8
+framing   : ksBase64(plaintext) + "\r", fragmented across 20-byte ATT writes
+payload   : plain text, space separated — "props CurrentSpeed 1.1"</code></pre>
+
+<h3>The vocabulary is not KingSmith's</h3>
+<p>
+  Once decoded, the command set turns out to be <strong>Xiaomi's MIoT serial
+  protocol</strong> — the vocabulary a Mi-ecosystem device's MCU speaks to its network
+  module, tunnelled here over BLE. <code>props</code>, <code>time_posix</code>,
+  <code>mcu_version</code>, <code>version</code>, <code>error</code> and the <code>0</code>
+  success replies are all MIoT's. KingSmith is a Mi-ecosystem vendor, so this is less
+  surprising than it first looks.
+</p>
+<p>
+  That does not decode any command the capture did not contain — the property names are
+  still the vendor's. What it does mean is that the envelope has a published specification,
+  which is where the error-code semantics below come from rather than from guesswork.
+</p>
+
+<h3>The encoding is base64 with a permuted alphabet</h3>
+<pre><code>custom  SaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KZ3
+std     ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/</code></pre>
+<p>
+  The literal lives in the app binary. One slot is inferred — index 62 never appears in the
+  captured traffic — and every other position is confirmed against real bytes. The stored
+  literal has two characters transposed relative to the working alphabet: solving from known
+  plaintext gives 100% printable output only with them swapped, against 96.6% as stored.
+</p>
+
+<h3>The handshake is why passive sniffing fails</h3>
+<p>
+  A real KS-C2 <strong>drops the link 1.8 to 3.6 seconds after connecting</strong> unless a
+  handshake is written to it. This is the single fact that kept the protocol undocumented:
+  a client that connects and listens is hung up on before the pad says anything worth
+  reading. There is no secret in it — the sequence is fixed and anyone can replay it — but
+  you cannot observe your way to it.
+</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Sent →</th><th>← Reply</th></tr></thead>
+  <tbody>
+    <tr><td><code>shake</code></td><td><code>shake 00</code></td></tr>
+    <tr><td><code>time_posix &lt;unix seconds&gt;</code></td><td><code>time_posix 0</code></td></tr>
+    <tr><td><code>version</code></td><td><code>version 0014</code></td></tr>
+    <tr><td><code>servers getProp 1 3 7 8 9 16 17 18 19 21 22 23 24 13 15</code></td><td><code>servers 0</code>, then a config dump</td></tr>
+    <tr><td><code>props user_id &lt;id&gt;</code></td><td>—</td></tr>
+    <tr><td><code>get_pk</code></td><td><code>get_pk 3</code></td></tr>
+    <tr><td><code>props ControlMode 1</code></td><td><code>props ControlMode 1</code></td></tr>
+    <tr><td><code>servers getProp 1 9 15 2 10 11 12 13 14</code></td><td><code>servers 0</code> — subscribes to telemetry</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <code>user_id</code> is not an identity the protocol checks: the pad takes any integer and
+  the app never reads it back. The value visible in a capture is whoever's account was being
+  recorded, so the right thing to send is a random per-install number connected to no real
+  account.
+</p>
+
+<h3>Control, and why a start gets refused</h3>
+<div class="scroller">
+<table>
+  <thead><tr><th>Action</th><th>Message</th></tr></thead>
+  <tbody>
+    <tr><td>Start</td><td><code>props ControlMode 1</code> → <code>props runState 1</code></td></tr>
+    <tr><td>Stop</td><td><code>props runState 0</code></td></tr>
+    <tr><td>Pause</td><td><code>props runState 0</code> — the same bytes as stop</td></tr>
+    <tr><td>Set speed</td><td><code>props CurrentSpeed 1.1</code>, km/h, one decimal</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Stopping hands control back to the pad's own panel, and in panel mode <code>runState 1</code>
+  is accepted and ignored — the belt simply does not move. <code>ControlMode 1</code>
+  therefore has to be re-asserted on every start, not once at handshake.
+</p>
+<p>
+  Re-asserting it is not always enough, and on a KS-C2 a start is refused often enough to be
+  worth handling. From a real log, with the waits between attempts removed:
+</p>
+<pre><code>--&gt; props ControlMode 1 / props runState 1
+&lt;-- props ControlMode 2 ChildLockSwitch 0 runState 0 ...   ← panel kept control
+&lt;-- props Error ErrorCode -5000                            ← refused
+--&gt; props ControlMode 1 / props runState 1
+&lt;-- props Error ErrorCode -5000                            ← refused again
+--&gt; props ControlMode 1 / props runState 1
+&lt;-- props ControlMode 1                                    ← taken
+&lt;-- props runState 1 CurrentSpeed 0.0                      ← and moving</code></pre>
+<p>
+  Nothing in the capture explains what is different about the third attempt. What is usable
+  is that the pad <em>answers within the same second, every time</em> — a vendor error code,
+  or <code>ControlMode 2</code> meaning the panel still holds control, or the
+  <code>ControlMode 1</code> echo that means the command was taken.
+</p>
+<p>
+  <code>-5000</code> is not an arbitrary number. MIoT fixes <code>-4001</code> to
+  <code>-4007</code> for its own conditions and then reserves <strong><code>-9999</code> to
+  <code>-5000</code> inclusive</strong> for codes a device vendor defines itself. So
+  <code>-5000</code> is KingSmith firmware's own, documented nowhere, and its meaning here is
+  only what the log shows: this start will not be honoured. Treat the whole vendor band as a
+  refusal — a sibling model may well answer <code>-5003</code> — and treat none of the
+  <code>-400x</code> codes that way, because none of them mean refused.
+</p>
+
+<h3>Pause is stop, and the pad is what makes it a pause</h3>
+<p>
+  This was open for a long time. The official app visibly carries a pause alongside start and
+  stop, and warns that speed cannot be adjusted while paused, but it builds its command
+  templates at runtime and early captures only ever exercised <code>runState 1</code>.
+  <code>runState 2</code> was the obvious guess, and a guess is not something to aim at a
+  treadmill.
+</p>
+<p>Two independent things settled it:</p>
+<ul>
+  <li>The arm64 build of the app disassembles where the 32-bit one would not, and the send
+    path converts its argument to exactly <code>0</code> or <code>1</code> before storing it
+    under <code>runState</code>. It is structurally incapable of emitting a <code>2</code>.</li>
+  <li>A capture of the app doing reconnect → play → pause → play → pause on a real KS-C2
+    shows exactly four control writes: <code>runState 1</code>, <code>0</code>,
+    <code>1</code>, <code>0</code>. Nothing else.</li>
+</ul>
+<p>
+  What makes it a pause lives on the pad: <strong>the session counters survive it.</strong>
+  In the same capture the running-time counter read 3 before the first pause and resumed at
+  5 → 6 after, holding still through the ten-second gap rather than resetting, and the next
+  <code>runState 1</code> picked the walk back up. The derived calorie figure did
+  <em>not</em> survive it, and distance and steps were both still zero on a walk that short,
+  so they remain unconfirmed either way.
+</p>
+
+<h3>Telemetry, and a binary sidecar nobody expected</h3>
+<p>
+  Telemetry arrives on <code>fed8</code> as <code>props</code> lines, often
+  <strong>partial</strong> — <code>props RunningSteps 3</code> on its own is normal, so merge
+  updates rather than replacing state. Distance counts metres and calories count
+  gram-calories; both are thousandths.
+</p>
+<p>
+  Interleaved with that text stream, the pad occasionally pushes short raw binary frames — no
+  base64, no carriage return, control bytes a text line can never contain. One full exchange
+  in the capture carries a little-endian POSIX timestamp matching the capture's own clock,
+  which reads as a time-sync request. The answer went to a <strong>third
+  characteristic</strong> whose UUID the capture cannot supply, because the phone had
+  discovery cached from an earlier bond.
+</p>
+<p>
+  This matters to anyone writing a driver for these pads, because the obvious handling is
+  wrong: those bytes used to land in the line buffer, glue themselves onto the next text
+  line, and make the decoder reject the lot — silently eating a real speed reading. Recognise
+  a sidecar frame by its bytes, log it, drop it.
+</p>
+
+<div class="cta">
+  <p><strong>All of this is implemented and running.</strong> Belt Control drives all four
+  families from a browser tab, over Web Bluetooth, with no vendor app in the loop.</p>
+  <p><a class="btn" href="/">Open Belt Control</a></p>
+</div>
+
+<h2>The full reference</h2>
+<p>
+  This page is the tour. The complete reference — every field of every frame, the capture
+  method with the <code>tshark</code> filters, the scaling arithmetic with its ground truth,
+  the GATT dumps, and a table of the approaches that failed before the capture worked — is
+  in the repository:
+</p>
+<ul>
+  <li><a href="https://github.com/morsela/beltcontrol/blob/main/docs/protocols.md">docs/protocols.md</a>
+    — the protocol reference in full</li>
+  <li><a href="https://github.com/morsela/beltcontrol/blob/main/src/lib/drivers.js">src/lib/drivers.js</a>
+    — the drivers themselves, deliberately plain JavaScript</li>
+  <li><a href="https://github.com/morsela/beltcontrol">github.com/morsela/beltcontrol</a>
+    — the whole project, Apache-2.0</li>
+</ul>
+<p>
+  Nothing from the vendor's app is redistributed. The reference explains how to obtain the
+  APK yourself and reproduce the analysis from it.
+</p>
+<p>
+  If you have a pad that lands on FitShow, or on nothing at all, the app's connection log is
+  the capture that would let it be decoded properly — and it is one button to send.
+</p>
+
+</main>
+
+<footer>
+  <ul>
+    <li><a href="/">The app</a></li>
+    <li><a href="/compatible-treadmills">Compatible treadmills</a></li>
+    <li><a href="/walkingpad-without-the-app">Without the KS+Fit app</a></li>
+    <li><a href="/troubleshooting">Troubleshooting</a></li>
+    <li><a href="/walkingpad-on-iphone">On iPhone</a></li>
+    <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
+  </ul>
+  <p class="fine">
+    Belt Control is an independent project, not affiliated with, endorsed by, or sponsored
+    by Beijing KingSmith Technology Co., Ltd. WalkingPad® and KingSmith® are trademarks of
+    that company, used here only to identify the treadmills described. The analysis above is
+    interoperability research on BLE traffic and a publicly distributed binary.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

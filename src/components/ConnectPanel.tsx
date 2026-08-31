@@ -45,7 +45,8 @@ export function ConnectPanel() {
           <strong>This browser can&rsquo;t talk to the treadmill</strong>
           <p>
             Firefox and Safari — including every browser on iOS — never implemented Web
-            Bluetooth. Chrome, Edge, Opera and Samsung Internet have it, over HTTPS.
+            Bluetooth. Chrome, Edge, Opera and Samsung Internet have it, over HTTPS.{' '}
+            <a href="/walkingpad-on-iphone">Why, and what is left on an iPhone.</a>
           </p>
         </div>
         <button class="btn primary block" onClick={copyLink}>
@@ -142,6 +143,13 @@ export function ConnectPanel() {
                 <b>FitShow</b> — some OEM units: detection only, no control yet
               </li>
             </ul>
+            {/* The written page, not a repetition of it: every model seen on each
+                protocol, and what each one can and cannot report. It leaves the app,
+                which is why it is the last thing in here rather than beside Connect. */}
+            <p>
+              <a href="/compatible-treadmills">The full compatibility list</a> — every
+              model, and which numbers each protocol can report.
+            </p>
           </details>
         )}
       </div>

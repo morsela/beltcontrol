@@ -1,0 +1,199 @@
+/* ---------------------------------------------------------------------------
+   The written pages — /compatible-treadmills and friends.
+
+   These are plain HTML in public/, copied to dist/ verbatim, and they never load the
+   app bundle: a page that answers "will this work with my C2" should not need 40 kB of
+   treadmill controller to render one table. That also keeps them readable to anything
+   that fetches without running scripts, which is the whole reason they exist.
+
+   The palette is tokens.css, restated as literals. It cannot be imported — tokens.css
+   is bundled into the app's stylesheet and hashed — so the two are kept in step by
+   hand. If a colour moves there, move it here; nothing else in the app reads this file.
+   --------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f0f2f5;
+  --line: #e2e5ea;
+  --ink: #101418;
+  --muted: #67707d;
+  --accent: #1f7a4d;
+  --warn: #a86b00;
+
+  --font: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0e11;
+    --panel: #14181d;
+    --panel-2: #1b2027;
+    --line: #232a33;
+    --ink: #e8ecf1;
+    --muted: #8e99a8;
+    --accent: #3ddc91;
+    --warn: #e0a33a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.62 var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+.page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 5rem;
+}
+
+/* --- masthead ------------------------------------------------------------- */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2.5rem;
+}
+.masthead .brand {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+.masthead .brand span { color: var(--muted); font-weight: 400; }
+
+/* --- type ----------------------------------------------------------------- */
+
+h1 {
+  font-size: 2.1rem;
+  line-height: 1.12;
+  margin: 0 0 0.6rem;
+  text-wrap: balance;
+}
+h2 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  margin: 2.75rem 0 0.75rem;
+  text-wrap: balance;
+}
+h3 {
+  font-size: 1.05rem;
+  margin: 1.75rem 0 0.5rem;
+}
+p, ul, ol, table { margin: 0 0 1rem; }
+li { margin-bottom: 0.4rem; }
+
+.lede {
+  font-size: 1.12rem;
+  line-height: 1.55;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+code {
+  font: 0.88em var(--mono);
+  background: var(--panel-2);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}
+pre {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  font: 0.82rem/1.55 var(--mono);
+}
+pre code { background: none; padding: 0; font-size: 1em; }
+
+/* --- tables --------------------------------------------------------------- */
+
+/* Wide on purpose — a compatibility table has columns. It scrolls inside its own box
+   rather than making the whole page scroll sideways on a phone. */
+.scroller {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.25rem;
+  background: var(--panel);
+}
+
+/* The seven-column compatibility table does not fit a comfortable reading measure, and
+   squeezed into one it wraps every model list to five lines. Where the window can spare
+   it, that one table steps outside the column; below that it scrolls like the rest. */
+@media (min-width: 58rem) {
+  .scroller.wide {
+    margin-left: -3.5rem;
+    margin-right: -3.5rem;
+    width: calc(100% + 7rem);
+  }
+}
+table { border-collapse: collapse; width: 100%; min-width: 34rem; margin: 0; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--panel-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+tbody tr:last-child td { border-bottom: none; }
+td.yes { color: var(--accent); font-weight: 600; }
+td.no { color: var(--muted); }
+td.partial { color: var(--warn); font-weight: 600; }
+
+/* --- call to action ------------------------------------------------------- */
+
+.cta {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.35rem;
+  margin: 2.5rem 0;
+}
+.cta p { margin: 0 0 0.9rem; }
+.cta p:last-child { margin-bottom: 0; }
+.btn {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.7rem 1.15rem;
+  border-radius: 999px;
+}
+.btn:hover { filter: brightness(1.06); }
+
+.note {
+  border-left: 3px solid var(--line);
+  padding: 0.1rem 0 0.1rem 1rem;
+  color: var(--muted);
+  margin: 1.25rem 0;
+}
+
+/* --- footer --------------------------------------------------------------- */
+
+footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+footer ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; }
+footer li { margin: 0; }
+footer .fine { margin-top: 1rem; }

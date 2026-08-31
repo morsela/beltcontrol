@@ -189,7 +189,9 @@ src/lib/simulator.ts    fake pad for development (dropped from production builds
 src/lib/viewport.ts     the 64rem desktop breakpoint, shared by the shell and app.css
 src/lib/links.ts        outbound URLs used in more than one place
 src/styles/tokens.css   the single source of truth for colour, type and spacing
-public/                 manifest, icons, service worker
+public/                 manifest, icons, service worker, robots.txt, sitemap.xml
+public/content.css      the written pages' stylesheet — they never load the app bundle
+public/*/index.html     the written pages: compatibility, troubleshooting, the protocols
 test/                   unit tests, plus a fake GATT surface in ble-mock.ts
 tools/og-image.html     source for the link-preview card in public/og.png
 tools/screenshots.sh    regenerates the two images above (--check for staleness)

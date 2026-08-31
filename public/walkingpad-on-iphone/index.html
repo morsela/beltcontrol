@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Why a Browser Can't Control a WalkingPad on iPhone</title>
+<meta name="description" content="Safari has never implemented Web Bluetooth, and on iOS every browser is Safari. What that rules out for controlling a WalkingPad from an iPhone or iPad, and what is left.">
+<link rel="canonical" href="https://beltcontrol.com/walkingpad-on-iphone">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Belt Control">
+<meta property="og:url" content="https://beltcontrol.com/walkingpad-on-iphone">
+<meta property="og:title" content="Why a browser can't control a WalkingPad on iPhone">
+<meta property="og:description" content="Safari has never implemented Web Bluetooth, and on iOS every browser is Safari. What that rules out, and what is left.">
+<meta property="og:image" content="https://beltcontrol.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/content.css">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <a class="brand" href="/">Belt Control <span>— treadmill control in the browser</span></a>
+</header>
+
+<main>
+<h1>WalkingPad on iPhone: the honest answer</h1>
+<p class="lede">
+  Belt Control cannot run on an iPhone or an iPad, and no version of it ever will while
+  the situation below holds. Here is exactly why, so you can stop looking.
+</p>
+
+<h2>Safari has no Web Bluetooth</h2>
+<p>
+  Belt Control talks to a treadmill through <strong>Web Bluetooth</strong>, a browser API
+  that lets a web page connect to a Bluetooth Low Energy device after you choose it from a
+  browser-drawn chooser. Chrome shipped it in version 56, and Edge, Opera and Samsung
+  Internet followed. Apple has never implemented it in Safari, and neither has Mozilla in
+  Firefox — both declined it on privacy and security grounds, and neither position has
+  moved.
+</p>
+<p>
+  On desktop that is an inconvenience: install Chrome. On iOS it is a wall, because of the
+  second half.
+</p>
+
+<h2>On iOS, every browser is Safari</h2>
+<p>
+  Chrome for iOS, Edge for iOS, Firefox for iOS and the rest are interface shells around
+  WebKit — Apple's engine, the same one behind Safari. Installing Chrome on an iPhone does
+  not install Chrome's engine, so it does not bring Chrome's Web Bluetooth with it. A page
+  that needs the API gets the same answer in every browser on the device.
+</p>
+<p>
+  Regulatory pressure in the EU has begun to prise this open in principle, but no
+  mainstream third-party engine has shipped to iOS users at scale, and none of it changes
+  what your phone can do this afternoon.
+</p>
+
+<h2>What is actually left</h2>
+<ul>
+  <li><strong>A desktop or laptop.</strong> Chrome or Edge on Windows, macOS or Linux, with
+    the machine in radio range of the pad. This is the setup Belt Control is designed
+    around — most of these treadmills live under a desk with a computer already on it.</li>
+  <li><strong>An Android phone or tablet.</strong> Chrome on Android has Web Bluetooth.
+    Propped on the treadmill and installed to the home screen from the manifest, it behaves
+    like an app.</li>
+  <li><strong>A third-party WebBLE browser on iOS.</strong> A handful exist — they bundle
+    their own Bluetooth bridge and expose the API to pages they load. They can work, but
+    they are niche, paid, and not something to rely on.</li>
+  <li><strong>The manufacturer's app, or the remote.</strong> KS+Fit is a native iOS app
+    and uses the platform Bluetooth stack directly, which is precisely the thing a web page
+    is not allowed to do. The bundled remote needs no phone at all.</li>
+</ul>
+
+<div class="note">
+  This is a browser limitation, not a hosting one. Nothing about the treadmill, the
+  protocol, or how this app is served can be changed to work around it — the API simply is
+  not there to call.
+</div>
+
+<h2>History still works, everywhere</h2>
+<p>
+  One thing does survive on an iPhone: the History screen. Import a JSON backup exported
+  from a browser that <em>can</em> connect, and you can browse past walks, totals and the
+  heatmap on any device, Safari included. You cannot start a belt from it — but the record
+  travels.
+</p>
+
+<div class="cta">
+  <p><strong>On a desktop or an Android device?</strong> Then it works. Chrome or Edge,
+  treadmill switched on and in range.</p>
+  <p><a class="btn" href="/">Open Belt Control</a></p>
+</div>
+
+</main>
+
+<footer>
+  <ul>
+    <li><a href="/">The app</a></li>
+    <li><a href="/compatible-treadmills">Compatible treadmills</a></li>
+    <li><a href="/walkingpad-without-the-app">Without the KS+Fit app</a></li>
+    <li><a href="/troubleshooting">Troubleshooting</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">The protocols</a></li>
+    <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
+  </ul>
+  <p class="fine">
+    Belt Control is an independent project, not affiliated with, endorsed by, or sponsored
+    by Beijing KingSmith Technology Co., Ltd. WalkingPad® and KingSmith® are trademarks of
+    that company, used here only to identify compatible treadmills. Apple, iPhone, iPad and
+    Safari are trademarks of Apple Inc.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

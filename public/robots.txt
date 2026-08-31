@@ -1,6 +1,10 @@
-# Everything here is a single public page. Nothing to hide from a crawler, and
-# nothing behind a path either — the app is hash-routed, so /#/today and friends
-# are never requested from the server.
+# Nothing here is private and nothing is behind a login. The app itself is one page —
+# it is hash-routed, so /#/today and friends are never requested from the server — and
+# the written pages beside it are ordinary static HTML.
+#
+# Deliberately no Disallow for the AI crawlers. A page whose whole argument is "you can
+# do this without the vendor's app" is a page that wants to be quotable, and an assistant
+# asked for a WalkingPad web app is now a real way people arrive.
 User-agent: *
 Allow: /
 

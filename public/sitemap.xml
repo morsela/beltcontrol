@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- One URL, because there is one URL: the three screens are hash routes off the shell.
+<!-- The app is one URL — the three screens are hash routes off the shell — plus the
+     written pages in public/, which are ordinary HTML files and are the only thing here
+     a crawler can read without running JavaScript.
 
      __LASTMOD__ is stamped with the last commit date at build time by the stamp-sitemap
      plugin in vite.config.ts. A hand-written date is wrong from the next commit onwards,
@@ -10,5 +12,35 @@
     <lastmod>__LASTMOD__</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://beltcontrol.com/compatible-treadmills</loc>
+    <lastmod>__LASTMOD__</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://beltcontrol.com/walkingpad-without-the-app</loc>
+    <lastmod>__LASTMOD__</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://beltcontrol.com/troubleshooting</loc>
+    <lastmod>__LASTMOD__</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://beltcontrol.com/walkingpad-bluetooth-protocol</loc>
+    <lastmod>__LASTMOD__</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://beltcontrol.com/walkingpad-on-iphone</loc>
+    <lastmod>__LASTMOD__</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
   </url>
 </urlset>

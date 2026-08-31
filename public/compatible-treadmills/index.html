@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Which WalkingPad and KingSmith Treadmills Work With Belt Control</title>
+<meta name="description" content="Model-by-model compatibility for controlling a KingSmith or WalkingPad treadmill from a browser: which units speak which Bluetooth protocol, and what each one can report.">
+<link rel="canonical" href="https://beltcontrol.com/compatible-treadmills">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Belt Control">
+<meta property="og:url" content="https://beltcontrol.com/compatible-treadmills">
+<meta property="og:title" content="Which WalkingPad and KingSmith treadmills work with Belt Control">
+<meta property="og:description" content="Model-by-model compatibility: which units speak which Bluetooth protocol, and what each one can report.">
+<meta property="og:image" content="https://beltcontrol.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/content.css">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <a class="brand" href="/">Belt Control <span>— treadmill control in the browser</span></a>
+</header>
+
+<main>
+<h1>Which treadmills work</h1>
+<p class="lede">
+  Belt Control does not go by model name. It reads the treadmill's Bluetooth service
+  table on connect and picks a driver from what it finds — so the question is not what
+  your pad is called, it is which protocol its firmware speaks.
+</p>
+
+<p>
+  That distinction is not pedantry. The <strong>X21</strong> appears in KingSmith's own
+  product catalogue under two different chip families, and units sold under one model
+  name have shipped with different radios in different years. A compatibility list keyed
+  to model names would be wrong for somebody; probing the device is right for everybody.
+  If your pad exposes one of the four services below, it will be driven correctly whatever
+  the box said.
+</p>
+
+<h2>The four protocol families</h2>
+
+<div class="scroller wide">
+<table>
+  <thead>
+    <tr>
+      <th>Protocol</th><th>Models commonly seen on it</th><th>Control</th><th>Pause</th>
+      <th>Distance</th><th>Steps</th><th>Calories</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Classic</strong><br><code>fe00</code></td>
+      <td>A1, A1 Pro, C1, C2, P1, R1 Pro, R2, K12, K15, T1, KS-F0, KS-F1</td>
+      <td class="yes">Full</td>
+      <td class="no">—</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td><strong>FTMS</strong><br><code>1826</code></td>
+      <td>Z1, Z3, P1E, MT1, W1, X21, X26, G2, MX8, K50S, K20S</td>
+      <td class="yes">Full</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes</td>
+      <td class="no">—</td>
+      <td class="yes">Yes</td>
+    </tr>
+    <tr>
+      <td><strong>KingSmith</strong><br><code>0x1234</code></td>
+      <td>KS-C2, G1, G1 Pro, MX16, X21, K12 Pro, KS-K9</td>
+      <td class="yes">Full</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes</td>
+      <td class="yes">Yes</td>
+      <td class="partial">Unverified</td>
+    </tr>
+    <tr>
+      <td><strong>FitShow</strong><br><code>fff0</code></td>
+      <td>Assorted OEM units</td>
+      <td class="no">Detect only</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  <strong>Full control</strong> means start, stop and set speed, with the app confirming
+  each one against what the belt reports rather than against the fact that a command was
+  written. A command that goes out and is ignored is a common failure on this hardware,
+  and it is not treated as success anywhere in this app.
+</p>
+
+<h3>Pause is not universal</h3>
+<p>
+  A pause is a stop the treadmill can be resumed from with its session counters intact.
+  FTMS has a dedicated command for it — <code>08 02</code>, resumed by the same op code
+  that starts the belt — but no way to ask in advance whether a given unit supports it,
+  so Belt Control sends it and reads the answer. A unit that rejects it gets stopped
+  instead, says so, and the Pause button withdraws for the rest of the connection. A belt
+  still moving under a button that says <em>Paused</em> is the outcome worth writing code
+  to prevent.
+</p>
+<p>
+  On the KingSmith <code>0x1234</code> family, pause turned out to be the same bytes as
+  stop — <code>runState 0</code>. What makes it a pause is that the pad keeps the
+  session's counters across it and picks the walk back up on the next start, which a
+  capture of the official app finally settled. The classic <code>fe00</code> command set
+  has no pause at all: it is not in the vendor's app, it is not in any published
+  reverse-engineering of the protocol, and Belt Control does not guess one.
+</p>
+
+<h3>What "unverified" means</h3>
+<p>
+  Some pads report a number that cannot be believed. On the <code>0x1234</code> family
+  calories are a worked example: the pad does not measure them, it derives them from
+  distance at a flat 62.5 gram-calories per metre. The scale is known and the arithmetic
+  is right, but the figure is a formula's output, not a measurement, and it most likely
+  tracks a body weight the pad never asked you for.
+</p>
+<p>
+  Fields like that are shown raw, flagged in the interface, and left out of every total
+  rather than quietly summed into your week. A dashboard that adds up a number it does
+  not trust is worse than one that shows an em dash.
+</p>
+
+<h2>Your browser matters more than your treadmill</h2>
+<p>
+  Belt Control is built on Web Bluetooth, which not every browser implements. This is the
+  constraint that actually stops people, and no amount of protocol support gets around it:
+</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Browser</th><th>Works</th></tr></thead>
+  <tbody>
+    <tr><td>Chrome 56+, Edge, Opera, Samsung Internet — desktop</td><td class="yes">Yes</td></tr>
+    <tr><td>Chrome on Android</td><td class="yes">Yes</td></tr>
+    <tr><td>Firefox, desktop and Android</td><td class="no">No — never implemented</td></tr>
+    <tr><td>Safari, including every browser on iOS</td><td class="no">No — never implemented</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  There is no way around the Safari gap, because on iOS every browser is Safari's engine
+  underneath. <a href="/walkingpad-on-iphone">The iPhone situation, in full</a>.
+</p>
+
+<div class="cta">
+  <p><strong>The reliable way to find out is to try it.</strong> Nothing installs, no account
+  is created, and the chooser only ever shows devices in radio range right now.</p>
+  <p><a class="btn" href="/">Open Belt Control</a></p>
+</div>
+
+<h2>If your pad is not on the list</h2>
+<p>
+  Try it anyway — the list above is the models that have been seen, not the models that
+  work. Detection is by service table, so an unlisted pad on a known protocol simply
+  works. If it lands on FitShow, or on nothing at all, the connection log names every
+  service it looked for and what it found, and <strong>Send feedback</strong> in the app
+  attaches that log to a mail. That log is the capture: it is how an undecoded pad gets
+  decoded.
+</p>
+
+</main>
+
+<footer>
+  <ul>
+    <li><a href="/">The app</a></li>
+    <li><a href="/walkingpad-without-the-app">Without the KS+Fit app</a></li>
+    <li><a href="/troubleshooting">Troubleshooting</a></li>
+    <li><a href="/walkingpad-on-iphone">On iPhone</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">The protocols</a></li>
+    <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
+  </ul>
+  <p class="fine">
+    Belt Control is an independent project, not affiliated with, endorsed by, or sponsored
+    by Beijing KingSmith Technology Co., Ltd. WalkingPad® and KingSmith® are trademarks of
+    that company, used here only to identify compatible treadmills.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>
