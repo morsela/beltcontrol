@@ -23,6 +23,7 @@ lives here instead.
 |---|---|
 | `/assets/*` → `max-age=31536000, immutable` | Vite fingerprints those filenames, so the same name always means the same bytes. |
 | `index.html`, `sw.js`, `manifest.json` → `max-age=0, must-revalidate` | The shell, the worker and the manifest must never go stale, or a released fix sits behind a cached shell. |
+| `sitemap.xml`'s `lastmod` is stamped at build time | With the last commit date, by the `stamp-sitemap` plugin in `vite.config.ts`. A hand-written date is wrong from the next commit onwards, and a `lastmod` a crawler finds stale teaches it to ignore the field on this host. |
 | `sw.js` cache name is stamped at build time | `VERSION` in `sw.js` carries a hash of the emitted asset filenames, injected by the `stamp-service-worker` plugin in `vite.config.ts`. It was a hand-written constant that never moved, which left the worker's `activate` handler — delete every cache that is not `VERSION` — with nothing to delete on any deploy. |
 | `Content-Security-Policy` | The one header that is load bearing rather than ordinary hardening — see below. |
 | `X-Frame-Options: DENY` | Same intent as `frame-ancestors 'none'`, for browsers that predate it. |
@@ -67,7 +68,8 @@ Export backup still work, and inline script, cross-origin script, styles, images
 frames are all refused.
 
 The policy also decides what `index.html` may carry in its head, which the next section
-leans on: the inline `<style>` behind the `<noscript>` fallback is covered by
+leans on: the inline `<style>` behind the static intro and the `<noscript>` fallback is
+covered by
 `style-src 'unsafe-inline'`, and the `application/ld+json` block is a data block rather than
 a script — the HTML parser never prepares it for execution, so `script-src 'self'` does not
 reject it. Verified with the production headers in place: no violation is reported for
@@ -85,9 +87,31 @@ either.
   The image is `public/og.png`, generated from `tools/og-image.html` — that file carries the
   headless-Chrome command to re-render it after a change to the mark or the tagline. Without
   it a shared link previews the app's own dark, empty shell.
-- **`<noscript>` holds a real page**, not a one-line apology. Firefox and Safari users cannot
-  run this app at all, and they arrive anyway; the fallback tells them why, and gives a
-  crawler prose to index on a page that is otherwise an empty `<div>`.
+- **The static intro in `<body>` is the page's only crawlable prose.** The app renders into
+  an empty `<div>`, so without it the served document contains no text at all. `main.tsx`
+  removes it the moment the app mounts — it is a first paint, and everything it claims is
+  something the app then says properly.
+
+  It exists because the `<noscript>` block cannot do this job, which this file previously
+  claimed it did. Googlebot renders with JavaScript enabled, so it discards `<noscript>`
+  exactly as a browser does; the block is worth keeping for the Firefox and Safari visitors
+  who arrive anyway and deserve an explanation, but it has never been worth anything to
+  search. Fetching the deployed page without a JavaScript engine returned nothing but the
+  `<title>` — which is also what the crawlers behind the AI assistants see, and they are now
+  a real way people find a tool like this.
+
+## What is not in the repository
+
+Two things that matter to search live outside it, and neither can be committed:
+
+- **Search Console and Bing Webmaster Tools.** Verify by DNS TXT record at Cloudflare
+  rather than by a meta tag, which keeps `index.html` and the CSP out of it, then submit
+  the sitemap and request indexing for the new pages. Nothing here ranks until it is
+  indexed, and impressions per query is the only honest signal for the first couple of
+  months — clicks lag it badly on a new domain.
+- **Anything pointing at the domain.** All this repository can do is make the site
+  rankable; none of it makes the site rank. That is links, and links come from the places
+  the audience already is.
 
 ## The domain
 
