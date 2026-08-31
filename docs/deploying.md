@@ -135,10 +135,18 @@ Three things about how they are built:
   naming the exclusions removes the dependency on that ordering — and makes the next person
   adding a page notice that there is something to update.
 
-Adding a page means four edits, and the fourth is the one that gets forgotten: the file
-itself, the slug in the `vercel.json` lookahead, an entry in `sitemap.xml`, and a link to it
-from somewhere — the static intro in `index.html` and the footer of each existing page. A
-page nothing links to is a page nothing finds.
+Adding a page means five edits, and the last is the one that gets forgotten: the file
+itself, the slug in the `vercel.json` rewrite lookahead, the slug again in the `vercel.json`
+cache header, an entry in `sitemap.xml`, and a link to it from somewhere — the static intro
+in `index.html` and the footer of each existing page. A page nothing links to is a page
+nothing finds.
+
+The two `vercel.json` edits are spelled differently on purpose. The rewrite's negative
+lookahead takes a `walkingpad-` prefix, but the header's `source` cannot: Vercel parses it
+as a path pattern rather than a regex, and rejects a nested group — `walkingpad-(.*)`
+inside an alternation fails the deployment outright with *invalid `source` pattern*. So the
+header lists every slug flat, in the same shape as the `index.html|sw.js|…` entry above it.
+Nothing in a local build catches this; only a deploy does.
 
 ## What is not in the repository
 
