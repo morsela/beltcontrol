@@ -133,6 +133,25 @@ describe('reading sessions back out of storage', () => {
     expect(localStorage.getItem(OPEN_KEY)).toBeNull();
   });
 
+  it('leaves a session already in flight alone', async () => {
+    // Called at startup and again when a driver is wired, so it meets a live session
+    // whenever somebody connects mid-walk. The stored copy is a checkpoint of that same
+    // session, up to 5 s behind it — never a better one.
+    const started = Date.now() - 60_000;
+    const { restoreOpenSession, currentSession } = await freshStore(
+      { id: 'open', startedAt: started, activeMs: 45_000, distKm: 1.2, protocol: 'classic' },
+      OPEN_KEY
+    );
+    restoreOpenSession();
+    // The walk moves on past the checkpoint in storage.
+    currentSession.value = { ...currentSession.value!, activeMs: 61_000, distKm: 1.5 };
+
+    restoreOpenSession();
+
+    expect(currentSession.value?.activeMs).toBe(61_000);
+    expect(currentSession.value?.distKm).toBe(1.5);
+  });
+
   it('still resumes a valid in-flight session', async () => {
     const started = Date.now() - 60_000;
     const { restoreOpenSession, currentSession } = await freshStore(
