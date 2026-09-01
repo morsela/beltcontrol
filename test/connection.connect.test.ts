@@ -56,6 +56,38 @@ afterEach(async () => {
   Reflect.deleteProperty(navigator, 'bluetooth');
 });
 
+describe('a second press while an attempt is already running', () => {
+  it('does not open a second chooser', async () => {
+    let release: ((d: BluetoothDevice) => void) | null = null;
+    const mock = installBluetooth(
+      () => new Promise<BluetoothDevice>((resolve) => (release = resolve))
+    );
+
+    // Not awaited: this is the state the app is in with the chooser on screen and the
+    // Connect button still sitting there behind it.
+    const first = connect({ filtered: true });
+    expect(phase.value).toBe('choosing');
+
+    await connect({ filtered: true });
+    expect(mock).toHaveBeenCalledTimes(1);
+
+    release!(fakeDevice('KS-C2'));
+    await first;
+    expect(connected.value).toBe(true);
+  });
+
+  it('leaves an attempt that is already past the chooser alone', async () => {
+    const mock = installBluetooth(async () => fakeDevice('KS-C2'));
+    await connect({ filtered: true });
+    expect(connected.value).toBe(true);
+
+    // And once it has finished, the next press is an ordinary one.
+    await disconnect();
+    await connect({ filtered: true });
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('connect', () => {
   it('remembers the advertised name once the whole handshake has succeeded', async () => {
     installBluetooth(async () => fakeDevice('KS-ST-A1P'));
