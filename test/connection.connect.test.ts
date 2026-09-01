@@ -31,6 +31,27 @@ function fakeDevice(name?: string) {
   } as unknown as BluetoothDevice;
 }
 
+/** A device that connects but speaks nothing the app knows, so `detectDriver` returns
+ *  null and the connect path fails after the GATT link is already up. */
+function unknownDevice() {
+  const server = new FakeServer().addService(UUID.deviceInfo, [
+    new FakeCharacteristic(0x2a29),
+  ]);
+  const disconnect = vi.fn();
+  const device = {
+    name: 'Some Speaker',
+    id: 'unknown-device-id',
+    gatt: {
+      connected: true,
+      connect: async () => server,
+      disconnect,
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  } as unknown as BluetoothDevice;
+  return { device, disconnect };
+}
+
 function installBluetooth(requestDevice: (o: RequestDeviceOptions) => Promise<BluetoothDevice>) {
   const mock = vi.fn(requestDevice);
   Object.defineProperty(navigator, 'bluetooth', {
@@ -54,6 +75,33 @@ beforeEach(() => {
 afterEach(async () => {
   await disconnect();
   Reflect.deleteProperty(navigator, 'bluetooth');
+});
+
+/**
+ * A connect that fails after `gatt.connect()` has landed still holds the link. Nothing
+ * downstream releases it: `teardown` unwinds the driver, and on this path there is no
+ * driver — detection is what failed. Left open, the pad stays bound to this tab for as
+ * long as it lives, and the vendor's own app cannot reach it in the meantime.
+ */
+describe('a connect that fails after the link is up', () => {
+  it('hands the pad back rather than holding it', async () => {
+    const { device, disconnect: gattDisconnect } = unknownDevice();
+    installBluetooth(async () => device);
+
+    await connect({ filtered: true });
+
+    expect(phase.value).toBe('error');
+    expect(gattDisconnect).toHaveBeenCalled();
+  });
+
+  it('does not remember a pad it could not drive', async () => {
+    const { device } = unknownDevice();
+    installBluetooth(async () => device);
+
+    await connect({ filtered: true });
+
+    expect(settings.value.lastDeviceName).toBe(null);
+  });
 });
 
 describe('connect', () => {
