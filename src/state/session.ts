@@ -223,8 +223,22 @@ function persistOpen() {
   }
 }
 
-/** Recover a session that was in flight when the page reloaded. */
+/**
+ * Recover a session that was in flight when the page reloaded.
+ *
+ * Called twice by design — once at startup, so a walk left open can still be closed by
+ * the idle rule while nothing is connected, and again when a driver is wired, because
+ * that is the first moment a reconnect could be picking one back up. So it has to be
+ * safe to call against a session that is already running, and it was not: the second
+ * call overwrote the live record with the last copy written to storage, which lags it by
+ * up to the 5 s checkpoint interval, and re-seeded the counters from those older totals.
+ * Connecting mid-walk quietly rewound the walk.
+ *
+ * A session already open is the authority on itself. The stored copy is a checkpoint of
+ * that same session, never a better one.
+ */
 export function restoreOpenSession() {
+  if (currentSession.value) return;
   try {
     const raw = localStorage.getItem(OPEN_KEY);
     if (!raw) return;
