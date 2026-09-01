@@ -44,9 +44,10 @@ export function ConnectPanel() {
         <div class="unsupported">
           <strong>This browser can&rsquo;t talk to the treadmill</strong>
           <p>
-            Firefox and Safari — including every browser on iOS — never implemented Web
-            Bluetooth. Chrome, Edge, Opera and Samsung Internet have it, over HTTPS.{' '}
-            <a href="/walkingpad-on-iphone">Why, and what is left on an iPhone.</a>
+            Firefox and Safari can&rsquo;t connect to Bluetooth devices, and on an iPhone or
+            iPad every browser is Safari underneath. Chrome, Edge, Opera and Samsung
+            Internet can.{' '}
+            <a href="/troubleshooting">More on why, and what to use instead.</a>
           </p>
         </div>
         <button class="btn primary block" onClick={copyLink}>
@@ -72,8 +73,8 @@ export function ConnectPanel() {
         <div class="card intro">
           <strong>Drive your WalkingPad from this browser</strong>
           <p>
-            Start, stop and set speed over Bluetooth — no phone app in the loop. Walks
-            are recorded in this browser and never uploaded.
+            Start, stop and set the speed over Bluetooth, without the phone app. Your walks
+            are saved on this device and never uploaded.
           </p>
         </div>
       )}
@@ -111,8 +112,8 @@ export function ConnectPanel() {
               Show all devices
             </button>
             <p class="hint">
-              Pad not in the list? Some units advertise under unexpected names —{' '}
-              <b>Show all devices</b> shows everything nearby.
+              Pad not in the list? Some show up under a name you wouldn&rsquo;t
+              recognise —{' '}<b>Show all devices</b> shows everything nearby.
             </p>
           </>
         )}
@@ -124,31 +125,31 @@ export function ConnectPanel() {
           <details class="compat">
             <summary>Which treadmills work?</summary>
             <p>
-              The app probes the pad on connect and picks the protocol itself, so what
-              matters is which of these your unit speaks — not its model name:
+              Most of them. The app asks your treadmill what it can do when you connect,
+              so what matters is what is inside it rather than its model name:
             </p>
             <ul>
               <li>
-                <b>Classic</b> — A1, C1, C2, P1, R1/R2, K12 and most older pads: full
-                control
+                <b>Older pads</b> — A1, C1, C2, P1, R1/R2, K12 and similar: start, stop
+                and speed
               </li>
               <li>
-                <b>FTMS</b> — Z1, Z3, P1E, MT1, W1, X21, G2 and other newer units: full
-                control, with pause
+                <b>Newer pads</b> — Z1, Z3, P1E, MT1, W1, X21, G2 and others: the same,
+                plus pause
               </li>
               <li>
-                <b>KingSmith</b> — KS-C2, G1, MX16, K12 Pro: full control, with pause
+                <b>KS-C2 and relatives</b> — G1, MX16, K12 Pro: the same, plus pause
               </li>
               <li>
-                <b>FitShow</b> — some OEM units: detection only, no control yet
+                <b>Some other brands</b> — found and named, but not driveable yet
               </li>
             </ul>
             {/* The written page, not a repetition of it: every model seen on each
                 protocol, and what each one can and cannot report. It leaves the app,
                 which is why it is the last thing in here rather than beside Connect. */}
             <p>
-              <a href="/compatible-treadmills">The full compatibility list</a> — every
-              model, and which numbers each protocol can report.
+              <a href="/compatible-treadmills">The full list</a> — every model, and which
+              numbers each one can show you.
             </p>
           </details>
         )}

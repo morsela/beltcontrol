@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Use a WalkingPad Without the KS+Fit App</title>
-<meta name="description" content="Control a KingSmith or WalkingPad treadmill without installing KS+Fit: what the remote can and cannot do, what the phone app is for, and how a browser can take its place.">
+<meta name="description" content="Use a KingSmith or WalkingPad treadmill without installing KS+Fit: what the remote can and can't do, what the phone app is really for, and how a browser can replace it.">
 <link rel="canonical" href="https://beltcontrol.com/walkingpad-without-the-app">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Belt Control">
 <meta property="og:url" content="https://beltcontrol.com/walkingpad-without-the-app">
 <meta property="og:title" content="Use a WalkingPad without the KS+Fit app">
-<meta property="og:description" content="What the remote can and cannot do, what the phone app is for, and how a browser can take its place.">
+<meta property="og:description" content="What the remote can and can't do, what the phone app is really for, and how a browser can replace it.">
 <meta property="og:image" content="https://beltcontrol.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -29,131 +29,132 @@
 <main>
 <h1>Using a WalkingPad without the KS+Fit app</h1>
 <p class="lede">
-  You do not need an account, a phone, or the manufacturer's software to drive a
-  KingSmith treadmill. The Bluetooth protocol it speaks is not authenticated, and a
-  browser can speak it.
+  You don't need an account, a phone, or the manufacturer's software to run a KingSmith
+  treadmill. There's no password standing between your pad and any app that knows how to
+  talk to it — and a web browser can.
 </p>
 
-<h2>What you lose without the app, and what you don't</h2>
+<h2>What you actually lose without the app</h2>
 <p>
-  Most WalkingPad units ship with a small infrared or radio remote, and it is genuinely
-  enough for walking: start, stop, faster, slower, mode. What the remote cannot do is
-  remember anything. It shows no history, keeps no daily total, holds no goal, and the
-  numbers on the pad's own panel reset the moment the session ends.
+  Most WalkingPads come with a small remote, and for walking it's genuinely enough: start,
+  stop, faster, slower. What the remote can't do is remember anything. No history, no daily
+  total, no goal — and the numbers on the treadmill's own display reset the moment you
+  finish.
 </p>
 <p>
-  That memory is the real job of the phone app — and the price of it is an account, a
-  login, push notifications, an SDK or two, and your walking data on somebody's server.
-  For a lot of people that trade is a bad one, and it is the reason this page exists.
+  That memory is what the phone app is really for. The price of it is an account, a login,
+  notifications, and your walking data sitting on somebody else's server. For a lot of
+  people that's a bad trade, which is why this page exists.
 </p>
 
-<h2>The options, honestly</h2>
+<h2>Your options, honestly</h2>
 
 <div class="scroller">
 <table>
-  <thead><tr><th>Approach</th><th>Control</th><th>History</th><th>Needs</th></tr></thead>
+  <thead><tr><th>How</th><th>Controls the belt</th><th>Remembers your walks</th><th>What you need</th></tr></thead>
   <tbody>
     <tr>
-      <td>The bundled remote</td>
+      <td>The remote it came with</td>
       <td class="yes">Yes</td>
-      <td class="no">None</td>
+      <td class="no">No</td>
       <td>Nothing</td>
     </tr>
     <tr>
-      <td>KS+Fit / WalkingPad+</td>
+      <td>KS+Fit or WalkingPad+</td>
       <td class="yes">Yes</td>
       <td class="yes">Yes, on their servers</td>
-      <td>A phone, an account</td>
+      <td>A phone and an account</td>
     </tr>
     <tr>
-      <td>A Python controller such as <code>ph4-walkingpad</code></td>
+      <td>A desktop app for your computer</td>
+      <td class="yes">Yes</td>
+      <td class="partial">Depends which</td>
+      <td>An install, usually one type of computer only</td>
+    </tr>
+    <tr>
+      <td>A script you run yourself</td>
       <td class="yes">Yes</td>
       <td class="partial">Whatever you build</td>
-      <td>A computer, a terminal, Python</td>
-    </tr>
-    <tr>
-      <td>A desktop menu-bar app</td>
-      <td class="yes">Yes</td>
-      <td class="partial">Varies</td>
-      <td>An install, usually one OS only</td>
+      <td>Comfort with a command line</td>
     </tr>
     <tr>
       <td><strong>Belt Control</strong></td>
       <td class="yes">Yes</td>
-      <td class="yes">Yes, in your browser only</td>
+      <td class="yes">Yes, on your own device</td>
       <td>Chrome or Edge</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-<h2>How the browser route works</h2>
+<h2>How the browser one works</h2>
 <p>
-  Belt Control is a web page that uses <strong>Web Bluetooth</strong> — a browser API that
-  lets a page talk to a Bluetooth Low Energy device directly, after you pick that device
-  from a chooser the browser draws itself. There is no pairing code, no bridge, no
-  companion service, and no server in the path. The radio link is browser to treadmill.
-  The site that served the page only ever shipped static files and never sees a single
-  reading.
+  Modern browsers can connect to Bluetooth devices directly, once you pick the device from
+  a list the browser shows you. That's all this is. There's no pairing code to type, no
+  extra software in between, and nothing goes to a server — your browser talks to your
+  treadmill over Bluetooth, the same way your headphones do.
 </p>
 <p>
-  In practice: open the page in Chrome or Edge, press <strong>Connect</strong>, pick your
-  pad from the list. The app reads the treadmill's Bluetooth service table, works out
-  which of the four known protocols it speaks, and drives it from there.
-  <a href="/compatible-treadmills">Which treadmills that covers.</a>
+  In practice: open the page in Chrome or Edge, press <strong>Connect</strong>, and pick
+  your pad from the list. The app then works out for itself how to talk to your particular
+  treadmill. <a href="/compatible-treadmills">Which pads that covers.</a>
 </p>
 
 <h3>What you get</h3>
 <ul>
-  <li>Start, stop and set speed, with the target and the belt's actual speed shown apart —
-    a command that was written is not a belt that is moving.</li>
-  <li>Live distance, steps and calories, where the pad reports them honestly. Where it
-    does not, you get an em dash rather than a number somebody made up.</li>
-  <li>Sessions detected automatically, with daily totals, a goal, a 30-day history and a
-    consistency heatmap.</li>
-  <li>A lifetime odometer that survives the pad's own counter resetting.</li>
-  <li>Export to CSV, or a JSON backup you can carry to another browser.</li>
+  <li>Start, stop and set the speed, with the speed you asked for and the speed the belt is
+    actually doing shown separately — because sending a command isn't the same as the belt
+    moving.</li>
+  <li>Live distance, steps and calories, wherever your pad reports them honestly. Where it
+    doesn't, you get a dash instead of a number somebody made up.</li>
+  <li>Walks recorded automatically, with daily totals, a goal, a month of history and a
+    chart of how consistent you've been.</li>
+  <li>A lifetime distance counter that keeps going even when the treadmill resets its
+    own.</li>
+  <li>Export to a spreadsheet, or a backup file you can carry to another computer.</li>
 </ul>
 
-<h3>Where the data lives</h3>
+<h3>Where your data lives</h3>
 <p>
-  In <code>localStorage</code>, in the browser you used, and nowhere else. It is never
-  uploaded, and there is no account to make. That has a real cost worth stating plainly:
-  clear your site data and the history is gone, and a walk recorded on the desktop does
-  not appear on the tablet. The backup export exists precisely because of that — it is
-  the migration path, and it is on you to run it.
+  In the browser you used, on your own device, and nowhere else. Nothing is uploaded and
+  there's no account to make.
+</p>
+<p>
+  That has a real cost worth saying plainly: clear your browsing data and your history goes
+  with it, and a walk recorded on your laptop won't show up on your tablet. The backup file
+  exists for exactly that reason — it's how you move your history, and it's on you to save
+  one.
 </p>
 
 <div class="cta">
   <p><strong>Nothing to install.</strong> Open it in Chrome or Edge with the treadmill
-  switched on and in range.</p>
+  switched on and nearby.</p>
   <p><a class="btn" href="/">Open Belt Control</a></p>
 </div>
 
-<h2>Is it safe to drive a treadmill from a web page?</h2>
+<h2>Is it safe to run a treadmill from a web page?</h2>
 <p>
-  It is exactly as safe as driving it from the phone app, which is to say: the belt can
-  start under software control with nobody standing on it, and that is true of every
-  option on this page including the remote in your hand.
+  It's exactly as safe as running it from the phone app — which is to say the belt can
+  start with nobody standing on it, and that's true of every option on this page, remote
+  included.
 </p>
 <p>
-  What the app does about it: starting and resuming both ask for confirmation and show the
-  target speed; speed is clamped to the range the unit itself reports, and that clamp is
-  clamped again so a pad reporting nonsense cannot widen it; Stop is always enabled, bound
-  to <kbd>Esc</kbd>, and pinned on screen from the moment a start goes out until the belt
-  reports zero; and the app never reconnects to a pad on its own, because silently
-  reattaching to a possibly-moving belt is not a safe default.
+  What the app does about it: starting and resuming both ask you to confirm and show the
+  speed first; the speed is capped to what your treadmill says it can do, and capped again
+  in case a pad reports something nonsensical; Stop is always available, works with the
+  <kbd>Esc</kbd> key, and stays pinned on screen from the moment you press start until the
+  belt reports it has stopped. And the app never reconnects on its own, because silently
+  reattaching to a treadmill that might be moving is not a safe thing to do.
 </p>
 <p>
   Those reduce the risk rather than removing it. Closing the page does not stop the belt.
   Use the treadmill's own controls or safety key as the real stop.
 </p>
 
-<h2>Does it need the internet?</h2>
+<h2>Does it need an internet connection?</h2>
 <p>
-  Only to load the page the first time. After that it installs an offline shell, so the
-  app keeps working with the network down — the treadmill link never used the network in
-  the first place.
+  Only to load the page the first time. After that it keeps a copy and works offline —
+  the connection to your treadmill never used the internet in the first place.
 </p>
 
 </main>
@@ -163,8 +164,7 @@
     <li><a href="/">The app</a></li>
     <li><a href="/compatible-treadmills">Compatible treadmills</a></li>
     <li><a href="/troubleshooting">Troubleshooting</a></li>
-    <li><a href="/walkingpad-on-iphone">On iPhone</a></li>
-    <li><a href="/walkingpad-bluetooth-protocol">The protocols</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">How it works, technically</a></li>
     <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
   </ul>
   <p class="fine">

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>WalkingPad Bluetooth Not Connecting — What to Check</title>
-<meta name="description" content="Why a KingSmith or WalkingPad treadmill does not appear in the Bluetooth chooser, refuses to start, or drops the link — and what each symptom actually means.">
+<meta name="description" content="Your WalkingPad doesn't show up, won't start, or keeps disconnecting. Here's what each of those actually means and what to do about it.">
 <link rel="canonical" href="https://beltcontrol.com/troubleshooting">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Belt Control">
 <meta property="og:url" content="https://beltcontrol.com/troubleshooting">
 <meta property="og:title" content="WalkingPad Bluetooth not connecting — what to check">
-<meta property="og:description" content="Why a WalkingPad does not appear in the chooser, refuses to start, or drops the link — and what each symptom means.">
+<meta property="og:description" content="Your WalkingPad doesn't show up, won't start, or keeps disconnecting. What each of those means, and what to do.">
 <meta property="og:image" content="https://beltcontrol.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -29,116 +29,120 @@
 <main>
 <h1>When the treadmill won't connect</h1>
 <p class="lede">
-  Nearly every Bluetooth failure on these pads is one of six things. Each has a distinct
-  symptom, and telling them apart is most of the fix.
+  Almost every Bluetooth problem with these pads is one of six things. Each one looks
+  different, and telling them apart is most of the fix.
 </p>
 
-<h2>Nothing appears in the chooser</h2>
+<h2>Nothing shows up in the device list</h2>
 <p>
-  The device picker is drawn by the browser, not by the page, and it only lists what the
-  radio can hear right now. An empty list means one of:
+  That list is drawn by your browser, not by this page, and it only shows what's switched
+  on and nearby right now. An empty list usually means one of these:
 </p>
 <ul>
-  <li><strong>The pad is asleep or off.</strong> Most units stop advertising after a few
-    minutes idle. Wake it at the panel and try again immediately.</li>
-  <li><strong>Something else is already connected.</strong> BLE treadmills accept one
-    client at a time. If the phone app is open in the background, or a paired remote dongle
-    is live, the pad is taken. Close the phone app fully — backgrounded is not closed.</li>
-  <li><strong>The pad advertises under a name you would not guess.</strong> The default
-    chooser is filtered to known name prefixes. <strong>Show all devices</strong> drops
-    that filter and lists everything nearby, which is how oddly-named OEM units get
-    found.</li>
+  <li><strong>The treadmill has gone to sleep.</strong> Most pads stop announcing
+    themselves after a few minutes of sitting idle. Wake it up at the panel and try again
+    straight away.</li>
+  <li><strong>Something else is already connected to it.</strong> These treadmills only
+    talk to one device at a time, so if the phone app is still open in the background, or a
+    paired dongle is active, your pad is already taken. Close the phone app properly —
+    leaving it in the background isn't the same as closing it.</li>
+  <li><strong>It's showing up under a name you wouldn't recognise.</strong> The list is
+    filtered to names we know. <strong>Show all devices</strong> removes that filter and
+    shows everything nearby, which is how oddly-named pads get found.</li>
 </ul>
 
-<h3>On macOS, an empty chooser can mean a permission</h3>
+<h3>On a Mac, an empty list often means a permission</h3>
 <p>
-  Chrome needs Bluetooth permission under <strong>System Settings → Privacy &amp; Security
-  → Bluetooth</strong>. Without it the chooser opens, finds nothing, and reports no error
-  at all — which looks exactly like a pad that is switched off. Grant it, restart Chrome,
-  try again.
+  Chrome needs your permission to use Bluetooth, under <strong>System Settings → Privacy
+  &amp; Security → Bluetooth</strong>. Without it the list opens, finds nothing, and shows
+  no error at all — which looks exactly like a treadmill that's switched off. Turn it on,
+  restart Chrome, and try again.
 </p>
 
-<h2>The Connect button does nothing, or is not there</h2>
+<h2>There's no Connect button, or pressing it does nothing</h2>
 <p>
-  Then the browser has no Web Bluetooth. Firefox and Safari never implemented it, and on
-  iOS every browser is Safari underneath, so no iPhone or iPad can run this app at all.
-  Chrome 56+, Edge, Opera and Samsung Internet have it, on desktop and on Android.
-  <a href="/walkingpad-on-iphone">The full iPhone answer.</a>
+  Then your browser can't connect to Bluetooth devices. <strong>Firefox and Safari
+  can't</strong> — and on an iPhone or iPad, every browser is Safari underneath, so
+  installing Chrome there doesn't help. Chrome, Edge, Opera and Samsung Internet can, on a
+  computer or on Android.
 </p>
 <p>
-  Web Bluetooth also requires a secure context. That means HTTPS, or
-  <code>http://localhost</code> if you are running it yourself. Opening built files as
-  <code>file://</code> will not work.
-</p>
-
-<h2>It connects, then drops after a couple of seconds</h2>
-<p>
-  That is a KingSmith <code>0x1234</code> pad — the KS-C2 and its siblings — behaving
-  exactly as designed. Those units drop the link 1.8 to 3.6 seconds after connecting
-  unless a handshake is written to them. It is not a fault and not a range problem: a
-  client that connects and listens politely gets hung up on.
+  There's no workaround for the iPhone. Use a computer or an Android device instead — see
+  <a href="/compatible-treadmills">the full browser list</a>.
 </p>
 <p>
-  Belt Control performs that handshake, so it should not happen here. If you are seeing it
-  from some other tool, that is why. It is also why this protocol went undocumented for so
-  long — you cannot sniff it passively, because the pad disconnects before it says
-  anything. <a href="/walkingpad-bluetooth-protocol">The handshake, written out.</a>
+  One more thing: the page has to be loaded over a secure connection. That means an address
+  starting <code>https://</code>, so beltcontrol.com is fine. Opening a downloaded copy of
+  the page from your own hard drive isn't.
 </p>
 
-<h2>It connects, but the belt refuses to start</h2>
+<h2>It connects, then drops out after a couple of seconds</h2>
 <p>
-  Common on the KS-C2, and the pad does tell you why — within the same second, every time.
-  Three causes, in the order worth checking:
+  That's certain KingSmith pads — the KS-C2 and its relatives — behaving exactly as
+  designed. They hang up on anything that connects and then just listens, within about
+  three seconds. It isn't a fault, and it isn't a range problem.
+</p>
+<p>
+  Belt Control knows the greeting those pads expect, so it shouldn't happen here. If you're
+  seeing it with some other tool, that's why.
+</p>
+
+<h2>It connects, but the belt won't start</h2>
+<p>
+  Common on the KS-C2, and the pad does tell us why. Three things to check, in order:
 </p>
 <ul>
-  <li><strong>The child lock is on.</strong> The pad reports the lock state, and when a
-    refused start arrives from a pad that has reported the lock engaged, the app says so
-    rather than giving generic advice. Clear it at the panel.</li>
-  <li><strong>The pad's own panel still has control.</strong> Stopping hands control back
-    to the panel, and in panel mode a start command is accepted and then ignored — the
-    belt simply does not move. The app re-asserts control on every start for this reason.</li>
-  <li><strong>The pad just refuses.</strong> On a real KS-C2 a start is sometimes rejected
-    twice and taken on the third attempt, with nothing observable different about the third.
-    The app retries a refused start up to three times — only while it is still reporting
-    "starting", never after it has reported failure, and never once a stop, pause or
-    disconnect has arrived. A belt that lurches into motion long after the app said it
-    never moved is precisely what a retry must not become.</li>
+  <li><strong>The child lock is on.</strong> The pad reports this, and when it does, the
+    app says so instead of giving you generic advice. Turn it off at the panel.</li>
+  <li><strong>The treadmill's own panel still has control.</strong> After a stop, control
+    goes back to the pad itself, and in that state it accepts a start command and then
+    ignores it — the belt just doesn't move. The app takes control back on every start for
+    exactly this reason.</li>
+  <li><strong>The pad just refuses, for no visible reason.</strong> On a real KS-C2 a start
+    is sometimes turned down twice and accepted on the third try, with nothing different
+    about the third. The app retries a refused start up to three times — only while it's
+    still saying "starting", and never once you've pressed stop or disconnected. A belt
+    that lurches into motion long after the app gave up, when you've already stepped off,
+    is exactly what a retry must never become.</li>
 </ul>
 <p>
-  Also worth a look at the pad's own display: an E-code there is a hardware complaint, and
-  no app can talk it out of one.
+  Also worth a glance at the treadmill's own display: an error code there is a hardware
+  complaint, and no app can talk it out of one.
 </p>
 
 <h2>The numbers look wrong</h2>
 <p>
-  Some of them are, and the app tries to be honest about which. Steps are absent on FTMS
-  units because the standard carries no step count. Calories are absent on classic
-  <code>fe00</code> pads. On the <code>0x1234</code> family calories are derived from
-  distance at a flat rate rather than measured, so they are flagged and left out of totals.
+  Some of them are, and the app tries to be straight with you about which. Many newer pads
+  don't count steps at all. Many older ones don't report calories. And where calories are
+  a rough guess calculated from distance rather than a real measurement, the app marks
+  them and keeps them out of your totals.
 </p>
 <p>
-  Distance on a <code>0x1234</code> pad is pushed roughly every ten metres, so a short walk
-  reads zero for a while before jumping. That is the pad's reporting interval, not a
-  stalled connection.
+  On the KS-C2 and its relatives, distance only updates every ten metres or so, so a short
+  walk sits at zero for a while and then jumps. That's the treadmill's reporting pace, not
+  a stalled connection.
 </p>
 <p>
-  Anywhere a field is missing you get an em dash. A dashboard that invents a number to
-  avoid an empty cell is worse than one that admits it does not know.
+  Wherever a number is missing you'll see a dash. An app that invents a number to avoid an
+  empty space is worse than one that admits it doesn't know.
 </p>
 
-<h2>It worked yesterday and today the pad is not offered</h2>
+<h2>It worked yesterday, and today my pad isn't offered</h2>
 <p>
-  Web Bluetooth grants access per device, per origin, through a gesture you make in the
-  chooser — a permission the browser will not hand over any other way. Belt Control
-  remembers the last pad's name and pre-filters the chooser to it, so reconnecting is one
-  click on a one-item list, but the chooser still has to open. That is the browser's rule,
-  not the app's, and it is a reasonable one for an API that can start a motor.
+  Your browser grants access to one device at a time, and only when you pick it from that
+  list yourself — it won't hand it over any other way. Belt Control remembers your last
+  treadmill and filters the list down to just that one, so reconnecting is a single click,
+  but the list still has to open.
+</p>
+<p>
+  That's your browser's rule rather than ours, and it's a reasonable one for something that
+  can start a motor.
 </p>
 
 <div class="cta">
-  <p><strong>Still stuck?</strong> The connection log names every service the app looked
-  for and what it found, and <strong>Send feedback</strong> attaches it to a mail. That log
-  is the capture — it is how an undecoded pad gets decoded.</p>
+  <p><strong>Still stuck?</strong> The app keeps a record of what it tried and what your
+  treadmill said back, and <strong>Send feedback</strong> attaches it to an email. That
+  record is the useful part — it's how a pad nobody has seen before gets supported.</p>
   <p><a class="btn" href="/">Open Belt Control</a></p>
 </div>
 
@@ -149,8 +153,7 @@
     <li><a href="/">The app</a></li>
     <li><a href="/compatible-treadmills">Compatible treadmills</a></li>
     <li><a href="/walkingpad-without-the-app">Without the KS+Fit app</a></li>
-    <li><a href="/walkingpad-on-iphone">On iPhone</a></li>
-    <li><a href="/walkingpad-bluetooth-protocol">The protocols</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">How it works, technically</a></li>
     <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
   </ul>
   <p class="fine">

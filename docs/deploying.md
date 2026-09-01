@@ -104,7 +104,7 @@ either.
 
 ## The written pages
 
-Five ordinary HTML files live in `public/`, copied to `dist/` verbatim and served as
+Four ordinary HTML files live in `public/`, copied to `dist/` verbatim and served as
 themselves:
 
 | Path | What it answers |
@@ -112,11 +112,10 @@ themselves:
 | `/compatible-treadmills` | Will it work with my pad, and which numbers will it show |
 | `/walkingpad-without-the-app` | What you give up by not installing KS+Fit, and what you don't |
 | `/troubleshooting` | Why the chooser is empty, why a start is refused, why the link drops |
-| `/walkingpad-on-iphone` | Why no iPhone can run this, and what is left |
-| `/walkingpad-bluetooth-protocol` | The four BLE protocols, frame by frame |
+| `/walkingpad-bluetooth-protocol` | The four BLE protocols, frame by frame — the one page written for developers |
 
-They exist because a hash-routed app is one URL, and one URL cannot answer five different
-questions to five different people arriving from five different searches. Every answer on
+They exist because a hash-routed app is one URL, and one URL cannot answer four different
+questions to four different people arriving from four different searches. Every answer on
 them was already written down — in the README, in `docs/protocols.md`, in the code
 comments — just not anywhere a crawler could reach it.
 
@@ -141,7 +140,8 @@ cache header, an entry in `sitemap.xml`, and a link to it from somewhere — the
 in `index.html` and the footer of each existing page. A page nothing links to is a page
 nothing finds.
 
-The two `vercel.json` edits are spelled differently on purpose. The rewrite's negative
+Register the slug in the header's flat list too — there is no prefix shortcut there. The
+two `vercel.json` edits are spelled differently on purpose. The rewrite's negative
 lookahead takes a `walkingpad-` prefix, but the header's `source` cannot: Vercel parses it
 as a path pattern rather than a regex, and rejects a nested group — `walkingpad-(.*)`
 inside an alternation fails the deployment outright with *invalid `source` pattern*. So the
