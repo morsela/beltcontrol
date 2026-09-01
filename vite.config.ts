@@ -77,7 +77,14 @@ function stampSitemap(): Plugin {
       const sitemap = join('dist', 'sitemap.xml');
       try {
         const src = await readFile(sitemap, 'utf8');
-        await writeFile(sitemap, src.replaceAll('__LASTMOD__', date));
+        // Only inside the element. A bare replaceAll also rewrote the placeholder where
+        // the file's own comment names it, which left the deployed sitemap explaining
+        // that "2026-08-31 is stamped with the last commit date" — the one copy of the
+        // explanation anybody reads is the deployed one.
+        await writeFile(
+          sitemap,
+          src.replaceAll('<lastmod>__LASTMOD__</lastmod>', `<lastmod>${date}</lastmod>`)
+        );
       } catch {
         /* no sitemap in this build */
       }
