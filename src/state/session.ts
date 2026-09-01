@@ -23,6 +23,9 @@ const IDLE_END_MS = 60_000;
 const PAUSE_HOLD_MS = 15 * 60_000;
 /** Anything shorter than this is noise (a nudged belt, a mis-tap). */
 const MIN_SESSION_MS = 30_000;
+/** Past this, an in-flight record found in storage is somebody's old walk rather than
+ *  the one they are on — the tab it belonged to is long gone. File it, do not resume it. */
+const STALE_OPEN_MS = 12 * 3600_000;
 /** One sample per this interval feeds the session speed chart. */
 const SAMPLE_EVERY_MS = 10_000;
 /** ~2 hours of samples. Beyond that we stop growing the array. */
@@ -249,9 +252,17 @@ export function restoreOpenSession() {
       return;
     }
     // A stale open session from days ago should be filed, not resumed.
-    if (Date.now() - s.startedAt > 12 * 3600_000) {
-      finalise(s);
-      localStorage.removeItem(OPEN_KEY);
+    if (Date.now() - s.startedAt > STALE_OPEN_MS) {
+      // Through `closeSession`, not `finalise`, for two things that path knows and this
+      // one did not. It applies the 30 s floor, so a scrap left open by a tab that closed
+      // seconds after the belt nudged is discarded rather than filed as a walk. And the
+      // end time is stamped here rather than left to `finalise`, which defaults it to
+      // *now* — a walk abandoned on Tuesday was being filed as one that ran until Friday,
+      // an eleven-hour span in the history and a day's worth of it on the wrong day.
+      // `startedAt + activeMs` is the one end the record can vouch for: it is where the
+      // belt's own moving time puts it, and it can never reach past the present.
+      currentSession.value = { ...s, endedAt: s.startedAt + s.activeMs };
+      closeSession('ended (recovered from a tab that did not close it)');
       return;
     }
     currentSession.value = s;

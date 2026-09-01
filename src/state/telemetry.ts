@@ -1,4 +1,4 @@
-import { signal, computed } from '@preact/signals';
+import { signal, computed, batch } from '@preact/signals';
 import type { DriverId, Telemetry } from '../lib/drivers.js';
 
 /**
@@ -61,10 +61,19 @@ export const lastFrameAt = signal<number | null>(null);
  * The 0x1234 pad sends partial frames, and drivers.js strips null keys before
  * emitting, so assigning the incoming object wholesale would blank every field the
  * frame happened not to carry.
+ *
+ * Batched, because a frame is one event and has to reach subscribers as one. Written
+ * as two bare assignments, the first of them notified everything derived from `live`
+ * while `lastFrameAt` still held the *previous* frame's timestamp — so an effect that
+ * woke on a speed change and then asked how old the reading was got the answer for the
+ * frame before it. The self-stop watcher in state/connection.ts is exactly that
+ * effect, and that staleness is what its guard is there to catch.
  */
 export function ingest(patch: Partial<Telemetry>) {
-  live.value = { ...live.value, ...patch };
-  lastFrameAt.value = Date.now();
+  batch(() => {
+    live.value = { ...live.value, ...patch };
+    lastFrameAt.value = Date.now();
+  });
 }
 
 export function resetTelemetry() {

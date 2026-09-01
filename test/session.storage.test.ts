@@ -103,6 +103,36 @@ describe('reading sessions back out of storage', () => {
     expect(localStorage.getItem(OPEN_KEY)).toBeNull();
   });
 
+  it('files a stale in-flight session at an end it can vouch for', async () => {
+    // Three days old. `finalise` would have stamped the end as *now*, filing a walk
+    // abandoned on Tuesday as one that ran until Friday.
+    const started = Date.now() - 3 * 24 * 3600_000;
+    const { restoreOpenSession, currentSession, sessions } = await freshStore(
+      { id: 'stale', startedAt: started, activeMs: 20 * 60_000, protocol: 'classic' },
+      OPEN_KEY
+    );
+    restoreOpenSession();
+
+    expect(currentSession.value).toBeNull();
+    expect(localStorage.getItem(OPEN_KEY)).toBeNull();
+    expect(sessions.value).toHaveLength(1);
+    expect(sessions.value[0]?.endedAt).toBe(started + 20 * 60_000);
+  });
+
+  it('discards a stale scrap rather than filing it as a walk', async () => {
+    const started = Date.now() - 3 * 24 * 3600_000;
+    const { restoreOpenSession, sessions } = await freshStore(
+      { id: 'scrap', startedAt: started, activeMs: 4_000, protocol: 'classic' },
+      OPEN_KEY
+    );
+    restoreOpenSession();
+
+    // Under the 30 s floor every other session is held to. Filing it was the only way
+    // a sub-floor walk could reach the history.
+    expect(sessions.value).toEqual([]);
+    expect(localStorage.getItem(OPEN_KEY)).toBeNull();
+  });
+
   it('leaves a session already in flight alone', async () => {
     // Called at startup and again when a driver is wired, so it meets a live session
     // whenever somebody connects mid-walk. The stored copy is a checkpoint of that same

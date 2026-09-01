@@ -325,6 +325,20 @@ describe('a belt that stops itself', () => {
     expect(running.value).toBe(false);
   });
 
+  it('still calls it stopped when the pad keeps streaming zero', () => {
+    // The grace period used to be armed inside an effect that depended on the frame
+    // timestamp, so every arriving frame tore the pending timer down and started a new
+    // one. A pad that notifies is the normal case, not the exception — FTMS pushes about
+    // once a second — so the three seconds never elapsed and this whole watcher was dead
+    // on exactly the protocol that has no resting state code to fall back on.
+    for (let i = 0; i < 20; i++) {
+      ingest({ speedKmh: 0 });
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(running.value).toBe(false);
+    expect(status.value.text).toMatch(/stopped on its own/);
+  });
+
   it('lets the belt pick back up inside that grace period', () => {
     ingest({ speedKmh: 0 });
     vi.advanceTimersByTime(2_000);

@@ -4,13 +4,14 @@ import {
   exportJson,
   importBackup,
   sanitizeSession,
+  sanitizeSettings,
   BackupError,
   BACKUP_SCHEMA,
 } from '../src/state/backup.js';
 import { sessions, currentSession, mergeSessions, MAX_SAMPLES, type Session } from '../src/state/session.js';
 import { settings, updateSettings } from '../src/state/settings.js';
 import { trustFor } from '../src/state/telemetry.js';
-import type { DriverId } from '../src/lib/drivers.js';
+import { HARD_MAX_KMH, HARD_MIN_KMH, type DriverId } from '../src/lib/drivers.js';
 
 const HOUR = 3_600_000;
 
@@ -234,5 +235,53 @@ describe('mergeSessions', () => {
   it('persists, so a restored history survives the reload', () => {
     mergeSessions([session({ protocol: 'classic', id: 'kept' })]);
     expect(localStorage.getItem('wp.sessions.v1')).toContain('kept');
+  });
+});
+
+/**
+ * Settings are read back from localStorage on every load, not only imported from a file,
+ * and `targetKmh` is not a number on a screen — it is the speed written to a treadmill.
+ * Read back with a bare cast, a value from a truncated write became NaN, survived the
+ * clamp in the connect path (`Math.min(Math.max(NaN, …))` is NaN) and went out on the
+ * wire. Hence one guard, next to the store, used by both readers.
+ */
+describe('sanitizeSettings', () => {
+  it('drops a target speed that is not a number', () => {
+    expect(sanitizeSettings({ targetKmh: 'fast' })).toEqual({});
+    expect(sanitizeSettings({ targetKmh: null })).toEqual({});
+    expect(sanitizeSettings({ targetKmh: Number.NaN })).toEqual({});
+  });
+
+  it('holds a stored target to the app speed envelope', () => {
+    expect(sanitizeSettings({ targetKmh: 600 }).targetKmh).toBe(HARD_MAX_KMH);
+    expect(sanitizeSettings({ targetKmh: 0.1 }).targetKmh).toBe(HARD_MIN_KMH);
+    expect(sanitizeSettings({ targetKmh: 3.2 }).targetKmh).toBe(3.2);
+  });
+
+  it('refuses a goal that would make every ratio meaningless', () => {
+    expect(sanitizeSettings({ goalMinutes: 0 })).toEqual({});
+    expect(sanitizeSettings({ goalMinutes: -5 })).toEqual({});
+    expect(sanitizeSettings({ goalMinutes: 45.4 }).goalMinutes).toBe(45);
+  });
+
+  it('keeps a remembered pad, and keeps the absence of one', () => {
+    expect(sanitizeSettings({ lastDeviceName: 'KS-C2' }).lastDeviceName).toBe('KS-C2');
+    expect(sanitizeSettings({ lastDeviceName: null }).lastDeviceName).toBe(null);
+    // Absent is not the same as null: a file that never mentioned it leaves the
+    // current value alone rather than forgetting the pad.
+    expect('lastDeviceName' in sanitizeSettings({ goalMinutes: 30 })).toBe(false);
+    expect(sanitizeSettings({ lastDeviceName: 42 })).toEqual({});
+  });
+
+  it('returns nothing at all for something that is not an object', () => {
+    expect(sanitizeSettings(null)).toEqual({});
+    expect(sanitizeSettings('{}')).toEqual({});
+    expect(sanitizeSettings([1, 2])).toEqual({});
+  });
+
+  it('keeps the valid half of a partly corrupt record', () => {
+    expect(sanitizeSettings({ goalMinutes: 30, heroMetric: 'nonsense', targetKmh: 'x' })).toEqual({
+      goalMinutes: 30,
+    });
   });
 });
