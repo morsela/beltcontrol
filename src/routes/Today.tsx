@@ -87,8 +87,8 @@ export function Today() {
         {day.excluded > 0 && (
           <p class="note" style="margin-top:.9rem">
             {day.excluded} session{day.excluded === 1 ? '' : 's'} excluded from the
-            distance total: that protocol reports distance on a scale this project has
-            not established, so summing it would invent a number.
+            distance total: recorded on a protocol whose distance scale this project had
+            not established at the time, so summing it would invent a number.
           </p>
         )}
       </div>
