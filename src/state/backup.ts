@@ -12,7 +12,7 @@
  * and drops what it cannot vouch for, rather than casting and hoping.
  */
 import { sessions, mergeSessions, sanitizeSession, type Session } from './session.js';
-import { settings, updateSettings, type Settings } from './settings.js';
+import { settings, updateSettings, sanitizeSettings, type Settings } from './settings.js';
 
 export const BACKUP_SCHEMA = 'walkingpad.backup.v1';
 
@@ -20,6 +20,10 @@ export const BACKUP_SCHEMA = 'walkingpad.backup.v1';
 // goes through it, not just the import path. Re-exported because a backup file is the
 // other thing it validates, and callers here expect to find it.
 export { sanitizeSession } from './session.js';
+// And `sanitizeSettings` for the same reason it moved: settings are read back from
+// localStorage on every load, not only imported from a file, so the guard belongs beside
+// the store rather than in the import path that was merely the first to need it.
+export { sanitizeSettings } from './settings.js';
 
 export interface Backup {
   schema: typeof BACKUP_SCHEMA;
@@ -60,33 +64,8 @@ export function exportJson(at = Date.now()): string {
 
 // --- validation ------------------------------------------------------------
 
-const HERO_METRICS: readonly Settings['heroMetric'][] = ['time', 'distance', 'steps', 'kcal'];
-
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
-
-/** Only the keys that survive validation are applied, so a backup missing half its
- *  settings leaves the rest of the current ones alone. */
-function sanitizeSettings(v: unknown): Partial<Settings> {
-  if (!isObj(v)) return {};
-  const out: Partial<Settings> = {};
-  if (typeof v.goalMinutes === 'number' && Number.isFinite(v.goalMinutes) && v.goalMinutes > 0) {
-    out.goalMinutes = Math.round(v.goalMinutes);
-  }
-  if (Array.isArray(v.presetsMph)) {
-    const presets = v.presetsMph.filter(
-      (p): p is number => typeof p === 'number' && Number.isFinite(p) && p > 0
-    );
-    if (presets.length > 0) out.presetsMph = presets;
-  }
-  if (typeof v.heroMetric === 'string' && (HERO_METRICS as readonly string[]).includes(v.heroMetric)) {
-    out.heroMetric = v.heroMetric as Settings['heroMetric'];
-  }
-  if (typeof v.targetKmh === 'number' && Number.isFinite(v.targetKmh) && v.targetKmh > 0) {
-    out.targetKmh = v.targetKmh;
-  }
-  return out;
-}
 
 // --- import ----------------------------------------------------------------
 

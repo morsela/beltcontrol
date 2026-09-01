@@ -125,8 +125,9 @@ function LifetimeCard() {
         t.excluded > 0 && (
           <p class="note" style="margin-top:.4rem">
             {t.excluded} walk{t.excluded === 1 ? ' is' : 's are'} left out of this
-            distance — the KingSmith 0x1234 protocol reports it on a scale nobody
-            established, so those numbers are kept raw rather than summed as miles.
+            distance — recorded on a protocol whose distance scale this project had not
+            established at the time, so those numbers are kept raw rather than summed as
+            miles.
           </p>
         )
       )}

@@ -45,13 +45,12 @@ export function App() {
   const r = route.value;
   const desktop = isDesktop.value;
 
-  if (error) return <Recovery error={error} onRetry={resetError} />;
-
-  const enterAmbient = () => {
-    trackEvent('ambient_entered');
-    setAmbient(true);
-  };
-
+  // Both effects sit above every early return below, because a hook that some renders
+  // reach and others do not is a hook whose slot moves. Preact identifies them by call
+  // order, so the render that shows `Recovery` was running three of the five and leaving
+  // the last two holding state from the render before it — which happened to work, and
+  // is the kind of thing that stops working quietly.
+  //
   // Ambient mode is only meaningful while something is actually connected.
   useEffect(() => {
     if (ambient && !connected.value) setAmbient(false);
@@ -61,9 +60,21 @@ export function App() {
   // rewritten rather than left pointing at a page with no nav entry — a nav where
   // nothing is current cannot tell you where you are. `replace`, not `assign`, so
   // Back does not bounce through it.
+  //
+  // Not while `Recovery` is up: it renders no rail and no nav, so there is no wrong
+  // place for the URL to be pointing, and rewriting the hash under a crashed app only
+  // makes the reload that follows land somewhere the user did not leave it.
   useEffect(() => {
-    if (desktop && r === 'now') location.replace('#/today');
-  }, [desktop, r]);
+    if (error || !desktop || r !== 'now') return;
+    location.replace('#/today');
+  }, [error, desktop, r]);
+
+  if (error) return <Recovery error={error} onRetry={resetError} />;
+
+  const enterAmbient = () => {
+    trackEvent('ambient_entered');
+    setAmbient(true);
+  };
 
   if (ambient) return <AmbientView onExit={() => setAmbient(false)} />;
 

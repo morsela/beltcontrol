@@ -233,6 +233,9 @@ export async function connect({ filtered, name }: { filtered: boolean; name?: st
     fail(err?.name === 'NotFoundError' ? new Error(`GATT lookup failed: ${err.message}`) : e);
     trackEvent('connect_failed', { reason: errName(err) });
     await teardown();
+    // The link survives everything above it: `teardown` unwinds the driver, and on this
+    // path there may never have been one. Left open, the pad stays bound to this tab.
+    releaseDevice();
   }
 }
 
@@ -302,6 +305,29 @@ function stopPolling() {
   pollTimer = null;
 }
 
+/**
+ * Hand the pad back to the radio: drop the browser's GATT link and stop watching it.
+ *
+ * Separate from `teardown`, which unwinds the driver, the poll timer and the session. A
+ * connect that fell over before a driver existed — an unrecognised GATT table, a
+ * characteristic that is not there — has none of that to unwind, but it does hold an open
+ * link, and a pad still connected to this tab is a pad the vendor's own app cannot reach
+ * until the tab is closed.
+ *
+ * The listener comes off first on purpose: `gatt.disconnect()` fires
+ * `gattserverdisconnected`, and `onDisconnected` would overwrite the error that is being
+ * reported with its own, and re-enter teardown behind it.
+ */
+function releaseDevice() {
+  device?.removeEventListener('gattserverdisconnected', onDisconnected);
+  try {
+    if (device?.gatt?.connected) device.gatt.disconnect();
+  } catch {
+    /* already gone */
+  }
+  device = null;
+}
+
 async function teardown() {
   stopPolling();
   clearStopWatch();
@@ -337,9 +363,7 @@ export async function disconnect() {
   } catch {
     /* ignore */
   }
-  device?.removeEventListener('gattserverdisconnected', onDisconnected);
-  if (device?.gatt?.connected) device.gatt.disconnect();
-  device = null;
+  releaseDevice();
   deviceName.value = null;
   phase.value = 'idle';
   await teardown();
@@ -747,16 +771,33 @@ let askedToMoveAt = 0;
  * and that last frame is still the newest one when `running` goes up. Read as evidence it
  * would cancel every start on arrival. Only what the belt has said *since* being asked to
  * move counts.
+ *
+ * That last guard is a `peek`, and the grace period below is why. Read as a dependency,
+ * every arriving frame re-ran this effect, and the re-run tore down the pending timer and
+ * started a fresh one — so on a pad that streams (FTMS notifies about once a second) the
+ * three seconds never elapsed and a belt that stopped itself was never noticed at all:
+ * Stop pinned over a stationary belt with no way back to Start, which is the exact failure
+ * this watcher exists to end. Nothing is lost by not subscribing: the timestamp is only
+ * ever read to date the reading the *other* guards woke on, and `ingest` publishes the
+ * frame in one batch so it is current by the time they do.
+ *
+ * Which is also why it is read last. An effect depends on the signals it actually
+ * reaches, so a guard that returns ahead of one silently drops it: with the `peek` read
+ * first, a pass that bailed on the frame age never reached `confirmedStopped`, and so
+ * never woke again when the belt finally reported zero. Everything this subscribes to is
+ * read before anything can return.
  */
 effect(() => {
   if (!running.value || startPending.value || stopPending.value) return;
-  if ((lastFrameAt.value ?? 0) <= askedToMoveAt) return;
   if (!confirmedStopped.value) return;
-
   // A named resting state is the pad saying it outright, so it is taken at once. Bare
   // zero speed is the same claim from a protocol that cannot name states, and gets the
   // grace period instead.
-  if (beltReportsRest.value) {
+  const saysResting = beltReportsRest.value;
+
+  if ((lastFrameAt.peek() ?? 0) <= askedToMoveAt) return;
+
+  if (saysResting) {
     selfStopped();
     return;
   }
