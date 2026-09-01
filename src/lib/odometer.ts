@@ -39,9 +39,11 @@ export interface Headline {
  *
  * Miles, when any stored session came from a protocol that reports distance in real
  * units. Hours otherwise — and that fallback is the point rather than a nicety. A
- * history made entirely of `0x1234` walks has no distance the app can place on a
- * scale, and a lifetime odometer reading `0.0 mi` over hundreds of walks would be the
- * exact failure [Field trust](../../docs/design.md#field-trust) exists to prevent.
+ * history made entirely of FitShow walks, which carry no distance at all, or of
+ * `0x1234` walks recorded before that pad's counter was confirmed to be metres, has no
+ * distance the app can place on a scale; a lifetime odometer reading `0.0 mi` over
+ * hundreds of walks would be the exact failure
+ * [Field trust](../../docs/design.md#field-trust) exists to prevent.
  * Time is measured here, from the wall clock, and needs no cooperation from any pad,
  * so it is the one total that is always honest.
  */
