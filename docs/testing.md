@@ -4,7 +4,27 @@
 npm test                # vitest, one pass
 npm run test:watch
 npm run check           # tsc --noEmit over src and test
+npm run lint            # oxlint
 ```
+
+All four run on every pull request, in that order — see `.github/workflows/test.yml`.
+
+## The linter
+
+`oxlint`, configured in `.oxlintrc.json`, and deliberately a narrow one: its `correctness`
+category, plus `react-hooks/rules-of-hooks`. That last rule is the reason the linter is
+here at all — a hook called after an early return is invisible to the typechecker and to
+the tests, works right up until a hook is added above it, and had already happened once in
+`app.tsx`.
+
+What is turned *off* matters as much. `react/immutability` and `react/purity` are the React
+Compiler's rules and this is Preact with no compiler: refs are mutated on purpose here, and
+`Date.now()` during render is how Today knows what day it is. `react/react-in-jsx-scope`
+predates the automatic runtime. `react-hooks/exhaustive-deps` cannot see signals, so it
+reads `connected.value` in a dependency array as a mistake when it is the point.
+
+oxlint rather than ESLint because it is a single binary with no plugin tree behind it,
+which keeps `npm ci` close to the handful of packages this project has always installed.
 
 The suite is unit-level and needs neither a treadmill nor a browser. It runs in jsdom because
 `src/state/session.ts` touches `localStorage` and `window.setInterval` at import time, and the

@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 8080",
     "check": "tsc --noEmit",
+    "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -21,6 +22,7 @@
     "@types/node": "^22.20.1",
     "@types/web-bluetooth": "^0.0.21",
     "jsdom": "^25.0.1",
+    "oxlint": "^1.81.0",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

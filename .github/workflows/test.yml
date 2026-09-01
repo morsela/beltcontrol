@@ -38,4 +38,19 @@ jobs:
       # resolves different dependencies than the developer has is not a gate.
       - run: npm ci
 
+      # Ordered cheapest-first, so an obvious break reports in seconds rather than
+      # after a minute of jsdom. All four run in one job on purpose: they are one
+      # question — is this branch fit to merge — and splitting them would multiply
+      # the required status checks the branch protection has to name.
+      - run: npm run lint
+
+      # The typecheck was only ever reached through `npm run build`, which CI did not
+      # run — so a type error was caught by the deploy rather than by the pull request.
+      - run: npm run check
+
       - run: npm test
+
+      # And the build itself: `check` covers its `tsc` half, so what this adds is the
+      # bundling — a broken import or a plugin that throws at build time is a failure
+      # that belongs to the branch, not to whoever deploys it next.
+      - run: npm run build

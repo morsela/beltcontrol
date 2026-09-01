@@ -1,0 +1,13 @@
+{
+  "plugins": ["react"],
+  "categories": { "correctness": "error" },
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+
+    "react-hooks/exhaustive-deps": "off",
+    "react/immutability": "off",
+    "react/purity": "off",
+    "react/react-in-jsx-scope": "off",
+    "react/style-prop-object": "off"
+  }
+}
