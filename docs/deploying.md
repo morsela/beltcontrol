@@ -30,9 +30,11 @@ lives here instead.
 | `Permissions-Policy: bluetooth=(self)` | Keeps the radio available to this origin and nothing it embeds. |
 | `Strict-Transport-Security` | Web Bluetooth needs a secure context; this makes downgrade to plain HTTP a non-option. `.com` is not HSTS-preloaded by the registry, so this header is the only thing enforcing it. |
 | `X-Content-Type-Options`, `Referrer-Policy` | Ordinary hardening. Nothing here is sensitive, but nothing here needs a referrer either. |
+| the written pages and `content.css` → `max-age=0, must-revalidate` | Same reasoning as the shell. None of them is fingerprinted, so a cached copy is a correction that never lands. |
 | `robots.txt`, `sitemap.xml` → `max-age=3600` | Crawlers re-read them often; an hour is short enough to fix a mistake and long enough to matter. |
 | icons and `og.png` → `max-age=604800` | Unfingerprinted but near-immutable. A week means a redesign lands within a week rather than never. |
-| `rewrites` → `/index.html` | Hash routing means the server only ever needs to serve the shell; the negative lookahead keeps real files (assets, icons, the manifest) being served as themselves. |
+| `rewrites` → `/index.html` | Hash routing means the server only ever needs to serve the shell; the negative lookahead keeps real files (assets, icons, the manifest) being served as themselves — and now the written pages too, which are extensionless paths the old lookahead would have swallowed. |
+| `trailingSlash: false` | The written pages are `dist/<slug>/index.html`, which Vercel serves at both `/slug` and `/slug/`. Two URLs for one page is a duplicate a canonical tag has to clean up after; this makes the server pick one and redirect the other. |
 
 ## The Content-Security-Policy
 
@@ -100,6 +102,52 @@ either.
   `<title>` — which is also what the crawlers behind the AI assistants see, and they are now
   a real way people find a tool like this.
 
+## The written pages
+
+Four ordinary HTML files live in `public/`, copied to `dist/` verbatim and served as
+themselves:
+
+| Path | What it answers |
+|---|---|
+| `/compatible-treadmills` | Will it work with my pad, and which numbers will it show |
+| `/walkingpad-without-the-app` | What you give up by not installing KS+Fit, and what you don't |
+| `/troubleshooting` | Why the chooser is empty, why a start is refused, why the link drops |
+| `/walkingpad-bluetooth-protocol` | The four BLE protocols, frame by frame — the one page written for developers |
+
+They exist because a hash-routed app is one URL, and one URL cannot answer four different
+questions to four different people arriving from four different searches. Every answer on
+them was already written down — in the README, in `docs/protocols.md`, in the code
+comments — just not anywhere a crawler could reach it.
+
+Three things about how they are built:
+
+- **They never load the app bundle.** A page that answers "will this work with my C2"
+  should not ship a treadmill controller to render one table. They link to `/content.css`
+  instead, which is a copy of `tokens.css`'s palette as literals — the two are kept in step
+  by hand, because `tokens.css` is bundled into the app's hashed stylesheet and cannot be
+  linked from a plain HTML file. If a colour moves there, move it here.
+- **They carry no script at all**, which keeps them inside the CSP without any widening,
+  and keeps them readable to a crawler that does not run JavaScript.
+- **The rewrite has to let them through.** The negative lookahead in `vercel.json` now
+  excludes their slugs by prefix (`walkingpad-` covers three of them). Vercel checks the
+  filesystem before applying rewrites, so a real file would most likely win regardless, but
+  naming the exclusions removes the dependency on that ordering — and makes the next person
+  adding a page notice that there is something to update.
+
+Adding a page means five edits, and the last is the one that gets forgotten: the file
+itself, the slug in the `vercel.json` rewrite lookahead, the slug again in the `vercel.json`
+cache header, an entry in `sitemap.xml`, and a link to it from somewhere — the static intro
+in `index.html` and the footer of each existing page. A page nothing links to is a page
+nothing finds.
+
+Register the slug in the header's flat list too — there is no prefix shortcut there. The
+two `vercel.json` edits are spelled differently on purpose. The rewrite's negative
+lookahead takes a `walkingpad-` prefix, but the header's `source` cannot: Vercel parses it
+as a path pattern rather than a regex, and rejects a nested group — `walkingpad-(.*)`
+inside an alternation fails the deployment outright with *invalid `source` pattern*. So the
+header lists every slug flat, in the same shape as the `index.html|sw.js|…` entry above it.
+Nothing in a local build catches this; only a deploy does.
+
 ## What is not in the repository
 
 Two things that matter to search live outside it, and neither can be committed:
@@ -109,9 +157,8 @@ Two things that matter to search live outside it, and neither can be committed:
   the sitemap and request indexing for the new pages. Nothing here ranks until it is
   indexed, and impressions per query is the only honest signal for the first couple of
   months — clicks lag it badly on a new domain.
-- **Anything pointing at the domain.** All this repository can do is make the site
-  rankable; none of it makes the site rank. That is links, and links come from the places
-  the audience already is.
+- **Anything pointing at the domain.** The pages above make the site rankable; they do not
+  make it rank. That is links, and links come from the places the audience already is.
 
 ## The domain
 

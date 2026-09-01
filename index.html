@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <title>Control a WalkingPad From Your Browser — Belt Control</title>
-<meta name="description" content="Independent web app that starts, stops and sets the speed of a KingSmith or WalkingPad treadmill from Chrome over Web Bluetooth — no phone app, no account.">
+<meta name="description" content="Start, stop and set the speed of a KingSmith or WalkingPad treadmill from a browser tab, over Bluetooth. No phone app, no account, nothing to install.">
 <link rel="canonical" href="https://beltcontrol.com/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 
@@ -15,7 +15,7 @@
 <meta property="og:site_name" content="Belt Control">
 <meta property="og:url" content="https://beltcontrol.com/">
 <meta property="og:title" content="Control a WalkingPad From Your Browser — Belt Control">
-<meta property="og:description" content="Start, stop and set speed over Web Bluetooth, straight from the browser. Live telemetry and a private session history that never leaves your device.">
+<meta property="og:description" content="Start, stop and set the speed of your treadmill straight from a browser tab. Live numbers as you walk, and a history that stays on your own device.">
 <meta property="og:image" content="https://beltcontrol.com/og.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
@@ -46,16 +46,16 @@
   "applicationSubCategory": "Treadmill control",
   "operatingSystem": "Any (runs in the browser)",
   "browserRequirements": "Requires Web Bluetooth: Chrome 56+, Edge, Opera or Samsung Internet. Firefox and Safari are not supported.",
-  "description": "An independent web app that connects to a treadmill speaking the KingSmith / WalkingPad Bluetooth protocols to start it, stop it, set speed, read live telemetry and keep a private history of every walk.",
+  "description": "An independent web app that connects to a KingSmith or WalkingPad treadmill over Bluetooth to start it, stop it, set the speed, show live distance, steps and calories, and keep a private history of every walk on your own device.",
   "disambiguatingDescription": "Not affiliated with, endorsed by, or sponsored by Beijing KingSmith Technology Co., Ltd. WalkingPad and KingSmith are their trademarks, used here only to identify compatible treadmills.",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "featureList": [
-    "Start, stop and set treadmill speed over Web Bluetooth",
-    "Live speed, distance, steps and calorie telemetry",
-    "Automatic session detection and daily totals",
+    "Start, stop and set treadmill speed from a browser, over Bluetooth",
+    "Live speed, distance, steps and calories as you walk",
+    "Walks recorded automatically, with daily totals",
     "30-day history, goal tracking and a consistency heatmap",
-    "JSON backup and CSV export, stored only in the browser"
+    "Backup and spreadsheet export, stored only on your own device"
   ],
   "softwareHelp": "https://github.com/morsela/beltcontrol#readme",
   "codeRepository": "https://github.com/morsela/beltcontrol",
@@ -97,34 +97,38 @@
 <div id="intro" class="pre">
   <h1>Control a WalkingPad from your browser</h1>
   <p class="lede">
-    Belt Control starts, stops and paces a KingSmith or WalkingPad treadmill over Web
-    Bluetooth. No phone app, no account, nothing to install.
+    Start, stop and set the speed of a KingSmith or WalkingPad treadmill from a browser
+    tab. No phone app, no account, nothing to install.
   </p>
   <p>
-    Open it in Chrome or Edge, press Connect, and the page talks to the treadmill
-    directly over the local radio — set the speed, watch live distance, steps and
-    calories, and keep a private history of every walk. The link is browser to
-    treadmill; the server only ships static files and never sees any of it. History
-    lives in this browser and is never uploaded.
+    Open it in Chrome or Edge and press Connect. Your browser talks to the treadmill over
+    Bluetooth, the same way it would to a pair of headphones — set the speed, watch your
+    distance, steps and calories as you walk, and keep a record of every session. Nothing
+    is sent anywhere: your walks are saved on your own device and never uploaded.
   </p>
 
   <h2>Which treadmills work</h2>
   <p>
-    The app probes the treadmill on connect and picks a protocol itself, so what matters
-    is what your unit speaks rather than what it is called:
+    Most of them. Belt Control doesn't go by model name — it asks your treadmill what it
+    can do when you connect, and adapts to the answer:
   </p>
   <ul>
-    <li><b>Classic <code>fe00</code></b> — A1, A1 Pro, C1, C2, P1, R1/R2, K12, T1 and
-      most older pads.</li>
-    <li><b>FTMS <code>1826</code></b> — Z1, Z3, P1E, MT1, W1, X21, G2 and other newer
-      units, with a real pause.</li>
-    <li><b>KingSmith <code>0x1234</code></b> — KS-C2, G1, MX16, K12 Pro, with pause.</li>
+    <li><b>Older pads</b> — A1, A1 Pro, C1, C2, P1, R1/R2, K12, T1 and similar.</li>
+    <li><b>Newer pads</b> — Z1, Z3, P1E, MT1, W1, X21, G2 and others, which can pause as
+      well as stop.</li>
+    <li><b>The KS-C2 and its relatives</b> — G1, MX16, K12 Pro, also with pause.</li>
   </ul>
 
-  <p>
-    <a href="https://github.com/morsela/beltcontrol">Source, protocol notes and the full
-    compatibility table on GitHub</a>.
-  </p>
+  <h2>More</h2>
+  <ul>
+    <li><a href="/compatible-treadmills">Will it work with my treadmill?</a> — every model,
+      and what each one can show you</li>
+    <li><a href="/walkingpad-without-the-app">Using a WalkingPad without the KS+Fit app</a></li>
+    <li><a href="/troubleshooting">When it won't connect</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">How it works, technically</a> — for
+      developers</li>
+    <li><a href="https://github.com/morsela/beltcontrol">Source on GitHub</a></li>
+  </ul>
 
   <hr>
   <p><small><strong>Safety.</strong> Belt Control commands a motorised treadmill. Only
@@ -142,11 +146,11 @@
   <!-- Only what stops being true when scripts are off. Everything else a reader needs is
        in the intro above, which renders with or without JavaScript. -->
   <div class="pre">
-    <h2>This page needs JavaScript and Web Bluetooth</h2>
+    <h2>This page needs JavaScript, and a browser that can use Bluetooth</h2>
     <ul>
-      <li>Chrome 56+, Edge, Opera or Samsung Internet — supported, desktop or Android.</li>
-      <li>Firefox and Safari, including Safari on iOS — not supported. Neither browser ever
-        implemented Web Bluetooth, so no iPhone or iPad can run this app.</li>
+      <li>Chrome, Edge, Opera or Samsung Internet can — on a computer or on Android.</li>
+      <li>Firefox and Safari can't connect to Bluetooth devices. On an iPhone or iPad every
+        browser is Safari underneath, so none of them can run this app.</li>
     </ul>
   </div>
 </noscript>
