@@ -146,6 +146,17 @@ const errName = (e: unknown) => (e instanceof Error && e.name ? e.name : 'Error'
  * "reconnect" is honestly "the same chooser, pre-filtered to the pad you had".
  */
 export async function connect({ filtered, name }: { filtered: boolean; name?: string }) {
+  // One attempt at a time. The chooser is a browser dialog and the button behind it stays
+  // on screen and clickable, so a double press — or an impatient second one while the
+  // GATT handshake is running — used to start a whole second attempt. Both then wrote to
+  // the same phase, and the loser finished last: backing out of one chooser reset the
+  // phase to `idle` underneath the attempt that was still connecting, leaving the app
+  // reporting "Not connected" over a live handshake.
+  if (phase.value === 'choosing' || phase.value === 'connecting') {
+    log('already connecting — ignoring a second attempt');
+    return;
+  }
+
   if (!navigator.bluetooth) {
     fail(
       new Error(
