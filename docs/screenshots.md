@@ -7,8 +7,9 @@ tools/screenshots.sh --check                      # are they older than the UI?
 ```
 
 The two images at the top of the README are generated, not staged. Regenerate them
-whenever a change to `src/routes`, `src/components`, `src/charts` or `src/styles` alters
-something a reader would notice, and commit the PNGs with the change that moved them.
+whenever a change under `apps/web/src/` — `routes`, `components`, `charts` or `styles` —
+alters something a reader would notice, and commit the PNGs with the change that moved
+them.
 
 ## Why they are generated
 
@@ -43,7 +44,7 @@ photograph whatever answers the door is worse than no screenshot tool.
 
 `tools/screenshots/seed.js` runs as a page init script, before any app code, and writes
 straight into the `localStorage` keys the app reads back on boot. It duplicates the
-`Session` and `Settings` shapes from `src/state/` on purpose: a fixture that imports the
+`Session` and `Settings` shapes from `apps/web/src/state/` on purpose: a fixture that imports the
 code it is posing for cannot pose for a version of that code which has since changed.
 **When a `Session` field changes, this file has to be updated by hand** — the symptom is
 a screen that renders empty, because `sanitizeSession` drops what it does not recognise.
@@ -73,7 +74,7 @@ are — change one and the rest move with it:
 - The nine empty days are six at the front, where the app is not installed yet — that is
   the blank left edge of the chart — and three days off since.
 
-The protocol is `classic`, because that is the trust map (`src/state/telemetry.ts`) under
+The protocol is `classic`, because that is the trust map (`apps/web/src/state/telemetry.ts`) under
 which distance and steps are allowed into a total at all. Under a protocol the app does
 not recognise, every walk here would be excluded from every figure and both images
 would come out empty.
@@ -102,7 +103,7 @@ at that line instead of quietly writing a wrong image.
 Pinned: the dark scheme, reduced motion (plus a stylesheet that kills every transition,
 because the goal meter animates its width on mount), `en-US` inside the page, `TZ` in the
 environment, and 1280×900 at 1×. That width is above the 64rem breakpoint in
-`src/lib/viewport.ts`, which is what makes Now the left-hand rail rather than a screen of
+`apps/web/src/lib/viewport.ts`, which is what makes Now the left-hand rail rather than a screen of
 its own — it is in both images, and there is no `now.png`. On a desktop width `app.tsx`
 redirects `#/now` to `#/today`, so the script opens `#/today` directly. The height is the
 shortest at which the running rail — Stop through the Esc hint — ends inside the frame
@@ -141,6 +142,8 @@ It is a trip-wire, not a proof, and it errs towards firing:
   positives this is the one that costs less than a README that lies.
 - `git log` cannot see the working tree, so uncommitted UI changes are invisible to it.
   It prints them as a note rather than failing on them.
-- `src/lib/format.ts` and `index.html` are not watched, though both can change what is
-  on screen. Watching all of `src/` would fire on every driver change, and a check that
-  fires constantly is one people learn to ignore. This page is the real backstop.
+- `apps/web/src/lib/format.ts` and `apps/web/index.html` are not watched, though both can
+  change what is on screen. Watching all of `apps/web/src/` would fire on every change to
+  the state modules, and a check that fires constantly is one people learn to ignore. This
+  page is the real backstop. The driver package is not watched either, and does not need
+  to be: the images are taken against the simulator, so no protocol change can move them.

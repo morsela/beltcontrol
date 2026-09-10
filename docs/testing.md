@@ -1,13 +1,20 @@
 # Testing
 
 ```sh
-npm test                # vitest, one pass
-npm run test:watch
-npm run check           # tsc --noEmit over src and test
-npm run lint            # oxlint
+npm test                # vitest, one pass, both workspaces
+npm run test:watch      # the app's suite; the drivers' is `npm run test:watch -w packages/belt-drivers`
+npm run check           # tsc --noEmit over both workspaces
+npm run lint            # oxlint, one pass over the whole tree
 ```
 
 All four run on every pull request, in that order — see `.github/workflows/test.yml`.
+
+The suites are split the way the code is. `packages/belt-drivers/test/` holds the four
+protocol suites and answers one question — do the drivers put the right bytes on the wire
+and read the right numbers back off it. `apps/web/test/` holds everything above that seam.
+Each workspace runs its own vitest, so either can be run alone; the drivers' suite is the
+slow one, at around fifty seconds, because the `0x1234` driver sleeps between fragments
+and its start-verdict window is a real timeout.
 
 ## The linter
 
@@ -27,8 +34,9 @@ oxlint rather than ESLint because it is a single binary with no plugin tree behi
 which keeps `npm ci` close to the handful of packages this project has always installed.
 
 The suite is unit-level and needs neither a treadmill nor a browser. It runs in jsdom because
-`src/state/session.ts` touches `localStorage` and `window.setInterval` at import time, and the
-drivers decode `DataView`s the way the browser hands them over.
+`apps/web/src/state/session.ts` touches `localStorage` and `window.setInterval` at import
+time, and the drivers decode `DataView`s the way the browser hands them over. Both vitest
+configs say so separately, because both suites need it.
 
 ## What is covered
 
@@ -37,24 +45,30 @@ protocol decoding and the arithmetic behind the totals.
 
 | File | What it pins down |
 |---|---|
-| `test/drivers.classic.test.ts` | `fe00` command framing and checksum, status decoding, 3-byte counters past 16 bits, junk frames ignored |
-| `test/drivers.ftms.test.ts` | the `0x2ACD` flags walk, the inverted "More Data" bit, the `0xFFFF` energy sentinel, signed incline, control-point acks *and* rejections |
-| `test/drivers.ks1234.test.ts` | the permuted base64 codec, `props` parsing, 20-byte fragment reassembly in both directions, the connect handshake |
-| `test/session.test.ts` | counter-reset rebasing, per-protocol trust exclusions, day aggregates, streaks, CSV export |
-| `test/backup.test.ts` | the JSON backup round trip, import merging and idempotence, and what a hand-edited or foreign file is allowed to do to the stored history |
-| `test/download.test.ts` | export filenames stamped with the local day, not the UTC one |
-| `test/feedback.test.ts` | what a support report contains, and how it degrades into a `mailto:` too small to hold it — measured on the encoded URL, newest log lines kept, typed message surrendered last |
-| `test/telemetry.test.ts` | merge-never-replace ingest, movement detection, the trust table |
-| `test/format.test.ts` | duration and unit formatting, local-midnight day keys, a DST boundary |
-| `test/metrics.test.ts` | which metrics each protocol may honestly display, and hero cycling |
-| `test/platform.test.ts` | mobile detection, including iPadOS Safari's desktop UA |
+| `packages/belt-drivers/test/drivers.classic.test.ts` | `fe00` command framing and checksum, status decoding, 3-byte counters past 16 bits, junk frames ignored |
+| `packages/belt-drivers/test/drivers.ftms.test.ts` | the `0x2ACD` flags walk, the inverted "More Data" bit, the `0xFFFF` energy sentinel, signed incline, control-point acks *and* rejections |
+| `packages/belt-drivers/test/drivers.ks1234.test.ts` | the permuted base64 codec, `props` parsing, 20-byte fragment reassembly in both directions, the connect handshake |
+| `apps/web/test/session.test.ts` | counter-reset rebasing, per-protocol trust exclusions, day aggregates, streaks, CSV export |
+| `apps/web/test/backup.test.ts` | the JSON backup round trip, import merging and idempotence, and what a hand-edited or foreign file is allowed to do to the stored history |
+| `apps/web/test/download.test.ts` | export filenames stamped with the local day, not the UTC one |
+| `apps/web/test/feedback.test.ts` | what a support report contains, and how it degrades into a `mailto:` too small to hold it — measured on the encoded URL, newest log lines kept, typed message surrendered last |
+| `apps/web/test/telemetry.test.ts` | merge-never-replace ingest, movement detection, the trust table |
+| `apps/web/test/format.test.ts` | duration and unit formatting, local-midnight day keys, a DST boundary |
+| `apps/web/test/metrics.test.ts` | which metrics each protocol may honestly display, and hero cycling |
+| `apps/web/test/platform.test.ts` | mobile detection, including iPadOS Safari's desktop UA |
 
 ## The BLE mock
 
-`test/ble-mock.ts` is a small fake of the GATT surface the drivers touch: services,
-characteristics, notifications, and a pad that can answer a write. That last part is what
-makes it more than a stub — the FTMS driver blocks on a control-point indication, so the fake
-pad acks writes and the whole request/response cycle can be tested:
+`packages/belt-drivers/src/testing/ble-mock.ts` is a small fake of the GATT surface the
+drivers touch: services, characteristics, notifications, and a pad that can answer a write.
+It lives in `src/` rather than beside the tests because it is an entry point the package
+exports — `@beltcontrol/belt-drivers/testing` — so the app's connect test drives the real
+connect path against the same fake pad the protocol suites use, instead of a second copy
+of it drifting quietly out of step.
+
+The pad answering a write is what makes it more than a stub: the FTMS driver blocks on a
+control-point indication, so the fake pad acks and the whole request/response cycle can be
+tested:
 
 ```js
 const cp = new FakeCharacteristic(UUID.ftmsControlPoint, {
@@ -69,7 +83,7 @@ reachable, and the attach/handshake/ack paths — where the real bugs live — w
 
 - **The Preact components.** They are thin over the state modules; testing them would mostly
   test the renderer.
-- **The real BLE round trip.** No amount of mocking can vouch for it. `test/drivers.*.test.ts`
+- **The real BLE round trip.** No amount of mocking can vouch for it. `packages/belt-drivers/test/drivers.*.test.ts`
   encodes what the captures showed, not what a pad in the room does. If a driver is wrong
   about the hardware, these tests will agree with it.
 - **The `0x1234` distance and calorie scaling.** Both are now divided by 1000, established

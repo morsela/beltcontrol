@@ -1,5 +1,5 @@
 import { signal, computed, batch } from '@preact/signals';
-import type { DriverId, Telemetry } from '../lib/drivers.js';
+import type { DriverId, Telemetry } from '@beltcontrol/belt-drivers';
 
 /**
  * How much to believe each numeric field, per protocol.

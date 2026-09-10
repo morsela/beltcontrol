@@ -23,7 +23,7 @@ cd "$(dirname "$0")/.."
 SESSION=beltcontrol-shots
 SEED="$PWD/tools/screenshots/seed.js"
 OUT="$PWD/docs/images"
-UI_DIRS=(src/routes src/components src/charts src/styles)
+UI_DIRS=(apps/web/src/routes apps/web/src/components apps/web/src/charts apps/web/src/styles)
 
 # Local formatting is a screenshot's most volatile input, and agent-browser has a flag
 # for neither half of it. The timezone can only come from the process the browser is
@@ -150,7 +150,11 @@ echo "starting a dev server for $(basename "$PWD") on ${ORIGIN}…"
 # itself, not an npm wrapper that exits and leaves it holding the port. --strictPort so
 # that a race for the port fails here rather than moving the server somewhere this
 # script is not looking.
-npx vite --host 127.0.0.1 --port "$PORT" --strictPort >"$VITE_LOG" 2>&1 &
+#
+# In a subshell that cds, rather than `vite --root apps/web`: the app's vite.config.ts
+# reads package.json and stamps dist/ by paths relative to the working directory, and
+# --root does not move that. `exec` keeps $! the vite pid the trap needs.
+(cd apps/web && exec npx vite --host 127.0.0.1 --port "$PORT" --strictPort) >"$VITE_LOG" 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 60); do
   curl -sfo /dev/null "$ORIGIN/" && break

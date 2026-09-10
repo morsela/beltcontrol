@@ -109,10 +109,10 @@ console hook are dropped by the bundler.
 ### Test and deploy
 
 ```sh
-npm test                # vitest — no hardware or browser needed
-npm run check           # tsc --noEmit over src and test
+npm test                # vitest, both workspaces — no hardware or browser needed
+npm run check           # tsc --noEmit over the app and the driver package
 tools/screenshots.sh --check   # are the README images older than the UI they show?
-npm run build           # → dist/
+npm run build           # → apps/web/dist/
 npx vercel --prod
 ```
 
@@ -159,13 +159,14 @@ real safety stop.
 Those are engineering mitigations, and they reduce the risk rather than removing it — none of
 them can help once the Bluetooth link drops with the belt still moving. The safety terms a user
 actually sees are the footer line on every screen and the in-app **Safety, terms & privacy**
-page (`#/legal`, [`src/routes/Legal.tsx`](src/routes/Legal.tsx)), which also covers privacy and
+page (`#/legal`, [`apps/web/src/routes/Legal.tsx`](apps/web/src/routes/Legal.tsx)), which also covers privacy and
 what is and is not collected.
 
 ## Documentation
 
 | Doc | What's in it |
 |---|---|
+| [The driver SDK](packages/belt-drivers/README.md) | The package the app drives a treadmill with: the `Driver` contract, what each protocol can do, and the simulator and GATT fake it ships |
 | [Protocol reference](docs/protocols.md) | All four BLE protocols frame by frame, and how they were reverse engineered — including the previously undocumented KingSmith `0x1234` family |
 | [Interface and session design](docs/design.md) | Why the UI is shaped this way; session detection, counter resets, field trust |
 | [Testing](docs/testing.md) | What the suite covers, the BLE mock, and what is deliberately left out |
@@ -175,26 +176,37 @@ what is and is not collected.
 
 ## Layout
 
+Two npm workspaces: the app, and the drivers it drives a treadmill with. The split is
+where it is because the drivers import nothing — they are handed a GATT server and
+report through callbacks — so everything above that seam is one side and everything
+below it is the other.
+
 ```
-index.html              Vite entry
-src/main.tsx            bootstrap, guards, service-worker registration
-src/app.tsx             shell (one column on mobile, rail + content on desktop), hash router
-src/routes/             Now · Today · History · Legal (safety, terms, privacy)
-src/components/         hero, speed control, tiles, stop bar, ambient mode, sheets
-src/charts/             hand-rolled inline SVG: column, area, heatmap
-src/state/              connection · telemetry · session · settings · backup · log
-src/lib/drivers.js      the protocol drivers — plain JS, deliberately untouched
-src/lib/drivers.d.ts    hand-written types for the above
-src/lib/feedback.ts     the support report, and fitting one into a mailto: link
-src/lib/simulator.ts    fake pad for development (dropped from production builds)
-src/lib/viewport.ts     the 64rem desktop breakpoint, shared by the shell and app.css
-src/lib/links.ts        outbound URLs used in more than one place
-src/styles/tokens.css   the single source of truth for colour, type and spacing
-public/                 manifest, icons, service worker, robots.txt, sitemap.xml
-public/content.css      the written pages' stylesheet — they never load the app bundle
-public/*/index.html     the written pages: compatibility, troubleshooting, the protocols
-test/                   unit tests, plus a fake GATT surface in ble-mock.ts
-tools/og-image.html     source for the link-preview card in public/og.png
+apps/web/
+  index.html            Vite entry
+  src/main.tsx          bootstrap, guards, service-worker registration
+  src/app.tsx           shell (one column on mobile, rail + content on desktop), hash router
+  src/routes/           Now · Today · History · Legal (safety, terms, privacy)
+  src/components/       hero, speed control, tiles, stop bar, ambient mode, sheets
+  src/charts/           hand-rolled inline SVG: column, area, heatmap
+  src/state/            connection · telemetry · session · settings · backup · log
+  src/lib/feedback.ts   the support report, and fitting one into a mailto: link
+  src/lib/viewport.ts   the 64rem desktop breakpoint, shared by the shell and app.css
+  src/lib/links.ts      outbound URLs used in more than one place
+  src/styles/tokens.css the single source of truth for colour, type and spacing
+  public/               manifest, icons, service worker, robots.txt, sitemap.xml
+  public/content.css    the written pages' stylesheet — they never load the app bundle
+  public/*/index.html   the written pages: compatibility, troubleshooting, the protocols
+  test/                 the app's unit tests
+
+packages/belt-drivers/  the SDK — see its own README
+  src/drivers.ts        the four protocol drivers, and the contract they share
+  src/bluetooth.ts      what to ask navigator.bluetooth.requestDevice for
+  src/simulator.ts      fake pad, for driving the UI with no hardware in reach
+  src/testing/          a fake GATT surface, exported so the app's tests use it too
+  test/                 the protocol suites — the only stand-in for a treadmill
+
+tools/og-image.html     source for the link-preview card in apps/web/public/og.png
 tools/screenshots.sh    regenerates the two images above (--check for staleness)
 tools/screenshots/      the month of fake walking they are taken against
 docs/                   the documentation linked above
@@ -236,7 +248,7 @@ commands a motorised belt should say plainly that it comes with no warranty.
 
 Section 4(d) makes the [`NOTICE`](NOTICE) file a condition rather than a request, which is what
 carries the independence statement into forks. If you fork this, keep it, and keep
-[`src/components/Disclaimer.tsx`](src/components/Disclaimer.tsx) rendered — see
+[`apps/web/src/components/Disclaimer.tsx`](apps/web/src/components/Disclaimer.tsx) rendered — see
 [Trademarks and independence](docs/trademarks.md).
 
 Nothing here is legal advice.

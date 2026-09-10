@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client", "web-bluetooth", "node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  },
+  "include": ["src", "test", "vite.config.ts"]
+}

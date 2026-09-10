@@ -11,7 +11,7 @@ import {
 import { sessions, currentSession, mergeSessions, MAX_SAMPLES, type Session } from '../src/state/session.js';
 import { settings, updateSettings } from '../src/state/settings.js';
 import { trustFor } from '../src/state/telemetry.js';
-import { HARD_MAX_KMH, HARD_MIN_KMH, type DriverId } from '../src/lib/drivers.js';
+import { HARD_MAX_KMH, HARD_MIN_KMH, type DriverId } from '@beltcontrol/belt-drivers';
 
 const HOUR = 3_600_000;
 

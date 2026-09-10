@@ -2,11 +2,11 @@
 //
 // Runs as an agent-browser --init-script, which means it executes in the page before
 // any app script does, so everything it writes is already in localStorage by the time
-// src/main.tsx reads it back on line 13. Nothing here is imported by the app and
+// apps/web/src/main.tsx reads it back on line 13. Nothing here is imported by the app and
 // nothing here imports the app: this is a stand-in for a month of walking, and a
 // stand-in that imports the code it is posing for cannot pose for a version of that
-// code which has since changed. The shapes below are copied from src/state/session.ts
-// and src/state/settings.ts deliberately, and docs/screenshots.md says what to do when
+// code which has since changed. The shapes below are copied from apps/web/src/state/session.ts
+// and apps/web/src/state/settings.ts deliberately, and docs/screenshots.md says what to do when
 // they drift apart.
 //
 // It is idempotent, and it is unconditional — which is why tools/screenshots.sh moves
@@ -24,12 +24,12 @@
   // been touched, and keeps the 3.0 / brisk preset chip showing as the pressed one.
   const TARGET_KMH = 4.8;
   const PACE_KMH = 3.73; // the historical days' pace — chosen to land the 83.6 km total
-  const STEPS_PER_KM = 1350; // the figure src/lib/simulator.ts walks to
+  const STEPS_PER_KM = 1350; // the figure packages/belt-drivers/src/simulator.ts walks to
   const OPEN_MS = 303_000; // 5m03s — see docs/screenshots.md on the thirty-second window
 
   // The classic fe00 protocol, which is what connectSimulated('classic') attaches and
   // what the caption under the README table refers to. Its trust map is the one that
-  // lets distance and steps into the totals at all — see src/state/telemetry.ts. A
+  // lets distance and steps into the totals at all — see apps/web/src/state/telemetry.ts. A
   // protocol the app does not recognise gets an all-absent map, and every one of these
   // walks would then be excluded from every total and the screens would read empty.
   const CLASSIC = {
@@ -75,7 +75,7 @@
     samples: [], // only the walk in progress draws a chart
   });
 
-  // One sample every 10 s, which is SAMPLE_EVERY_MS in src/state/session.ts, over the
+  // One sample every 10 s, which is SAMPLE_EVERY_MS in apps/web/src/state/session.ts, over the
   // ramp the simulator actually walks: 0.35 km/h per second up to the setpoint. Kept in
   // step with the copy in tools/screenshots.sh, which rebuilds it at capture time.
   const rampSamples = (spanMs) => {
@@ -145,7 +145,7 @@
   // --- pinning what the machine would otherwise decide ----------------------------
   //
   // The app formats clocks, dates and thousands separators with the *browser's* locale
-  // (toLocaleTimeString(undefined, …) in src/lib/format.ts), so the same fixture renders
+  // (toLocaleTimeString(undefined, …) in apps/web/src/lib/format.ts), so the same fixture renders
   // "8:02 PM · 2,491" here and "20:02 · 2 491" on a machine set to de-DE. The timezone
   // is pinned by TZ in tools/screenshots.sh, which is the only place it can be, since
   // Chrome takes it from the environment it was launched out of. The locale cannot be

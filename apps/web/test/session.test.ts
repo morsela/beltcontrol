@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Counter, sessions, currentSession, todayTotals, lifetimeTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
 import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
-import type { DriverId } from '../src/lib/drivers.js';
+import type { DriverId } from '@beltcontrol/belt-drivers';
 import { dayKey } from '../src/lib/format.js';
 
 describe('Counter', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { classicDriver, CLASSIC_MODE, UUID } from '../src/lib/drivers.js';
-import type { Telemetry } from '../src/lib/drivers.js';
-import { FakeServer, FakeCharacteristic } from './ble-mock.js';
+import { classicDriver, CLASSIC_MODE, UUID } from '../src/drivers.js';
+import type { Telemetry } from '../src/drivers.js';
+import { FakeServer, FakeCharacteristic } from '../src/testing/ble-mock.js';
 
 // F7 A2 <cmd> <param> <crc> FD, crc = (0xA2 + cmd + param) & 0xFF.
 const frame = (cmd: number, param: number) =>

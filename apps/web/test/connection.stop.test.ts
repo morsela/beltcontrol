@@ -12,7 +12,7 @@ import {
 } from '../src/state/connection.js';
 import { ingest, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
-import type { Driver } from '../src/lib/drivers.js';
+import type { Driver } from '@beltcontrol/belt-drivers';
 
 /**
  * `driver` is an exported signal, so a fake pad can be dropped straight in without

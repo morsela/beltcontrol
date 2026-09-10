@@ -1,0 +1,29 @@
+{
+  "name": "@beltcontrol/belt-drivers",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./simulator": {
+      "types": "./src/simulator.ts",
+      "default": "./src/simulator.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/ble-mock.ts",
+      "default": "./src/testing/ble-mock.ts"
+    }
+  },
+  "dependencies": {
+    "@types/web-bluetooth": "^0.0.21"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}

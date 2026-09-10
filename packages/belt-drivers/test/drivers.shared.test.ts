@@ -10,10 +10,10 @@ import {
   HARD_MIN_KMH,
   PROTOCOLS,
   UUID,
-} from '../src/lib/drivers.js';
-import type { Driver, DriverId } from '../src/lib/drivers.js';
-import { simulatedDriver } from '../src/lib/simulator.js';
-import { FakeServer, FakeCharacteristic } from './ble-mock.js';
+} from '../src/drivers.js';
+import type { Driver, DriverId } from '../src/drivers.js';
+import { simulatedDriver } from '../src/simulator.js';
+import { FakeServer, FakeCharacteristic } from '../src/testing/ble-mock.js';
 
 describe('hex', () => {
   it('formats a whole buffer', () => {
