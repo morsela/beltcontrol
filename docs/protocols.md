@@ -3,10 +3,17 @@
 How KingSmith / WalkingPad treadmills speak Bluetooth, and how that was worked out.
 
 Reverse engineered from **KS+Fit 6.5.6** (`com.kingsmith.xiaojin`, APKPure XAPK), plus an iOS
-HCI capture for the `0x1234` family. The result is `src/lib/drivers.js`, which is deliberately
-plain JavaScript — it is the reverse-engineered half of the project, it has no DOM
-dependencies, and rewriting it in TypeScript would risk the protocol work for no runtime gain.
-`src/lib/drivers.d.ts` types it from the outside.
+HCI capture for the `0x1234` family. The result is
+`packages/belt-drivers/src/drivers.ts`, a package of its own: it imports nothing, reaches
+nothing on its own, and talks to a treadmill only through the GATT server it is handed and
+the callbacks its caller installs.
+
+It was plain JavaScript for most of its life, typed from the outside by a hand-written
+`drivers.d.ts`, on the grounds that the reverse-engineered half of the project was not
+worth disturbing for types it could get without being touched. That changed when it became
+a package other code is written against — a contract kept in a separate file is a contract
+that can drift from the code it describes. The conversion changed types and nothing else,
+and the protocol suites passed unedited on both sides of it.
 
 - [How the official app works](#how-the-official-app-works)
 - [The protocol families](#the-protocol-families)
@@ -112,7 +119,7 @@ Last-session record — header `F8 A7`: `[8..10]` time, `[11..13]` distance, `[1
 
 The pad does **not** push status on its own, so the app polls `askStats()` once per second.
 
-Belt-state codes are not spelled out anywhere in the APK. `drivers.js` maps them to
+Belt-state codes are not spelled out anywhere in the APK. `drivers.ts` maps them to
 best-effort labels and the UI shows the raw number alongside, so a wrong guess is visible
 rather than silently misleading.
 
@@ -340,7 +347,7 @@ the `version` reply carries (`0014` on this C2), is assembled into `driver.firmw
 the first question when a sibling model misbehaves.
 
 **Distance and calorie scaling.** Both fields are thousandths: `RunningDistance` counts
-**metres** and `BurnCalories` counts **gram-calories**, so `drivers.js` divides each by 1000.
+**metres** and `BurnCalories` counts **gram-calories**, so `drivers.ts` divides each by 1000.
 The first capture left this open — both stayed at 0 through a walk too short to move them —
 and a later one settled it. Two lines carried them:
 
@@ -483,5 +490,5 @@ python3 -m json.tool base/assets/flutter_assets/assets/mine/allProducts.json
 
 ---
 
-The decoding above is exercised by `test/drivers.*.test.ts` — see [Testing](testing.md).
+The decoding above is exercised by `packages/belt-drivers/test/drivers.*.test.ts` — see [Testing](testing.md).
 Legal position on the analysis: [Trademarks and independence](trademarks.md).

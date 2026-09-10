@@ -50,12 +50,12 @@ Three tiers, each answering one question:
 | **History** | Am I actually keeping this up? |
 
 Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
-km/h — so miles are a display concern only, converted in `src/lib/format.ts`.
+km/h — so miles are a display concern only, converted in `apps/web/src/lib/format.ts`.
 
 ## Two layouts
 
 Desktop is the primary target: Web Bluetooth exists in desktop Chromium and nowhere on
-iOS at all. The breakpoint is **64rem**, declared once in `src/lib/viewport.ts` and read
+iOS at all. The breakpoint is **64rem**, declared once in `apps/web/src/lib/viewport.ts` and read
 from both sides — the shell branches on it in JS and `app.css` branches on it in CSS. If
 the two ever disagree the page renders half in each mode, so the media query names the
 file above it and a test pins the constant.
@@ -102,7 +102,7 @@ deserves more history, not bigger squares.
 `Esc` does double duty: it stops the belt from anywhere, and it is the universal dismiss
 key. Those collided — closing the connection sheet also halted the walk. The rule is now
 that **Esc belongs to the topmost dialog when one is open, and to the belt otherwise**,
-arbitrated by a counter in `src/state/ui.ts`.
+arbitrated by a counter in `apps/web/src/state/ui.ts`.
 
 That is only safe because of a second rule: **no dialog may hide Stop**. `Sheet` renders
 its own Stop whenever the belt is moving, so the control is on screen for the entire time
@@ -145,7 +145,7 @@ moment Escape has somewhere better to be.
   *skipping whatever the connected protocol cannot report*. FTMS carries no step count and
   neither the classic nor the `0x1234` frame carries calories, so a fixed six-tile grid
   guaranteed permanent em dashes on every real device. Availability is resolved once, at
-  connect time, from `capabilities` plus the trust map in `src/state/telemetry.ts`.
+  connect time, from `capabilities` plus the trust map in `apps/web/src/state/telemetry.ts`.
 - **The tread strip is a readout, not decoration.** A band of slats — above the hero
   number on a phone, and flush along the top of the speed card in the desktop rail, where
   the hero no longer is — scrolls at the speed the pad reports, driven from the same
@@ -161,7 +161,7 @@ moment Escape has somewhere better to be.
   rems below — nothing about it reads as a proportion, because it has no end. Reduced
   motion is honoured in `TreadStrip` rather than in `tokens.css`: that blanket rule
   reaches declarative animations only, and this one is scripted. Timing constants live in
-  `src/lib/tread.ts`, including the pitch, which the component hands to CSS as
+  `apps/web/src/lib/tread.ts`, including the pitch, which the component hands to CSS as
   `--tread-pitch` so the gradient period and the travel cannot drift apart.
 - **The lifetime odometer counts what it can vouch for.** History leads with one number on
   mechanical wheels — every session ever stored, the one in progress included, so the last
@@ -233,7 +233,8 @@ moment Escape has somewhere better to be.
   ```sh
   CH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
   "$CH" --headless --disable-gpu --default-background-color=00000000 \
-    --screenshot=public/icon-512.png --window-size=512,512 "file://$PWD/public/icon.svg"
+    --screenshot=apps/web/public/icon-512.png --window-size=512,512 \
+    "file://$PWD/apps/web/public/icon.svg"
   ```
 
   Repeat at 192, and against `icon-maskable.svg` for `icon-maskable-512.png`. The maskable
@@ -286,7 +287,7 @@ itself once it closes and carries its real totals.
 
 Everything arriving from a file is untrusted: a backup can be hand-edited, truncated by a
 full disk, or written by an older build, and whatever it contains lands in `localStorage` and
-then in the charts. `src/state/backup.ts` therefore validates field by field and drops what it
+then in the charts. `apps/web/src/state/backup.ts` therefore validates field by field and drops what it
 cannot vouch for. An entry with no usable start time has nowhere to go on the calendar and is
 skipped; a non-finite or negative number becomes zero rather than poisoning every total it
 touches; an unrecognised protocol falls back to an all-`absent` trust map, which keeps its
@@ -319,7 +320,7 @@ claiming what gets sent is a claim, the text itself is the thing.
 
 What this costs is length. A `mailto:` is a URL, it goes through the OS shell, and the
 shell stops carrying it somewhere around 2 KB — so a 400-line log does not fit, and cannot
-be made to. `fitMailto` in `src/lib/feedback.ts` measures the *encoded* URL (every newline
+be made to. `fitMailto` in `apps/web/src/lib/feedback.ts` measures the *encoded* URL (every newline
 triples on the way in), then drops log lines oldest-first until it fits, keeping the
 newest — a failure is at the end of a log, and the connect handshake that scrolled off is
 reconstructible from [the protocol reference](protocols.md) while the last four lines are
@@ -334,7 +335,7 @@ half would be worse than no log, because the missing half is where the bug was.
 The pads report cumulative-since-power-on counters that reset without warning. Differencing
 them naively produces negative deltas that silently corrupt every total, so a drop is treated
 as a reset: the accumulator rebases on the new value and keeps going. See `Counter` in
-`src/state/session.ts`, and the round-trip cases in `test/session.test.ts`.
+`apps/web/src/state/session.ts`, and the round-trip cases in `apps/web/test/session.test.ts`.
 
 ## Field trust
 

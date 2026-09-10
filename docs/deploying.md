@@ -1,12 +1,20 @@
 # Deploying
 
 ```sh
-npm run build           # tsc --noEmit && vite build  → dist/
+npm run build           # tsc --noEmit && vite build  → apps/web/dist/
 npx vercel --prod
 ```
 
 The output is static files. Any host will do; Vercel is what this repo is configured for, and
 the GitHub repository is connected to the project, so a push to `main` deploys on its own.
+
+Both commands run from the repository root, which is a monorepo: `npm run build` delegates
+to the `apps/web` workspace, and Vercel's **Root Directory** setting has to stay at the
+repository root for `npm install` to link the driver package the app depends on. The
+`outputDirectory` in `vercel.json` names `apps/web/dist` for the same reason. That setting
+lives in the Vercel project rather than in this repo, so it is the one part of the build
+nothing here can check — worth confirming on the first preview deploy after any change to
+the workspace layout.
 
 Vercel serves HTTPS, which is the second context Web Bluetooth accepts (the first being
 `http://localhost`). Hosting it is genuinely useful for **Chrome on Android**: open the URL on
@@ -23,8 +31,8 @@ lives here instead.
 |---|---|
 | `/assets/*` → `max-age=31536000, immutable` | Vite fingerprints those filenames, so the same name always means the same bytes. |
 | `index.html`, `sw.js`, `manifest.json` → `max-age=0, must-revalidate` | The shell, the worker and the manifest must never go stale, or a released fix sits behind a cached shell. |
-| `sitemap.xml`'s `lastmod` is stamped at build time | With the last commit date, by the `stamp-sitemap` plugin in `vite.config.ts`. A hand-written date is wrong from the next commit onwards, and a `lastmod` a crawler finds stale teaches it to ignore the field on this host. |
-| `sw.js` cache name is stamped at build time | `VERSION` in `sw.js` carries a hash of the emitted asset filenames, injected by the `stamp-service-worker` plugin in `vite.config.ts`. It was a hand-written constant that never moved, which left the worker's `activate` handler — delete every cache that is not `VERSION` — with nothing to delete on any deploy. |
+| `sitemap.xml`'s `lastmod` is stamped at build time | With the last commit date, by the `stamp-sitemap` plugin in `apps/web/vite.config.ts`. A hand-written date is wrong from the next commit onwards, and a `lastmod` a crawler finds stale teaches it to ignore the field on this host. |
+| `sw.js` cache name is stamped at build time | `VERSION` in `sw.js` carries a hash of the emitted asset filenames, injected by the `stamp-service-worker` plugin in `apps/web/vite.config.ts`. It was a hand-written constant that never moved, which left the worker's `activate` handler — delete every cache that is not `VERSION` — with nothing to delete on any deploy. |
 | `Content-Security-Policy` | The one header that is load bearing rather than ordinary hardening — see below. |
 | `X-Frame-Options: DENY` | Same intent as `frame-ancestors 'none'`, for browsers that predate it. |
 | `Permissions-Policy: bluetooth=(self)` | Keeps the radio available to this origin and nothing it embeds. |
@@ -34,7 +42,7 @@ lives here instead.
 | `robots.txt`, `sitemap.xml` → `max-age=3600` | Crawlers re-read them often; an hour is short enough to fix a mistake and long enough to matter. |
 | icons and `og.png` → `max-age=604800` | Unfingerprinted but near-immutable. A week means a redesign lands within a week rather than never. |
 | `rewrites` → `/index.html` | Hash routing means the server only ever needs to serve the shell; the negative lookahead keeps real files (assets, icons, the manifest) being served as themselves — and now the written pages too, which are extensionless paths the old lookahead would have swallowed. |
-| `trailingSlash: false` | The written pages are `dist/<slug>/index.html`, which Vercel serves at both `/slug` and `/slug/`. Two URLs for one page is a duplicate a canonical tag has to clean up after; this makes the server pick one and redirect the other. |
+| `trailingSlash: false` | The written pages are `apps/web/dist/<slug>/index.html`, which Vercel serves at both `/slug` and `/slug/`. Two URLs for one page is a duplicate a canonical tag has to clean up after; this makes the server pick one and redirect the other. |
 
 ## The Content-Security-Policy
 
@@ -86,7 +94,7 @@ either.
   deployment is a public URL serving identical HTML, so without it the previews compete with
   production for the same query.
 - **`og:image` is an absolute URL.** Slack, Discord and X do not resolve relative ones.
-  The image is `public/og.png`, generated from `tools/og-image.html` — that file carries the
+  The image is `apps/web/public/og.png`, generated from `tools/og-image.html` — that file carries the
   headless-Chrome command to re-render it after a change to the mark or the tagline. Without
   it a shared link previews the app's own dark, empty shell.
 - **The static intro in `<body>` is the page's only crawlable prose.** The app renders into
@@ -104,7 +112,7 @@ either.
 
 ## The written pages
 
-Four ordinary HTML files live in `public/`, copied to `dist/` verbatim and served as
+Four ordinary HTML files live in `apps/web/public/`, copied to `apps/web/dist/` verbatim and served as
 themselves:
 
 | Path | What it answers |
