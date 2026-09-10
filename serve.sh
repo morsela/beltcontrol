@@ -14,4 +14,7 @@ PORT="${1:-8080}"
 echo "  dashboard  http://localhost:${PORT}/"
 echo
 echo "Open in Chrome or Edge. Ctrl-C to stop."
+# The app lives in apps/web, and its vite.config.ts reads package.json and stamps
+# dist/ relative to the working directory — so run vite from there, not from the root.
+cd apps/web
 exec npx vite --host 127.0.0.1 --port "$PORT"

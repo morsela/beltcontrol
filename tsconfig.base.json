@@ -4,9 +4,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "web-bluetooth", "node"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact",
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -22,6 +19,5 @@
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true
-  },
-  "include": ["src", "test", "vite.config.ts"]
+  }
 }

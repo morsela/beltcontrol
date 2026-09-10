@@ -9,6 +9,11 @@ import { defineConfig, type Plugin } from 'vite';
 // Stamped into the bundle so a support report can name the build it came from.
 // Read here rather than imported, so package.json's dependency list does not end up
 // in the app just to carry one string.
+//
+// This path — and the two `dist/` paths in the plugins below — are relative to the
+// working directory, not to this file. Everything that starts vite therefore starts it
+// from apps/web: the npm scripts do it by living in this workspace, serve.sh and
+// tools/screenshots.sh by changing directory first.
 const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
 
 /**
