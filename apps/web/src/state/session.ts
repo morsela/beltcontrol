@@ -1,4 +1,5 @@
 import { signal, computed, effect } from '@preact/signals';
+import { DRIVER_IDS } from '@beltcontrol/belt-drivers';
 import type { DriverId } from '@beltcontrol/belt-drivers';
 import {
   live,
@@ -72,7 +73,6 @@ export interface Session {
 // session's numbers from every aggregate instead of inventing kilometres.
 
 const TRUSTS: readonly Trust[] = ['ok', 'unverified', 'absent'];
-const DRIVER_IDS: readonly DriverId[] = ['classic', 'ftms', 'fitshow', 'ks1234'];
 const TRUSTED_FIELDS: readonly TrustedField[] = ['distKm', 'steps', 'kcal'];
 
 const isObj = (v: unknown): v is Record<string, unknown> =>

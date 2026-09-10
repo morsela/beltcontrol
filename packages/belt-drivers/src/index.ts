@@ -12,3 +12,4 @@
 //   import { FakeServer } from '@beltcontrol/belt-drivers/testing';
 
 export * from './drivers.js';
+export * from './bluetooth.js';

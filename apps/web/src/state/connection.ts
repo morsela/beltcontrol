@@ -1,5 +1,5 @@
 import { signal, computed, effect } from '@preact/signals';
-import { detectDriver, UUID } from '@beltcontrol/belt-drivers';
+import { detectDriver, requestOptions } from '@beltcontrol/belt-drivers';
 import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 import {
   ingest,
@@ -24,31 +24,6 @@ import {
   holdSession,
   restoreOpenSession,
 } from './session.js';
-
-// Coarse name prefixes covering all 114 treadmill/walking-pad `leach_word` values in the
-// KS+Fit product catalog (assets/mine/allProducts.json).
-const NAME_PREFIXES = [
-  'KS-',
-  'KingSmith',
-  'WalkingPad',
-  'R1 Pro',
-  'RE',
-  'RH',
-  'FS-',
-  'FT216',
-  'Gymnas',
-  'ZP-',
-];
-
-// Every service the page may touch must be declared up front or Web Bluetooth blocks access.
-const OPTIONAL_SERVICES = [
-  UUID.classicService,
-  UUID.ftmsService,
-  UUID.ks1234Service,
-  UUID.fitshowService,
-  UUID.deviceInfo,
-  UUID.battery,
-];
 
 /** The belt moves off at its own fixed low speed the instant `start` lands, whatever
  *  target was asked for, and some units ignore a `setSpeed` sent before it is actually
@@ -175,15 +150,7 @@ export async function connect({ filtered, name }: { filtered: boolean; name?: st
   try {
     phase.value = 'choosing';
     setStatus('choosing device…');
-    const options: RequestDeviceOptions = name
-      ? { filters: [{ name }], optionalServices: OPTIONAL_SERVICES }
-      : filtered
-        ? {
-            filters: NAME_PREFIXES.map((namePrefix) => ({ namePrefix })),
-            optionalServices: OPTIONAL_SERVICES,
-          }
-        : { acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES };
-    picked = await navigator.bluetooth.requestDevice(options);
+    picked = await navigator.bluetooth.requestDevice(requestOptions({ name, filtered }));
   } catch (e) {
     const err = e as DOMException;
     phase.value = 'idle';

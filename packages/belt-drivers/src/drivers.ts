@@ -57,7 +57,17 @@ export interface Capabilities {
   needsPolling: boolean;
 }
 
-export type DriverId = 'classic' | 'ftms' | 'fitshow' | 'ks1234';
+/**
+ * Every protocol this package speaks.
+ *
+ * The list is the source and the type is derived from it, rather than the other way
+ * round: a fifth protocol added here is a compile error everywhere it is not yet
+ * handled — starting with `PROTOCOLS` below — and callers that have to validate a
+ * stored protocol name at runtime can read the same list instead of keeping their own.
+ */
+export const DRIVER_IDS = ['classic', 'ftms', 'fitshow', 'ks1234'] as const;
+
+export type DriverId = (typeof DRIVER_IDS)[number];
 
 /**
  * What a pad said about a start, for the protocols that say anything at all.
@@ -241,7 +251,7 @@ const inRange = (v: number, lo: number, hi: number): number | null =>
 // offered a 0.1 km/h step, including the classic one, whose step is 0.5. A fake pad
 // that answers differently from the real one is worse than no fake pad at all.
 
-export const PROTOCOLS = {
+export const PROTOCOLS: Record<DriverId, { capabilities: Capabilities; limits: SpeedLimits }> = {
   classic: {
     capabilities: {
       speed: true,
