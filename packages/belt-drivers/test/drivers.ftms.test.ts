@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ftmsDriver, parseTreadmillData, UUID } from '../src/lib/drivers.js';
-import type { Telemetry } from '../src/lib/drivers.js';
-import { FakeServer, FakeCharacteristic, toHex } from './ble-mock.js';
+import { ftmsDriver, parseTreadmillData, UUID } from '../src/drivers.js';
+import type { Telemetry } from '../src/drivers.js';
+import { FakeServer, FakeCharacteristic, toHex } from '../src/testing/ble-mock.js';
 
 const view = (bytes: number[]) => new DataView(Uint8Array.from(bytes).buffer);
 const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff];

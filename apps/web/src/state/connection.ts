@@ -1,6 +1,6 @@
 import { signal, computed, effect } from '@preact/signals';
-import { detectDriver, UUID } from '../lib/drivers.js';
-import type { Driver, StartVerdict } from '../lib/drivers.js';
+import { detectDriver, UUID } from '@beltcontrol/belt-drivers';
+import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 import {
   ingest,
   resetTelemetry,
@@ -289,7 +289,7 @@ export async function connectSimulated(
   id?: 'classic' | 'ftms' | 'ks1234' | 'fitshow',
   opts: { rejectPause?: boolean; refuseStarts?: number } = {}
 ) {
-  const { simulatedDriver } = await import('../lib/simulator.js');
+  const { simulatedDriver } = await import('@beltcontrol/belt-drivers/simulator');
   await wireDriver(simulatedDriver({ id, ...opts }), null, `Simulated ${id ?? 'classic'}`, true);
 }
 

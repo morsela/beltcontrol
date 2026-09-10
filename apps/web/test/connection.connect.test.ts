@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect, disconnect, connected, phase } from '../src/state/connection.js';
 import { settings, updateSettings } from '../src/state/settings.js';
-import { UUID } from '../src/lib/drivers.js';
-import { FakeServer, FakeCharacteristic } from './ble-mock.js';
+import { UUID } from '@beltcontrol/belt-drivers';
+import { FakeServer, FakeCharacteristic } from '@beltcontrol/belt-drivers/testing';
 
 /**
  * The chooser side of `connect()`: what it asks the browser for, and what it keeps

@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@beltcontrol/belt-drivers": "*",
     "@preact/signals": "^1.3.0",
     "@vercel/analytics": "^2.0.1",
     "preact": "^10.24.3"

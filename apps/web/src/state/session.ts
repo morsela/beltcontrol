@@ -1,5 +1,5 @@
 import { signal, computed, effect } from '@preact/signals';
-import type { DriverId } from '../lib/drivers.js';
+import type { DriverId } from '@beltcontrol/belt-drivers';
 import {
   live,
   isMoving,

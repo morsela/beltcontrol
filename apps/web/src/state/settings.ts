@@ -1,5 +1,5 @@
 import { signal, effect } from '@preact/signals';
-import { HARD_MAX_KMH, HARD_MIN_KMH } from '../lib/drivers.js';
+import { HARD_MAX_KMH, HARD_MIN_KMH } from '@beltcontrol/belt-drivers';
 
 const KEY = 'wp.settings.v1';
 

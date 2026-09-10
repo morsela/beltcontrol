@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ks1234Driver, ksEncode, ksDecode, parseProps, installId, UUID } from '../src/lib/drivers.js';
-import type { Telemetry } from '../src/lib/drivers.js';
-import { FakeServer, FakeCharacteristic } from './ble-mock.js';
+import { ks1234Driver, ksEncode, ksDecode, parseProps, installId, UUID } from '../src/drivers.js';
+import type { Telemetry } from '../src/drivers.js';
+import { FakeServer, FakeCharacteristic } from '../src/testing/ble-mock.js';
 
 describe('the permuted base64 alphabet', () => {
   it('round-trips', () => {

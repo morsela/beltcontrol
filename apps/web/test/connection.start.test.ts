@@ -11,7 +11,7 @@ import {
 } from '../src/state/connection.js';
 import { ingest, live, resetTelemetry } from '../src/state/telemetry.js';
 import { status } from '../src/state/log.js';
-import type { Driver, StartVerdict } from '../src/lib/drivers.js';
+import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 
 /**
  * The mirror of `connection.stop.test.ts`, and for the same reason: these are about
