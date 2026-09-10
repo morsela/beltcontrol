@@ -6,17 +6,135 @@
 //   ftms     00001826  notify 2acd  write 2ad9   newer chip:5 units (Z1, Z3, P1E, MT1, W1, X21, G2, ...)
 //   fitshow  0000fff0  notify fff1  write fff2   some OEM units
 //
-// Each factory returns the same shape so app.js never branches on protocol:
+// Every factory returns the same `Driver`, so a caller never branches on protocol. The
+// drivers reach nothing on their own: a `BluetoothRemoteGATTServer` is handed to
+// `attach()`, telemetry leaves through the `onData` callback the caller installs, and
+// diagnostics through `onLog`. Nothing here imports anything.
 //
-//   { id, name, capabilities, maxSpeedKmh, attach(server), detach(),
-//     start(), stop(), setSpeed(kmh), setMode(mode), poll() }
+// Fields the device does not report are `null`, never 0 — a caller can then show an em
+// dash rather than invent a number.
 //
-// and reports telemetry through an `onData` callback set by the caller:
-//
-//   { speedKmh, distKm, steps, secs, kcal, state, mode, raw }
-//
-// Fields the device does not report are `null`, never 0 — the UI shows those as an em dash
-// rather than inventing a number.
+// This file used to be plain JavaScript typed from the outside by a hand-written
+// drivers.d.ts, on the grounds that touching the reverse-engineered half of the project
+// was not worth the risk. The types now live in the source instead, which is what makes
+// this a package other code can be written against rather than one file's private
+// arrangement. The conversion changed types only: no statement moved, no name changed,
+// and the four protocol suites passed unedited on either side of it — they are the whole
+// safety net, because there is no treadmill in CI.
+
+// ---------------------------------------------------------------------------
+// The contract
+// ---------------------------------------------------------------------------
+
+/** Canonical telemetry. A field the device does not report is `null`, never 0. */
+export interface Telemetry {
+  speedKmh: number | null;
+  distKm: number | null;
+  steps: number | null;
+  secs: number | null;
+  kcal: number | null;
+  /** Raw belt-state code straight off the wire. */
+  state: number | null;
+  /** Best-effort label for `state`; a caller should show the raw number beside it. */
+  stateLabel: string | null;
+  mode: number | null;
+  heartRate: number | null;
+  inclinePct: number | null;
+  raw?: unknown;
+}
+
+export interface Capabilities {
+  speed: boolean;
+  mode: boolean;
+  incline: boolean;
+  steps: boolean;
+  /** The protocol carries a real pause — a stop the belt can be resumed from, rather
+   *  than a full stop dressed up as one. FTMS and 0x1234 (where the pad itself keeps
+   *  the session counters across it). Whether the individual unit honours it is a
+   *  separate question, answered by `pause()`'s result. */
+  pause: boolean;
+  /** Classic pads never push status; the caller must poll on a timer. */
+  needsPolling: boolean;
+}
+
+export type DriverId = 'classic' | 'ftms' | 'fitshow' | 'ks1234';
+
+/**
+ * What a pad said about a start, for the protocols that say anything at all.
+ *
+ *   accepted  the unit acknowledged taking the command
+ *   refused   the unit answered no — it will not move
+ *   unknown   the unit said nothing either way inside the window
+ *
+ * Never a statement about the belt: only movement reported by the belt is that.
+ */
+export type StartVerdict = 'accepted' | 'refused' | 'unknown';
+
+export interface Driver {
+  readonly id: DriverId;
+  readonly name: string;
+  readonly capabilities: Capabilities;
+  /** Mutable: FTMS and 0x1234 rewrite these from the device after attach(). */
+  maxSpeedKmh: number;
+  minSpeedKmh: number;
+  speedStep: number;
+
+  onData: ((d: Partial<Telemetry>) => void) | null;
+  onLog: ((msg: string) => void) | null;
+
+  /** Firmware identity as the pad reports it, e.g. "MCU 0005, module 0014". Absent on
+   *  protocols that never say; null until the pad has said. */
+  firmware?: string | null;
+  /** The pad's own child-lock switch: `true` is engaged — the first thing the vendor's
+   *  own advice points at when a start is refused — `null` until the pad has said.
+   *  Absent on protocols that carry no such switch. */
+  childLockOn?: boolean | null;
+
+  attach(server: BluetoothRemoteGATTServer): Promise<void>;
+  detach(): Promise<void>;
+  /** Also resumes from a pause: FTMS spends one op code on "Start or Resume". */
+  start(): Promise<void>;
+  /**
+   * The unit's own answer to the last `start()`, once it has had a moment to give one.
+   *
+   * Optional, and absent on every protocol that cannot answer — a caller must read a
+   * missing method as `'unknown'` and fall back to waiting for the belt to move, which
+   * is what it does anyway. Only the 0x1234 driver implements it: that pad refuses a
+   * start out loud, and a refusal heard in one second beats a silence timed out in ten.
+   *
+   * Safe to call once per start, after `start()` resolves; the window is armed inside
+   * `start()` itself so a fast answer cannot be missed.
+   */
+  startVerdict?(): Promise<StartVerdict>;
+  stop(): Promise<void>;
+  /**
+   * Pause the belt, resumable with `start()`.
+   *
+   * Resolves `'paused'` when the unit honoured it, or `'stopped'` when it did not
+   * support pause and the driver stopped the belt instead — never leave a treadmill
+   * running behind a button that claims it is paused. Rejects only on a real failure,
+   * and on protocols that have no pause command at all.
+   */
+  pause(): Promise<'paused' | 'stopped'>;
+  setSpeed(kmh: number): Promise<void>;
+  setMode(mode: number): Promise<void>;
+  poll(): Promise<void>;
+}
+
+/**
+ * The half of a driver that is its own, beyond the contract above.
+ *
+ * `_requireOpen` throws if the write channel is gone, so a command can never resolve
+ * without having been sent; the rest is each protocol's own frame handling. They are
+ * spelled out per driver rather than hung off `Driver` as optional members, so that a
+ * caller cannot reach for one and a driver cannot forget one.
+ */
+interface WritingDriver extends Driver {
+  _requireOpen(): void;
+}
+
+/** The starting limits a driver carries before a device says otherwise. */
+export type SpeedLimits = Pick<Driver, 'minSpeedKmh' | 'maxSpeedKmh' | 'speedStep'>;
 
 export const UUID = {
   classicService: 0xfe00,
@@ -49,14 +167,14 @@ export const UUID = {
 // unwrapped: `hex(someDataView.buffer)` would print the whole allocation behind a frame,
 // and passing the view straight to `new Uint8Array` yields an empty string with no error
 // at all — a logged frame that silently vanishes.
-const hex = (buf) => {
+const hex = (buf: ArrayBuffer | ArrayBufferView | ArrayLike<number>): string => {
   const bytes = ArrayBuffer.isView(buf)
     ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-    : new Uint8Array(buf);
+    : new Uint8Array(buf as ArrayBuffer | ArrayLike<number>);
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ');
 };
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** One decoder pair for the module — these are not free to build per notification. */
 const UTF8 = new TextEncoder();
@@ -71,9 +189,11 @@ const NOT_CONNECTED = 'not connected to the pad — command not sent';
 // lands in the middle of the Start sequence often enough to swallow a command — and a
 // swallowed command looks exactly like a pad that ignored you. Every driver funnels its
 // writes through one of these so nothing can overlap.
-function serialiser() {
-  let tail = Promise.resolve();
-  return (fn) => {
+type Serialiser = <T>(fn: () => Promise<T>) => Promise<T>;
+
+function serialiser(): Serialiser {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T,>(fn: () => Promise<T>) => {
     const run = tail.then(fn, fn); // run regardless of how the previous op ended
     tail = run.catch(() => {});
     return run;
@@ -103,7 +223,8 @@ export const HARD_MIN_KMH = 1.0;
 /** The per-press ceiling the UI promises. `speedStep` feeds a stepper, not a slider. */
 export const HARD_MAX_STEP_KMH = 0.5;
 
-const inRange = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+const inRange = (v: number, lo: number, hi: number): number | null =>
+  Number.isFinite(v) && v >= lo && v <= hi ? v : null;
 
 // ---------------------------------------------------------------------------
 // What each protocol can do
@@ -174,7 +295,7 @@ export const PROTOCOLS = {
  * device says about itself, and two drivers built from the same table must not be able
  * to write over each other — or over the table.
  */
-export const protocolDefaults = (id) => ({
+export const protocolDefaults = (id: DriverId): { capabilities: Capabilities } & SpeedLimits => ({
   capabilities: { ...PROTOCOLS[id].capabilities },
   ...PROTOCOLS[id].limits,
 });
@@ -191,8 +312,12 @@ export const protocolDefaults = (id) => ({
  * Either way the pair has to describe a real range at the end of it, so a bound that
  * would invert the other one is refused however plausible it looked alone.
  */
-export function adoptSpeedLimits(self, { min, max, step }, onLog) {
-  const note = (what, got, keeping) =>
+export function adoptSpeedLimits<T extends SpeedLimits>(
+  self: T,
+  { min, max, step }: { min?: number; max?: number; step?: number },
+  onLog?: ((msg: string) => void) | null
+): T {
+  const note = (what: string, got: number | undefined, keeping: number) =>
     onLog?.(`ignoring implausible ${what} from device: ${got} km/h (keeping ${keeping})`);
 
   const wasMin = self.minSpeedKmh;
@@ -237,9 +362,9 @@ export function adoptSpeedLimits(self, { min, max, step }, onLog) {
 // and remember which characteristics did, so the rest of the session does not pay for a
 // rejected GATT operation before every single write. The 0x1234 handshake alone is around
 // thirty 20-byte fragment writes.
-const noWriteWithoutResponse = new WeakSet();
+const noWriteWithoutResponse = new WeakSet<BluetoothRemoteGATTCharacteristic>();
 
-async function writeChar(ch, bytes) {
+async function writeChar(ch: BluetoothRemoteGATTCharacteristic, bytes: ArrayLike<number>) {
   const data = new Uint8Array(bytes);
   if (ch.properties.writeWithoutResponse && !noWriteWithoutResponse.has(ch)) {
     try {
@@ -252,6 +377,12 @@ async function writeChar(ch, bytes) {
   }
   await ch.writeValue(data);
 }
+
+/** The characteristic's new value, off a `characteristicvaluechanged` event. The DOM
+ *  types promise only an `EventTarget`, but the event is fired by the characteristic
+ *  the listener was registered on and by nothing else. */
+const charValue = (e: Event): DataView =>
+  (e.target as BluetoothRemoteGATTCharacteristic).value as DataView;
 
 // ---------------------------------------------------------------------------
 // Classic WalkingPad — service 0xfe00
@@ -267,7 +398,7 @@ export const CLASSIC_MODE = { auto: 0, manual: 1, standby: 2 };
 
 // Belt-state codes are not spelled out anywhere in the app; these labels are the community
 // reading and the UI shows the raw number next to them so a mismatch is visible.
-const BELT_STATE = {
+const BELT_STATE: Record<number, string> = {
   0: 'standby',
   1: 'starting',
   2: 'running',
@@ -277,13 +408,13 @@ const BELT_STATE = {
   9: 'starting',
 };
 
-function classicFrame(cmd, param) {
+function classicFrame(cmd: number, param: number): number[] {
   const body = [0xa2, cmd, param & 0xff];
   const crc = body.reduce((a, b) => a + b, 0) & 0xff;
   return [0xf7, ...body, crc, 0xfd];
 }
 
-function be(view, offset, width = 3) {
+function be(view: DataView, offset: number, width = 3): number {
   let v = 0;
   for (let i = 0; i < width; i++) v = (v << 8) | view.getUint8(offset + i);
   return v >>> 0;
@@ -292,25 +423,31 @@ function be(view, offset, width = 3) {
 /** How long the pad needs to actually leave standby before it will accept a start. */
 const CLASSIC_MODE_SETTLE_MS = 400;
 
-export function classicDriver() {
-  let notifyCh = null;
-  let writeCh = null;
-  let onNotify = null;
+/** The classic driver's own half: one frame builder in, one frame parser out. */
+interface ClassicDriver extends WritingDriver {
+  _send(cmd: number, param: number): Promise<void>;
+  _parse(view: DataView): void;
+}
+
+export function classicDriver(): Driver {
+  let notifyCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let writeCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let onNotify: ((e: Event) => void) | null = null;
   const queue = serialiser();
 
-  const self = {
+  const self: ClassicDriver = {
     id: 'classic',
     name: 'WalkingPad (classic fe00)',
     ...protocolDefaults('classic'),
     onData: null,
     onLog: null,
 
-    async attach(server) {
+    async attach(server: BluetoothRemoteGATTServer) {
       const svc = await server.getPrimaryService(UUID.classicService);
       notifyCh = await svc.getCharacteristic(UUID.classicNotify);
       writeCh = await svc.getCharacteristic(UUID.classicWrite);
 
-      onNotify = (e) => self._parse(e.target.value);
+      onNotify = (e) => self._parse(charValue(e));
       notifyCh.addEventListener('characteristicvaluechanged', onNotify);
       await notifyCh.startNotifications();
 
@@ -330,7 +467,7 @@ export function classicDriver() {
       notifyCh = writeCh = onNotify = null;
     },
 
-    _send(cmd, param) {
+    _send(cmd: number, param: number) {
       return queue(async () => {
         // Inside the queue, so a dead link comes back as a rejected promise rather than
         // a synchronous throw — `poll()` is called as `poll().catch(...)` on a timer, and
@@ -339,7 +476,8 @@ export function classicDriver() {
         self._requireOpen();
         const frame = classicFrame(cmd, param);
         self.onLog?.(`tx ${hex(frame)}`);
-        await writeChar(writeCh, frame);
+        // Non-null because `_requireOpen()` above throws when it is not.
+        await writeChar(writeCh!, frame);
         // The pad drops commands sent back to back.
         await sleep(120);
       });
@@ -350,9 +488,9 @@ export function classicDriver() {
     },
 
     poll: () => self._send(0, 0),
-    setMode: (mode) => self._send(2, mode),
+    setMode: (mode: number) => self._send(2, mode),
 
-    async setSpeed(kmh) {
+    async setSpeed(kmh: number) {
       await self._send(1, Math.round(kmh * 10));
     },
 
@@ -380,7 +518,7 @@ export function classicDriver() {
       throw new Error('the classic fe00 protocol has no pause command');
     },
 
-    _parse(view) {
+    _parse(view: DataView) {
       self.onLog?.(`rx ${hex(view)}`);
       if (view.byteLength < 3) return;
       const h0 = view.getUint8(0);
@@ -433,7 +571,7 @@ const FTMS_OP = {
 
 const FTMS_STOP_PARAM = { stop: 0x01, pause: 0x02 };
 
-const FTMS_RESULT = {
+const FTMS_RESULT: Record<number, string> = {
   0x01: 'success',
   0x02: 'op code not supported',
   0x03: 'invalid parameter',
@@ -442,7 +580,7 @@ const FTMS_RESULT = {
 };
 
 // Fitness Machine Status (0x2ADA) opcodes we care to surface.
-const FTMS_STATUS = {
+const FTMS_STATUS: Record<number, string> = {
   0x01: 'reset',
   0x02: 'stopped by user',
   0x03: 'paused by user',
@@ -457,8 +595,30 @@ const FTMS_STATUS = {
 /** Thrown internally when the flags word promises a field the frame does not contain. */
 const TRUNCATED = Symbol('truncated frame');
 
-export function parseTreadmillData(view) {
-  const out = { raw: hex(view) };
+/** Everything a Treadmill Data (0x2ACD) frame can carry. Absent fields are simply
+ *  missing — the flags word says which are present, so `undefined` and `null` mean
+ *  different things here: not sent, versus sent as the spec's "not available". */
+export interface TreadmillData extends Partial<Telemetry> {
+  raw: string;
+  /** The flags word promised a field the frame did not carry. Fields that were fully
+   *  present are still returned; everything after the short read is absent. */
+  truncated?: true;
+  avgSpeedKmh?: number;
+  rampAngleDeg?: number;
+  elevGainUpM?: number;
+  elevGainDownM?: number;
+  paceKmPerMin?: number;
+  avgPaceKmPerMin?: number;
+  kcalPerHour?: number;
+  kcalPerMin?: number;
+  mets?: number;
+  remainingSecs?: number;
+  forceOnBeltN?: number;
+  powerW?: number;
+}
+
+export function parseTreadmillData(view: DataView): TreadmillData {
+  const out: TreadmillData = { raw: hex(view) };
   let o = 0;
 
   // Every read is bounds checked. The flags word is the device's claim about what
@@ -468,7 +628,7 @@ export function parseTreadmillData(view) {
   // value — so the belt could be moving while the screen still read whatever it said
   // before. A short frame is now reported as truncated, keeping whatever fields were
   // fully present.
-  const need = (n) => {
+  const need = (n: number) => {
     if (o + n > view.byteLength) throw TRUNCATED;
     const at = o;
     o += n;
@@ -484,7 +644,7 @@ export function parseTreadmillData(view) {
 
   try {
     const flags = u16();
-    const has = (bit) => (flags & (1 << bit)) !== 0;
+    const has = (bit: number) => (flags & (1 << bit)) !== 0;
 
     // bit 0 is "More Data" — instantaneous speed is present when it is CLEAR.
     if (!has(0)) out.speedKmh = u16() / 100;
@@ -522,32 +682,58 @@ export function parseTreadmillData(view) {
 }
 
 /** Telemetry a Treadmill Data frame may or may not carry, per its flags word. */
-const FTMS_FRAME_FIELDS = ['speedKmh', 'distKm', 'secs', 'kcal', 'heartRate', 'inclinePct'];
+const FTMS_FRAME_FIELDS = ['speedKmh', 'distKm', 'secs', 'kcal', 'heartRate', 'inclinePct'] as const;
 
-export function ftmsDriver() {
-  let dataCh = null;
-  let cpCh = null;
-  let statusCh = null;
-  let onData = null;
-  let onCp = null;
-  let onStatus = null;
+/** How a control-point request ended: `result` is the pad's own code when it answered,
+ *  and a string when the app stopped waiting for one. */
+interface CpResult {
+  ok: boolean;
+  result: number | string;
+}
+
+/** The request in flight. `op` is what makes an indication an answer to *this* one. */
+interface CpSlot {
+  readonly op: number;
+  timer?: ReturnType<typeof setTimeout>;
+  settle(r: CpResult): void;
+}
+
+/** A rejection carries the pad's result code, so a caller that can act on one in
+ *  particular — start's reset-retry, pause's fallback — can tell them apart. */
+interface CpError extends Error {
+  result: number | string;
+}
+
+/** FTMS's own half: everything goes through the control point, under one permission. */
+interface FtmsDriver extends Driver {
+  _cp(bytes: [number, ...number[]], opts?: { timeout?: number }): Promise<CpResult>;
+  _requestControl(): Promise<void>;
+}
+
+export function ftmsDriver(): Driver {
+  let dataCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let cpCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let statusCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let onData: ((e: Event) => void) | null = null;
+  let onCp: ((e: Event) => void) | null = null;
+  let onStatus: ((e: Event) => void) | null = null;
   // The control-point request in flight: { op, resolve }. FTMS echoes the opcode it is
   // answering in byte 1 of every 0x80 indication, so an ack is only an ack for *this*
   // request if that byte matches what was written.
-  let pending = null;
+  let pending: CpSlot | null = null;
   let haveControl = false;
   // There is only one `pending` slot, so two control-point writes in flight at once would
   // hand the first one's ack to the second. Serialise write-and-wait as a unit.
   const queue = serialiser();
 
-  const self = {
+  const self: FtmsDriver = {
     id: 'ftms',
     name: 'FTMS (standard 1826)',
     ...protocolDefaults('ftms'),
     onData: null,
     onLog: null,
 
-    async attach(server) {
+    async attach(server: BluetoothRemoteGATTServer) {
       const svc = await server.getPrimaryService(UUID.ftmsService);
 
       // Supported Speed Range tells us exactly what this unit accepts.
@@ -580,14 +766,14 @@ export function ftmsDriver() {
 
       dataCh = await svc.getCharacteristic(UUID.ftmsTreadmillData);
       onData = (e) => {
-        let d;
+        let d: TreadmillData;
         try {
-          d = parseTreadmillData(e.target.value);
+          d = parseTreadmillData(charValue(e));
         } catch (err) {
           // Nothing throws from parseTreadmillData any more, but an exception escaping
           // a notification handler is the one failure mode that hides itself: the UI
           // simply stops updating, with a stale speed still on screen. Keep it visible.
-          self.onLog?.(`unparseable treadmill frame dropped: ${err?.message ?? err}`);
+          self.onLog?.(`unparseable treadmill frame dropped: ${(err as Error)?.message ?? err}`);
           return;
         }
         if (d.truncated) {
@@ -595,7 +781,7 @@ export function ftmsDriver() {
         }
         // Facts about the protocol rather than about this frame, so they are asserted
         // every time.
-        const out = { steps: null, state: null, stateLabel: null, raw: d.raw };
+        const out: Partial<Telemetry> = { steps: null, state: null, stateLabel: null, raw: d.raw };
         // Everything else is only published when the frame actually carried it.
         // `undefined` here means "not sent" — the flags word said so, or a truncated
         // frame ran out before reaching it — and flattening that to null blanks whatever
@@ -613,7 +799,7 @@ export function ftmsDriver() {
       try {
         statusCh = await svc.getCharacteristic(UUID.ftmsStatus);
         onStatus = (e) => {
-          const v = e.target.value;
+          const v = charValue(e);
           const op = v.getUint8(0);
           self.onLog?.(`status: ${FTMS_STATUS[op] ?? `op 0x${op.toString(16)}`}`);
         };
@@ -625,7 +811,7 @@ export function ftmsDriver() {
 
       cpCh = await svc.getCharacteristic(UUID.ftmsControlPoint);
       onCp = (e) => {
-        const v = e.target.value;
+        const v = charValue(e);
         if (v.byteLength < 3 || v.getUint8(0) !== 0x80) return;
         const req = v.getUint8(1);
         const res = v.getUint8(2);
@@ -661,7 +847,7 @@ export function ftmsDriver() {
         [dataCh, onData],
         [cpCh, onCp],
         [statusCh, onStatus],
-      ]) {
+      ] as [BluetoothRemoteGATTCharacteristic | null, ((e: Event) => void) | null][]) {
         if (!ch || !fn) continue;
         ch.removeEventListener('characteristicvaluechanged', fn);
         try {
@@ -683,12 +869,12 @@ export function ftmsDriver() {
     // Write to the control point and wait for the 0x80 indication that acknowledges it.
     // The result code rides on the thrown error, so callers that can do something about a
     // particular rejection — start's reset-retry, pause's fallback — can tell them apart.
-    _cp(bytes, { timeout = 3000 } = {}) {
+    _cp(bytes: [number, ...number[]], { timeout = 3000 } = {}) {
       return queue(async () => {
         const what = hex(bytes);
         self.onLog?.(`tx cp ${what}`);
         const op = bytes[0];
-        const ack = new Promise((resolve) => {
+        const ack = new Promise<CpResult>((resolve) => {
           // Keyed by opcode: FTMS echoes the op it is answering, so an indication only
           // settles this request when that byte matches what was written here.
           //
@@ -696,7 +882,7 @@ export function ftmsDriver() {
           // call more than once and safe to call on a slot that is no longer the pending
           // one. That is the point: a request has to be able to end even when the thing
           // ending it is not the pad answering.
-          const slot = {
+          const slot: CpSlot = {
             op,
             settle(r) {
               if (pending === slot) pending = null;
@@ -707,7 +893,7 @@ export function ftmsDriver() {
           slot.timer = setTimeout(() => slot.settle({ ok: false, result: 'timeout' }), timeout);
           pending = slot;
         });
-        await writeChar(cpCh, bytes);
+        await writeChar(cpCh!, bytes);
         const r = await ack;
         if (!r.ok) {
           // A numeric result is the pad's own verdict; a string is the app giving up on
@@ -716,7 +902,7 @@ export function ftmsDriver() {
             typeof r.result === 'string'
               ? `command ${what} went unanswered: ${r.result}`
               : `treadmill rejected command ${what}: ${FTMS_RESULT[r.result] ?? r.result}`
-          );
+          ) as CpError;
           err.result = r.result;
           throw err;
         }
@@ -739,7 +925,8 @@ export function ftmsDriver() {
         // A unit that never fully left the previous session refuses 0x07 outright, so the
         // second start of a sitting fails where the first succeeded. Reset clears that
         // state; it also revokes control, hence the second request.
-        if (e.result !== 0x04 && e.result !== 0x05) throw e;
+        const { result } = e as CpError;
+        if (result !== 0x04 && result !== 0x05) throw e;
         self.onLog?.('start refused — resetting the machine and retrying');
         haveControl = false;
         await self._cp([FTMS_OP.reset]);
@@ -778,9 +965,10 @@ export function ftmsDriver() {
         await self._cp([FTMS_OP.stopOrPause, FTMS_STOP_PARAM.pause]);
         return 'paused';
       } catch (e) {
-        if (e.result !== 0x02 && e.result !== 0x03) throw e;
+        const { result } = e as CpError;
+        if (result !== 0x02 && result !== 0x03) throw e;
         self.onLog?.(
-          `pause rejected (${FTMS_RESULT[e.result] ?? e.result}) — this unit has no pause; stopping instead`
+          `pause rejected (${FTMS_RESULT[result] ?? result}) — this unit has no pause; stopping instead`
         );
         // Control survives a "not supported" answer, so stop() will not re-request it.
         await self.stop();
@@ -790,7 +978,7 @@ export function ftmsDriver() {
       }
     },
 
-    async setSpeed(kmh) {
+    async setSpeed(kmh: number) {
       await self._requestControl();
       const v = Math.round(kmh * 100);
       await self._cp([FTMS_OP.setTargetSpeed, v & 0xff, (v >> 8) & 0xff]);
@@ -816,21 +1004,21 @@ export function ftmsDriver() {
 // frames rather than guessing at control commands. If your pad lands here, send me the log
 // and we can decode it properly.
 
-export function fitshowDriver() {
-  let notifyCh = null;
-  let onNotify = null;
+export function fitshowDriver(): Driver {
+  let notifyCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let onNotify: ((e: Event) => void) | null = null;
 
-  const self = {
+  const self: Driver = {
     id: 'fitshow',
     name: 'FitShow (fff0) — read-only',
     ...protocolDefaults('fitshow'),
     onData: null,
     onLog: null,
 
-    async attach(server) {
+    async attach(server: BluetoothRemoteGATTServer) {
       const svc = await server.getPrimaryService(UUID.fitshowService);
       notifyCh = await svc.getCharacteristic(UUID.fitshowNotify);
-      onNotify = (e) => self.onLog?.(`rx ${hex(e.target.value)}`);
+      onNotify = (e) => self.onLog?.(`rx ${hex(charValue(e))}`);
       notifyCh.addEventListener('characteristicvaluechanged', onNotify);
       await notifyCh.startNotifications();
       self.onLog?.(
@@ -888,7 +1076,9 @@ export function fitshowDriver() {
 const KS_B64 = 'SaCw4FGHIJqLhN+P9RVTU/WcY6ObDdefgEijklmnopQrsBuvMxXz1yA2t5078KZ3';
 const STD_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-function ksEncode(text) {
+/** Text in, permuted-base64 text out. The alphabet is a KingSmith permutation of the
+ *  standard one, so this is not interchangeable with btoa/atob. */
+function ksEncode(text: string): string {
   const std = btoa(String.fromCharCode(...UTF8.encode(text)));
   let out = '';
   for (const c of std) {
@@ -898,7 +1088,7 @@ function ksEncode(text) {
   return out;
 }
 
-function ksDecode(cipher) {
+function ksDecode(cipher: string): string {
   let std = '';
   for (const c of cipher) {
     const i = KS_B64.indexOf(c);
@@ -910,11 +1100,14 @@ function ksDecode(cipher) {
 }
 
 // "props CurrentSpeed 1.1 RunningSteps 11" -> {CurrentSpeed:'1.1', RunningSteps:'11'}
-function parseProps(line) {
+/** `null` when the line is not a `props` line at all. */
+function parseProps(line: string): Record<string, string> | null {
   const parts = line.trim().split(/\s+/);
   if (parts[0] !== 'props') return null;
-  const out = {};
-  for (let i = 1; i + 1 < parts.length; i += 2) out[parts[i]] = parts[i + 1].replace(/^"|"$/g, '');
+  const out: Record<string, string> = {};
+  // Asserted rather than guarded: the loop condition is already the bounds check, and a
+  // guard here would add a branch to the statement that cannot be taken.
+  for (let i = 1; i + 1 < parts.length; i += 2) out[parts[i]!] = parts[i + 1]!.replace(/^"|"$/g, '');
   return out;
 }
 
@@ -922,7 +1115,7 @@ function parseProps(line) {
 // absent-key strip below (it is not `== null`), and once it reaches `live` the belt is
 // neither moving nor stopped — isMoving is false and confirmedStopped is false — so both
 // confirmation watchers run out their deadlines and the readout says NaN.
-const num = (v) => {
+const num = (v: unknown): number | null => {
   if (v == null || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -930,7 +1123,7 @@ const num = (v) => {
 
 /** num() over a thousandth-unit field. Null-safe on purpose: `null / 1000` is 0, which
  *  would turn an absent field into a real zero and blank the merged value. */
-const milli = (v) => {
+const milli = (v: unknown): number | null => {
   const n = num(v);
   return n == null ? null : n / 1000;
 };
@@ -972,7 +1165,7 @@ const KS_RX_MAX = 4096;
 // docs/protocols.md.
 const KS_TEXT_BYTES = new Uint8Array(256);
 for (const c of KS_B64 + '=\r') KS_TEXT_BYTES[c.charCodeAt(0)] = 1;
-const isKsTextByte = (b) => KS_TEXT_BYTES[b] === 1;
+const isKsTextByte = (b: number) => KS_TEXT_BYTES[b] === 1;
 
 /**
  * The band this protocol's parent spec — Xiaomi's MIoT serial command set — reserves for
@@ -991,10 +1184,31 @@ const KS_VENDOR_ERROR_MIN = -9999;
  *  a real KS-C2 both the refusal and the acceptance land inside one second. */
 const KS_START_VERDICT_MS = 1500;
 
-export function ks1234Driver() {
-  let writeCh = null;
-  let notifyCh = null;
-  let onNotify = null;
+/**
+ * The window a start's answer may arrive in, and the promise the caller reads it from.
+ * `open` is what makes `settle` idempotent: the pad answering, the timeout and a
+ * detach all race for the same slot, and any of them may get there first.
+ */
+interface StartWindow {
+  answer: Promise<StartVerdict>;
+  open: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  settle(verdict: StartVerdict): void;
+}
+
+/** The 0x1234 driver's own half: a line protocol, so everything is text in and text out. */
+interface Ks1234Driver extends WritingDriver {
+  _send(text: string): Promise<void>;
+  _handshake(): Promise<void>;
+  _rx(view: DataView): void;
+  _noteStartVerdict(line: string): void;
+  _apply(line: string): void;
+}
+
+export function ks1234Driver(): Driver {
+  let writeCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let notifyCh: BluetoothRemoteGATTCharacteristic | null = null;
+  let onNotify: ((e: Event) => void) | null = null;
   let rxBuf = '';
   let closed = false;
   const queue = serialiser();
@@ -1003,12 +1217,12 @@ export function ks1234Driver() {
   // network module's build, the config dump carries `mcu_version` — so it is assembled
   // here and published as one field. Worth the bookkeeping: when a sibling model
   // misbehaves, "which firmware" is the first question a bug report has to answer.
-  let fwMcu = null;
-  let fwModule = null;
-  function noteFirmware({ mcu, module: mod }) {
+  let fwMcu: string | null = null;
+  let fwModule: string | null = null;
+  function noteFirmware({ mcu, module: mod }: { mcu?: string; module?: string }) {
     fwMcu = mcu ?? fwMcu;
     fwModule = mod ?? fwModule;
-    const parts = [];
+    const parts: string[] = [];
     if (fwMcu != null) parts.push(`MCU ${fwMcu}`);
     if (fwModule != null) parts.push(`module ${fwModule}`);
     const label = parts.join(', ');
@@ -1019,7 +1233,7 @@ export function ks1234Driver() {
   }
 
   /** The pad's answer to the most recent `start()`; null before the first one. */
-  let lastStart = null;
+  let lastStart: StartWindow | null = null;
 
   /**
    * Open a window for the pad to answer the start that is about to be written.
@@ -1029,11 +1243,12 @@ export function ks1234Driver() {
    */
   function armStartVerdict() {
     lastStart?.settle('unknown'); // a new start supersedes the old one's window
-    let resolve;
-    const answer = new Promise((r) => {
+    // Definitely assigned: the Promise executor runs synchronously, before this returns.
+    let resolve!: (verdict: StartVerdict) => void;
+    const answer = new Promise<StartVerdict>((r) => {
       resolve = r;
     });
-    const record = {
+    const record: StartWindow = {
       answer,
       open: true,
       timer: null,
@@ -1049,7 +1264,7 @@ export function ks1234Driver() {
     return record;
   }
 
-  const self = {
+  const self: Ks1234Driver = {
     id: 'ks1234',
     name: 'KingSmith 0x1234 (chip:3)',
     ...protocolDefaults('ks1234'),
@@ -1062,13 +1277,13 @@ export function ks1234Driver() {
      *  first — see `watchForStart` in state/connection.ts. */
     childLockOn: null,
 
-    async attach(server) {
+    async attach(server: BluetoothRemoteGATTServer) {
       closed = false;
       const svc = await server.getPrimaryService(UUID.ks1234Service);
       writeCh = await svc.getCharacteristic(UUID.ks1234Write);
       notifyCh = await svc.getCharacteristic(UUID.ks1234Notify);
 
-      onNotify = (e) => self._rx(e.target.value);
+      onNotify = (e) => self._rx(charValue(e));
       notifyCh.addEventListener('characteristicvaluechanged', onNotify);
       await notifyCh.startNotifications();
 
@@ -1097,7 +1312,7 @@ export function ks1234Driver() {
     // Encode, terminate with CR, and fragment to 20 bytes — the app's MTU payload size.
     // Queued as a unit: a message interleaved with another one's fragments is undecodable,
     // because the pad reassembles a single stream on CR.
-    _send(text) {
+    _send(text: string) {
       return queue(async () => {
         if (closed || !writeCh) return;
         self.onLog?.(`--> ${text}`);
@@ -1189,7 +1404,7 @@ export function ks1234Driver() {
       self._requireOpen();
       await self._send('props runState 0');
     },
-    async setSpeed(kmh) {
+    async setSpeed(kmh: number) {
       self._requireOpen();
       await self._send(`props CurrentSpeed ${kmh.toFixed(1)}`);
     },
@@ -1212,7 +1427,7 @@ export function ks1234Driver() {
       /* the pad pushes telemetry on its own */
     },
 
-    _rx(view) {
+    _rx(view: DataView) {
       // A binary sidecar frame is answered by keeping it out of the line buffer. Fed to
       // the buffer, its bytes glue onto the next text line, ksDecode refuses the line,
       // and real telemetry goes down with it — in the capture that ate the pad's
@@ -1230,7 +1445,7 @@ export function ks1234Driver() {
         const chunk = rxBuf.slice(0, i);
         rxBuf = rxBuf.slice(i + 1);
         if (!chunk) continue;
-        let line;
+        let line: string;
         try {
           line = ksDecode(chunk);
         } catch {
@@ -1261,7 +1476,7 @@ export function ks1234Driver() {
      * actually sends. Left that way on purpose — `parseProps` reproduces the captured
      * even-length frames byte for byte and is not worth disturbing for one control line.
      */
-    _noteStartVerdict(line) {
+    _noteStartVerdict(line: string) {
       if (!lastStart?.open) return;
 
       const err = /\bErrorCode\s+(-?\d+)\b/.exec(line);
@@ -1282,7 +1497,7 @@ export function ks1234Driver() {
       }
     },
 
-    _apply(line) {
+    _apply(line: string) {
       // `version 0014` is the version command's reply — module firmware, not a props line.
       const ver = /^version\s+(\S+)$/.exec(line.trim());
       if (ver) noteFirmware({ module: ver[1] });
@@ -1313,7 +1528,7 @@ export function ks1234Driver() {
       }
 
       const state = p.runState != null ? Number(p.runState) : null;
-      const out = {
+      const out: Partial<Telemetry> = {
         speedKmh: num(p.CurrentSpeed),
         secs: num(p.RunningTotalTime),
         steps: num(p.RunningSteps),
@@ -1330,7 +1545,7 @@ export function ks1234Driver() {
       // The pad sends partial updates ("props RunningSteps 3"), and app.js merges each one
       // onto the last. Drop every absent key or a partial message would blank the fields it
       // simply did not mention.
-      for (const k of Object.keys(out)) if (out[k] == null) delete out[k];
+      for (const k of Object.keys(out) as (keyof Telemetry)[]) if (out[k] == null) delete out[k];
       if (Object.keys(out).length > 1) self.onData?.(out); // >1 because `raw` is always set
     },
   };
@@ -1345,13 +1560,13 @@ export { ksEncode, ksDecode, parseProps };
 // ---------------------------------------------------------------------------
 
 /** 16-bit alias to the full form the GATT table reports, so the two can be compared. */
-const canonicalUuid = (u) =>
+const canonicalUuid = (u: number | string): string =>
   typeof u === 'number'
     ? `${u.toString(16).padStart(8, '0')}-0000-1000-8000-00805f9b34fb`
     : String(u).toLowerCase();
 
-export async function detectDriver(server) {
-  const candidates = [
+export async function detectDriver(server: BluetoothRemoteGATTServer): Promise<Driver | null> {
+  const candidates: [number, () => Driver][] = [
     [UUID.classicService, classicDriver],
     [UUID.ftmsService, ftmsDriver],
     [UUID.ks1234Service, ks1234Driver],

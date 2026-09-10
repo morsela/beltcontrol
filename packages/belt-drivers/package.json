@@ -18,6 +18,9 @@
       "default": "./src/testing/ble-mock.ts"
     }
   },
+  "dependencies": {
+    "@types/web-bluetooth": "^0.0.21"
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "test": "vitest run",

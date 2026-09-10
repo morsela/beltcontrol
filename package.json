@@ -3,7 +3,10 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
@@ -15,7 +18,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "@types/web-bluetooth": "^0.0.21",
     "jsdom": "^25.0.1",
     "oxlint": "^1.81.0",
     "typescript": "^7.0.2",
