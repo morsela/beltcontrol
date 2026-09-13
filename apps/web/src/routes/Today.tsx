@@ -10,6 +10,9 @@ import { settings } from '../state/settings.js';
 import { AreaChart } from '../charts/Area.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { GoalMeter } from '../components/GoalMeter.js';
+import { FunFact } from '../components/FunFact.js';
+import { StickerSheet } from '../components/StickerSheet.js';
+import { NewSticker } from '../components/NewSticker.js';
 import { isDesktop } from '../lib/viewport.js';
 import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
 import { trackEvent } from '../lib/analytics.js';
@@ -43,82 +46,113 @@ export function Today() {
   return (
     <>
       <h1 class="page">Today</h1>
-      <p class="page-sub">
-        {list.length === 0
-          ? 'No walking recorded yet.'
-          : `${list.length} session${list.length === 1 ? '' : 's'}${
-              dayLead
-                ? open
-                  ? ', one still running'
-                  : ''
-                : ` · ${Math.round((day.minutes / goal) * 100)}% of goal`
-            }`}
-      </p>
 
-      {/* The day, stated once. On desktop the rail beside this is controls only, so
-          the minutes lead at hero size here rather than being a third of a stat row
-          under a hero saying the same thing a few hundred pixels to the left. */}
-      <div class="card">
-        {dayLead ? (
-          <div class="day-lead">
-            <div class="day-primary">
-              <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
-              <span class="k">walked today</span>
+      {/* The day, stated once, and the note beside it. Two thirds and one third on
+          desktop; stacked on a phone, where a 10rem note column is unreadable. */}
+      <div class="today-lead">
+        <div class="card">
+          {/* The session count as a tag pinned to the card's top edge rather than a
+              subtitle under the page name. It is one short clause about what is on the
+              card, and it belongs on the card. */}
+          {list.length > 0 && (
+            <span class="card-tag">
+              {list.length} session{list.length === 1 ? '' : 's'}
+              {open ? ', one running' : ''}
+            </span>
+          )}
+
+          <p class="lead-hand">Today you walked</p>
+
+          {dayLead ? (
+            <div class="day-lead">
+              <div class="day-primary">
+                <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
+              </div>
+              <div class="day-side">{supporting}</div>
             </div>
-            {supporting}
-          </div>
-        ) : (
-          <div class="stat-row">
-            <div class="stat">
-              <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
-              <span class="k">walked</span>
+          ) : (
+            <div class="stat-row">
+              <div class="stat">
+                <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
+                <span class="k">walked</span>
+              </div>
+              {supporting}
             </div>
-            {supporting}
-          </div>
-        )}
+          )}
 
-        {dayLead && <GoalMeter />}
+          {/* The meter belongs to this screen on desktop and to Now on a phone, where
+              the two are separate screens and stating it in both is not a repetition.
+              Down there Today still owes the ratio a mention, or the day's progress is
+              only on the other screen. */}
+          {dayLead ? (
+            <GoalMeter />
+          ) : (
+            goal > 0 &&
+            list.length > 0 && (
+              <p class="note" style="margin-top:.6rem">
+                {Math.round((day.minutes / goal) * 100)}% of today's goal.
+              </p>
+            )
+          )}
 
-        {/* No live line here, deliberately. The walk in progress has two homes already —
-            the rail says what the belt is doing this second, and the session list below
-            is the register every session is entered in, open one included. A third
-            statement of the same minutes is the habit this layout exists to break. */}
+          {/* No live line here, deliberately. The walk in progress has two homes already —
+              the rail says what the belt is doing this second, and the session list below
+              is the register every session is entered in, open one included. A third
+              statement of the same minutes is the habit this layout exists to break. */}
 
-        {day.excluded > 0 && (
-          <p class="note" style="margin-top:.9rem">
-            {day.excluded} session{day.excluded === 1 ? '' : 's'} excluded from the
-            distance total: recorded on a protocol whose distance scale this project had
-            not established at the time, so summing it would invent a number.
-          </p>
-        )}
+          {list.length === 0 && <p class="note" style="margin-top:.9rem">No walking recorded yet.</p>}
+
+          {day.excluded > 0 && (
+            <p class="note" style="margin-top:.9rem">
+              {day.excluded} session{day.excluded === 1 ? '' : 's'} excluded from the
+              distance total: recorded on a protocol whose distance scale this project had
+              not established at the time, so summing it would invent a number.
+            </p>
+          )}
+        </div>
+
+        <FunFact />
       </div>
 
-      {open && open.samples.length >= 2 && (
+      {/* Three across on desktop: what you have collected, what the belt just did, and
+          the register of the day. Stacked on a phone. */}
+      <div class="today-row">
+        <div class="card">
+          <p class="section-title" style="margin-top:0">Stickers</p>
+          <StickerSheet />
+        </div>
+
         <div class="card">
           <p class="section-title" style="margin-top:0">Speed this session (mph)</p>
-          <AreaChart
-            samples={open.samples}
-            width={isDesktop.value ? 720 : 320}
-            height={isDesktop.value ? 150 : 120}
-          />
-        </div>
-      )}
-
-      <p class="section-title">Sessions</p>
-      <div class="card">
-        {list.length === 0 ? (
-          <p class="empty">Walk for 30 seconds and it shows up here.</p>
-        ) : (
-          list.map((s) => (
-            <SessionRow
-              key={s.id}
-              s={s}
-              live={s.id === open?.id}
-              onDelete={() => setPendingDelete(s)}
+          {open && open.samples.length >= 2 ? (
+            <AreaChart
+              samples={open.samples}
+              width={isDesktop.value ? 340 : 320}
+              height={isDesktop.value ? 150 : 120}
             />
-          ))
-        )}
+          ) : (
+            <p class="empty">Nothing to trace yet. This fills in as the belt moves.</p>
+          )}
+        </div>
+
+        <div class="card">
+          <p class="section-title" style="margin-top:0">Sessions</p>
+          {list.length === 0 ? (
+            <p class="empty">Walk for 30 seconds and it shows up here.</p>
+          ) : (
+            list.map((s) => (
+              <SessionRow
+                key={s.id}
+                s={s}
+                live={s.id === open?.id}
+                onDelete={() => setPendingDelete(s)}
+              />
+            ))
+          )}
+          <NewSticker />
+        </div>
       </div>
+
 
       {pendingDelete && (
         <ConfirmDialog

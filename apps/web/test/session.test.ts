@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Counter, sessions, currentSession, todayTotals, lifetimeTotals, dailySeries, streak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
+import { Counter, sessions, currentSession, todayTotals, lifetimeTotals, dailySeries, streak, bestStreak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
 import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
 import type { DriverId } from '@beltcontrol/belt-drivers';
 import { dayKey } from '../src/lib/format.js';
@@ -282,6 +282,56 @@ describe('streak', () => {
   it('adds up several short walks in one day', () => {
     sessions.value = [daysAgo(0, 12), daysAgo(0, 12), daysAgo(0, 12)];
     expect(streak(30)).toBe(1);
+  });
+});
+
+describe('bestStreak', () => {
+  const daysAgo = (n: number, minutes: number) =>
+    session({ protocol: 'classic', startedAt: Date.now() - n * 24 * HOUR, activeMs: minutes * 60_000 });
+
+  it('is zero with nothing stored', () => {
+    sessions.value = [];
+    expect(bestStreak(30)).toBe(0);
+  });
+
+  it('finds the longest run anywhere in the history, not the current one', () => {
+    // A four-day run a fortnight ago, a one-day run today, and a gap between them.
+    sessions.value = [
+      daysAgo(0, 40),
+      daysAgo(14, 40),
+      daysAgo(15, 40),
+      daysAgo(16, 40),
+      daysAgo(17, 40),
+    ];
+    expect(streak(30)).toBe(1);
+    expect(bestStreak(30)).toBe(4);
+  });
+
+  it('does not forgive an unfinished today, the way the live streak does', () => {
+    // streak() leaves a live streak alone when today has not met the goal yet. A
+    // record cannot do that — a day counts here only once it has actually met it.
+    sessions.value = [daysAgo(1, 40), daysAgo(2, 40)];
+    expect(streak(30)).toBe(2);
+    expect(bestStreak(30)).toBe(2);
+
+    sessions.value = [daysAgo(0, 5), daysAgo(1, 40), daysAgo(2, 40)];
+    expect(streak(30)).toBe(2);
+    expect(bestStreak(30)).toBe(2);
+  });
+
+  it('counts today once it has met the goal', () => {
+    sessions.value = [daysAgo(0, 40), daysAgo(1, 40), daysAgo(2, 40)];
+    expect(bestStreak(30)).toBe(3);
+  });
+
+  it('is never less than the live streak', () => {
+    sessions.value = [daysAgo(0, 40), daysAgo(1, 40)];
+    expect(bestStreak(30)).toBeGreaterThanOrEqual(streak(30));
+  });
+
+  it('treats a goal of zero as no goal rather than one every day meets', () => {
+    sessions.value = [daysAgo(0, 40)];
+    expect(bestStreak(0)).toBe(0);
   });
 });
 

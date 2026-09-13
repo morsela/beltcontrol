@@ -5,6 +5,8 @@ session logic — most of what looks arbitrary here is load-bearing.
 
 - [The three screens](#the-three-screens)
 - [Two layouts](#two-layouts)
+- [Paper and ink](#paper-and-ink)
+- [The reward layer](#the-reward-layer)
 - [Dialogs and the Escape key](#dialogs-and-the-escape-key)
 - [Design decisions](#design-decisions)
 - [Sessions](#sessions)
@@ -67,7 +69,7 @@ file above it and a test pins the constant.
 | Region | Holds |
 |---|---|
 | Top bar | Wordmark, Today, History — *not* Now |
-| Left rail (sticky, own scroll) | Stop, connection, tread strip, speed, mode |
+| Left rail (sticky, own scroll) | Stop, connection, tread strip, speed, mode, the streak |
 | Content column | Today or History, and the disclaimer |
 
 Now is not in the nav because it is never absent — a nav entry for something already on
@@ -96,6 +98,110 @@ so a phone-sized viewBox in a desktop column magnifies the axis text and the goa
 along with the bars; callers pass roughly the rendered width to hold 1 unit ≈ 1 px. The
 consistency heatmap shows 26 weeks on desktop against 14 on a phone — twice the column
 deserves more history, not bigger squares.
+
+## Paper and ink
+
+The app is a sticker book: a cream page with a dot grain, cards outlined in ink and
+casting a hard 3px offset shadow, headings hand-lettered, and four muted fills reserved
+for rewards. It replaced a neutral grey-on-white dashboard, and the palette was re-solved
+against cream rather than tinted — a grey chosen against pure white is not the same
+colour against `#f4f1ea`.
+
+**Two type faces, doing two different jobs.** Gochi Hand carries anything a person would
+have written in the book: the wordmark, the page name, every card heading, "Today you
+walked". Nunito carries everything else, and in particular every label attached to a
+figure, which stays upright and mostly uppercase. That split is the whole idea — the
+headings are what somebody wrote, the labels are what the machine printed. **Nothing that
+ticks is ever in the display face.** Gochi Hand has no tabular figures, and a duration
+that changes width as it counts is the one thing the readouts here cannot do.
+
+**Both faces are served from this origin.** The CSP is `default-src 'none'`, which meant
+no webfont could load at all until `font-src 'self'` was added; a `<link>` to
+`fonts.googleapis.com` would have been the easy way and would have handed a third party
+the IP address of every visitor on every load, which is precisely the trade the rest of
+this app refuses. 59 KB of Latin-subset woff2 lives in `apps/web/public/fonts` instead,
+with its licences beside it.
+
+**The dark theme is night, not inverted paper.** A printed page has no dark counterpart:
+inverting it gives black paper with a black outline drawn on it, which is nothing. So the
+dark theme keeps what survives the lights going out — the warmth, the four fills, the
+handwriting — and drops what does not: the grain, the ink outline and the hard shadow.
+`--ink-line` and `--ink-w` collapse back to the ordinary quiet border there, in one place,
+so every card follows without a second rule anywhere.
+
+**Stop got its own fill token.** `--bad` is error *text* on a card and `--bad-fill` is a
+large white label on a saturated block; the two are read against opposite backgrounds and
+one value cannot solve both. They are the same colour in light and deliberately different
+in dark, where a red light enough to read as text on near-black puts white on Stop at
+2.8:1. The split takes that to 4.9:1 without costing the error text anything.
+
+Every colour in both themes is measured, and the figures are in the comments beside them
+in `apps/web/src/styles/tokens.css`. The sequential ramp was re-solved for the cream
+surface under the same rules as the one it replaced: single hue, monotone lightness,
+adjacent ΔL ≥ 0.075, lightest data step ≥ 2:1 against the card.
+
+**Rotation is used four times and refused everywhere else.** The wordmark, the session
+tag, the newest streak sticker and the badges are all small and fixed-width, so a degree
+or two lifts a corner by a pixel or two and reads as something stuck on by hand. The
+fun-fact note is the full width of the content column, where the same half a degree lifts
+one corner thirteen pixels above the other and reads as a broken layout; it is square, and
+its torn corners do the work instead.
+
+## The reward layer
+
+Two additions, and two things deliberately absent from both.
+
+**No points, no XP, no level.** Every figure on every other screen here is one the
+treadmill sent or one the clock measured; a score is neither, and an invented number in
+the same column as measured ones undoes what makes the measured ones worth reading.
+
+**No daily objectives either.** A "today's three" card — walk before nine, one walk of
+fifteen minutes, meet the goal — was built, tested and then taken out again. Two of the
+three restated figures the same screen already carried, and the third told somebody who
+walks every day at the same time to walk at the time they already walk. What was left was
+a list that had to be satisfied rather than a record of what happened, which is the
+opposite of what the rest of this screen does: nothing else here asks anything of anyone.
+A streak and a sticker sheet both say "here is what you did"; a checklist says "here is
+what you owe", and one card of that changes the tone of the whole screen. The reward layer
+is a record, not a chore list.
+
+**Nothing depends on a figure a pad might not report.** The badges are decided from start
+times, durations and counts — wall-clock, measured locally, needing no cooperation from
+any protocol. A distance badge and a calories badge were both drafted and both cut:
+distance on an unverified pad is not kilometres, the `0x1234` calorie figure is computed
+from distance at a flat rate rather than measured, and which pad somebody owns is not an
+achievement. Everything on the sheet is earnable on every protocol the app speaks,
+including FitShow, which reports nothing but that the belt is moving.
+
+**The streak sits in the rail.** It bends the rule that the rail carries no accumulated
+figures, and it is the one thing allowed to. The rule exists to stop a figure being stated
+twice in one viewport, and the streak is stated nowhere else on the screen; it is beside
+the controls because it is the only number in the app whose job is to make somebody press
+Start, and Start is there. Seven days, filled left to right, because seven is the most
+that can be read without counting — the thirty-day columns and the twenty-six-week heatmap
+on History answer the longer question, and this is not a third chart. The strip itself is
+`aria-hidden` with the same fact given once as text, for the reason the odometer's wheels
+are: seven list items each announcing whether a circle is filled is noise for something a
+screen reader can state in four words.
+
+**The fun fact restates a distance, and never introduces one.** "1.15 miles today is the
+Brooklyn Bridge, end to end" is the one card on Today that is not a measurement. Both
+figures on it go through the same `fmtMiles` every other mile goes through, so it cannot
+disagree with the stat beside it, and it renders nothing at all when there is nothing
+honest to say — a pad reporting no distance, or one whose scale was never established,
+gets no card rather than an empty one. The landmark list in
+`apps/web/src/lib/landmarks.ts` is deliberately short: every entry is a factual claim this
+app makes to its users, so it is a list that can be checked rather than a long one.
+
+**Badges are derived, never stored.** No session record carries an earned-at timestamp and
+none was added: the sessions are the evidence and a sticker is a reading of them, which
+also means an imported backup lights up the sheet it should have lit up rather than
+starting the new browser at zero. "Earned today" falls out of the same idea — the reading
+is taken twice, once over the whole history and once with today left out, and the
+difference is what today produced. The streak badge is excluded from that comparison
+rather than guessed at, because yesterday's streak is not one of the inputs; under-claiming
+a reward is the safe direction, and the sticker still appears on the sheet the moment it is
+earned.
 
 ## Dialogs and the Escape key
 

@@ -33,14 +33,18 @@ export function Logo({ size = 24 }: { size?: number }) {
 }
 
 /**
- * Mark plus name. The name is a heading nowhere — on both layouts it labels the
- * app, not the section under it, and the sections already own the headings.
+ * The name, handwritten inside an outlined pill — the wordmark as the sticker-book
+ * design draws it.
+ *
+ * The tile mark is deliberately not beside it here. It is a filled square with its own
+ * two fixed colours, and next to a hand-lettered label on paper it reads as a second
+ * logo rather than part of this one. It has not gone anywhere: it is still the favicon,
+ * the installed app icon and the tab strip, which is where a mark that has to work at
+ * 16px belongs. See public/icon.svg.
+ *
+ * The name is a heading nowhere — on both layouts it labels the app, not the section
+ * under it, and the sections already own the headings.
  */
 export function Brand({ class: cls = '' }: { class?: string }) {
-  return (
-    <span class={`brand${cls ? ` ${cls}` : ''}`}>
-      <Logo size={22} />
-      Belt Control
-    </span>
-  );
+  return <span class={`brand${cls ? ` ${cls}` : ''}`}>Belt Control</span>;
 }

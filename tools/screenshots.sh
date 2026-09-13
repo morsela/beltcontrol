@@ -116,7 +116,10 @@ ab() { "${AB_BIN[@]}" --session "$SESSION" "$@"; }
 # --- the dev server -------------------------------------------------------------------
 
 SERVER_PID=
-VITE_LOG=$(mktemp -t beltcontrol-shots)
+# The template needs its own X's: BSD mktemp appends them to a -t template and GNU
+# mktemp refuses one without them, so the bare name worked on macOS and failed on
+# Linux with "too few X's in template".
+VITE_LOG=$(mktemp -t beltcontrol-shots.XXXXXX)
 
 cleanup() {
   rc=$?
@@ -295,12 +298,13 @@ JS
 mkdir -p "$OUT"
 
 echo "capturing Today…"
-# Both waits are on the content column, because at this width that is where every number
-# is: the rail is controls only. `.day-primary` is the day's minutes at hero size — the
-# same figure the hero in the rail used to carry, in the one place that now states it.
-# The subtitle no longer carries a percentage either; the meter under the lead does.
+# Both waits are on the content column, because at this width that is where the day's
+# figures are. `.day-primary` is the day's minutes at hero size — the same figure the
+# hero in the rail used to carry, in the one place that now states it. The session count
+# moved off the page subtitle and onto a tag pinned to the day's card, which is what
+# `.card-tag` is; the subtitle carries no percentage either, because the meter does.
 ab wait --fn "document.querySelector('.day-primary .v')?.textContent.trim() === '31m'"
-ab wait --fn "document.querySelector('.page-sub')?.textContent.trim() === '2 sessions, one still running'"
+ab wait --fn "document.querySelector('.card-tag')?.textContent.replace(/\s+/g,' ').trim() === '2 sessions, one running'"
 pin_session
 ab screenshot "$OUT/today.png" >/dev/null
 
