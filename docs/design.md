@@ -149,20 +149,28 @@ its torn corners do the work instead.
 
 ## The reward layer
 
-Three additions, and one thing deliberately absent from all of them.
+Two additions, and two things deliberately absent from both.
 
-**No points, no XP, no level.** It was the first version and the first thing cut. Every
-figure on every other screen here is one the treadmill sent or one the clock measured; a
-score is neither, and an invented number in the same column as measured ones undoes what
-makes the measured ones worth reading. A tick is the smallest mark that still says "that
-one is done", and it is the only mark the quests use.
+**No points, no XP, no level.** Every figure on every other screen here is one the
+treadmill sent or one the clock measured; a score is neither, and an invented number in
+the same column as measured ones undoes what makes the measured ones worth reading.
 
-**Nothing depends on a figure a pad might not report.** The badges and the quests are
-decided from start times, durations and counts — wall-clock, measured locally, needing no
-cooperation from any protocol. A distance badge and a calories badge were both drafted and
-both cut: distance on an unverified pad is not kilometres, the `0x1234` calorie figure is
-computed from distance at a flat rate rather than measured, and which pad somebody owns is
-not an achievement. Everything on the sheet is earnable on every protocol the app speaks,
+**No daily objectives either.** A "today's three" card — walk before nine, one walk of
+fifteen minutes, meet the goal — was built, tested and then taken out again. Two of the
+three restated figures the same screen already carried, and the third told somebody who
+walks every day at the same time to walk at the time they already walk. What was left was
+a list that had to be satisfied rather than a record of what happened, which is the
+opposite of what the rest of this screen does: nothing else here asks anything of anyone.
+A streak and a sticker sheet both say "here is what you did"; a checklist says "here is
+what you owe", and one card of that changes the tone of the whole screen. The reward layer
+is a record, not a chore list.
+
+**Nothing depends on a figure a pad might not report.** The badges are decided from start
+times, durations and counts — wall-clock, measured locally, needing no cooperation from
+any protocol. A distance badge and a calories badge were both drafted and both cut:
+distance on an unverified pad is not kilometres, the `0x1234` calorie figure is computed
+from distance at a flat rate rather than measured, and which pad somebody owns is not an
+achievement. Everything on the sheet is earnable on every protocol the app speaks,
 including FitShow, which reports nothing but that the belt is moving.
 
 **The streak sits in the rail.** It bends the rule that the rail carries no accumulated

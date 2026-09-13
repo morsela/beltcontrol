@@ -16,7 +16,7 @@ server only ships static files and never sees any telemetry. Session history liv
 `localStorage` and is never uploaded — History exports it as a JSON backup you can import
 into another browser, or as a CSV for a spreadsheet.
 
-![Today at desktop width. In the left rail: a pinned Stop button, the belt reported as running, a target of 3.0 mph with the belt now at 3.0, speed presets, and a three-day streak drawn as a row of seven stickers. Beside it the day's card — 31m walked today with 1.16 mi and 2,512 steps and a goal meter reading 29m to go — and a note card reading "1.16 miles today is the Brooklyn Bridge, end to end". Under those, three cards: a sticker sheet with two of six badges earned, a speed trace for the session in progress, and the day's sessions](docs/images/today.png)
+![Today at desktop width. In the left rail: a pinned Stop button, the belt reported as running, a target of 3.0 mph with the belt now at 3.0, speed presets, and a three-day streak drawn as a row of seven stickers. Beside it the day's card — 31m walked today with 1.16 mi and 2,512 steps and a goal meter reading 29m to go — and a note card reading "1.16 miles today is the Brooklyn Bridge, end to end". Under those, three cards: a sticker sheet with two of six badges earned, a speed trace for the session in progress, and the day's sessions with a note that Double Day was earned today](docs/images/today.png)
 
 ![History beside the same rail: a lifetime odometer reading 52.0 mi, 30-day totals, and minutes-per-day columns against the dashed goal line](docs/images/history.png)
 

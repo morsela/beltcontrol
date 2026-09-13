@@ -1429,32 +1429,6 @@ table.data th { color: var(--muted); font-weight: 500; }
 }
 .badge-new svg { flex: none; width: 18px; height: 18px; }
 
-/* --- quests --------------------------------------------------------------- */
-
-/* Three a day, ticked or not, and no points anywhere. Scoring was the first
-   thing tried and the first thing cut: a walking pad reports minutes, distance
-   and sometimes steps, so any point total is a number this app invented, and
-   every figure on every other screen in it is one the pad actually sent. A tick
-   is the smallest thing that still says "that one is done". */
-.quests { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.6rem; }
-.quest { display: flex; align-items: center; gap: 0.6rem; font-size: var(--t-sm); }
-.quest-box {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: var(--ink-w) solid var(--ink-line);
-  background: var(--panel-2);
-  display: grid;
-  place-items: center;
-  color: var(--sticker-ink);
-}
-.quest.done .quest-box { background: var(--sticker-sage); }
-.quest.done .quest-label { color: var(--muted); text-decoration: line-through; }
-.quest-box svg { width: 13px; height: 13px; display: block; }
-.quest-label { flex: 1; min-width: 0; text-wrap: pretty; }
-.quest-progress { flex: none; color: var(--muted); font-size: var(--t-label); }
-
 /* --- desktop -------------------------------------------------------------- */
 
 /* 64rem must match DESKTOP_MIN_PX in src/lib/viewport.ts: the shell branches on it

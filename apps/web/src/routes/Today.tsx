@@ -13,7 +13,6 @@ import { GoalMeter } from '../components/GoalMeter.js';
 import { FunFact } from '../components/FunFact.js';
 import { StickerSheet } from '../components/StickerSheet.js';
 import { NewSticker } from '../components/NewSticker.js';
-import { Quests } from '../components/Quests.js';
 import { isDesktop } from '../lib/viewport.js';
 import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
 import { trackEvent } from '../lib/analytics.js';
@@ -152,11 +151,6 @@ export function Today() {
           )}
           <NewSticker />
         </div>
-      </div>
-
-      <p class="section-title">Today's three</p>
-      <div class="card">
-        <Quests sessionsToday={list} day={day} />
       </div>
 
 
