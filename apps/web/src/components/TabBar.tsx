@@ -53,7 +53,10 @@ export function TabBar({ route, variant = 'bottom' }: { route: Route; variant?: 
             href={`#/${t.route}`}
             aria-current={route === t.route ? 'page' : undefined}
           >
-            {t.icon}
+            {/* The desktop bar is a row of labelled pills and the icons only crowd
+                them. The phone bar keeps them: down there the label is 0.7rem under a
+                thumb, and the glyph is most of what is actually read. */}
+            {variant === 'bottom' && t.icon}
             <span>{t.label}</span>
           </a>
         ))}

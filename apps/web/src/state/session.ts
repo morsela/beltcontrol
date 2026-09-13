@@ -523,9 +523,13 @@ export function dailySeries(days: number): DayTotal[] {
   return out;
 }
 
+/** How far back both streak calculations look. Also the widest the daily series is
+ *  ever asked for, so a longer run than this is not visible to either of them. */
+const STREAK_WINDOW_DAYS = 400;
+
 /** Consecutive days up to today meeting the goal. */
 export function streak(goalMinutes: number): number {
-  const series = dailySeries(400);
+  const series = dailySeries(STREAK_WINDOW_DAYS);
   let n = 0;
   for (let i = series.length - 1; i >= 0; i--) {
     const d = series[i];
@@ -536,6 +540,34 @@ export function streak(goalMinutes: number): number {
     else break;
   }
   return n;
+}
+
+/**
+ * The longest run of consecutive goal-meeting days anywhere in the history.
+ *
+ * Separate from `streak` rather than folded into it, because the two answer different
+ * questions and disagree on purpose. `streak` is the live one and forgives today: a
+ * day still in progress that has not met the goal yet does not end it. A record cannot
+ * forgive anything — a day counts here only once it has actually met the goal — so an
+ * unfinished today is simply not part of the best run until it is.
+ *
+ * Bounded by the same 400-day window `streak` reads, which is the window the daily
+ * series is built over.
+ */
+export function bestStreak(goalMinutes: number): number {
+  if (!(goalMinutes > 0)) return 0;
+  const series = dailySeries(STREAK_WINDOW_DAYS);
+  let best = 0;
+  let run = 0;
+  for (const d of series) {
+    if (d.minutes >= goalMinutes) {
+      run++;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+  }
+  return best;
 }
 
 export function sessionsOn(key: string): Session[] {

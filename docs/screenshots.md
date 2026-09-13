@@ -94,6 +94,13 @@ point half a minute before they would round differently. It also flattens the ra
 that the live session ticker would otherwise leave on the right-hand edge of Today's
 speed chart.
 
+The figures above are the fixture's, measured at the instant of the re-anchor. The belt
+is still running when the shutter fires a moment later, so the distance and the step
+count in the images land a unit or two above them, by however long that machine takes to
+get from `restoreOpenSession()` to a PNG — a second on the machine these were first taken
+on, a good deal longer on a slow container. Minutes are unaffected, which is the point of
+the thirty-second window: they are what the two assertions above are pinned to.
+
 Every `wait` in the script is an assertion as much as a wait — it waits for the exact
 string the screen should be showing. A UI change that moves one of them fails the script
 at that line instead of quietly writing a wrong image.

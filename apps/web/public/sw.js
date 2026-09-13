@@ -57,7 +57,10 @@ self.addEventListener('fetch', (event) => {
   // revalidating. That is also why a poisoned or truncated entry would persist
   // indefinitely: nothing ever re-fetches it. Hence caching only clean responses, and
   // a VERSION that moves when the build does.
-  if (url.pathname.startsWith('/assets/')) {
+  // /fonts/ joins /assets/ here rather than in SHELL: the names carry their upstream
+  // version so a hit can be served without revalidating, and a file that fails to
+  // fetch must not take the whole install down with it the way an addAll would.
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/fonts/')) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>

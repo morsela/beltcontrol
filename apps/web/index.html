@@ -27,8 +27,8 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171511" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="Belt Control">
 <meta name="apple-mobile-web-app-title" content="Belt Control">
@@ -64,25 +64,32 @@
 </script>
 
 <style>
+  /* Painted before anything else so the first frame is already the right paper. The
+     app stylesheet sets this too, but it arrives with the bundle; without it here the
+     page opens white and then turns cream, which is the one transition a reader
+     notices. Same literals as --bg in src/styles/tokens.css. */
+  html { background: #f4f1ea; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { html { background: #171511; } }
+
   /* The static intro and the <noscript> fallback are the only things on this page that
      are styled without the app's stylesheet — the bundle carries that, and neither of
      these waits for it. Hence literal colours rather than tokens.css variables; they
      are the same values, and they have to hold before anything else has loaded. */
   .pre { max-width: 36rem; margin: 3rem auto; padding: 0 1.25rem;
     font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: #101418; }
+    color: #2b2a27; }
   .pre h1 { font-size: 1.9rem; line-height: 1.15; margin: 0 0 0.5rem; }
   .pre h2 { font-size: 1.05rem; margin: 2rem 0 0.5rem; }
-  .pre .lede { color: #67707d; margin-top: 0; font-size: 1.05rem; }
+  .pre .lede { color: #6f6b62; margin-top: 0; font-size: 1.05rem; }
   .pre li { margin-bottom: 0.35rem; }
-  .pre small { color: #67707d; }
-  .pre a { color: #1f7a4d; }
-  .pre hr { border: 0; border-top: 1px solid #e2e5ea; margin: 2rem 0; }
+  .pre small { color: #6f6b62; }
+  .pre a { color: #46705a; }
+  .pre hr { border: 0; border-top: 1px solid #ddd7c9; margin: 2rem 0; }
   @media (prefers-color-scheme: dark) {
-    .pre { color: #e8ecf1; }
-    .pre .lede, .pre small { color: #8e99a8; }
-    .pre a { color: #3ddc91; }
-    .pre hr { border-top-color: #232a33; }
+    .pre { color: #ede7d9; }
+    .pre .lede, .pre small { color: #a49c8b; }
+    .pre a { color: #8fc7a3; }
+    .pre hr { border-top-color: #39342a; }
   }
 </style>
 </head>

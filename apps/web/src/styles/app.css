@@ -23,7 +23,11 @@
 
 .card {
   background: var(--panel);
-  border: 1px solid var(--line);
+  /* An outline in ink, not a hairline rule: a card here is a thing stuck to the
+     page rather than a region of it. --ink-line and --ink-w both collapse back to
+     the old quiet border under the dark theme, where an ink edge on a dark card
+     is a smudge — see tokens.css. */
+  border: var(--ink-w) solid var(--ink-line);
   border-radius: var(--radius);
   padding: var(--pad);
   margin-bottom: var(--gap);
@@ -41,19 +45,25 @@
   min-height: var(--tap);
   padding: 0.6rem 1rem;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   background: var(--panel);
   color: var(--ink);
-  font-weight: 550;
+  font-weight: 650;
   cursor: pointer;
   transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
 }
 .btn:hover:not(:disabled) { border-color: var(--muted); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+/* --bad-fill, not --bad: see the note beside them in tokens.css. */
+.btn.danger { background: var(--bad-fill); border-color: var(--bad-fill); color: #fff; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--line); }
+/* Pressed, a stuck-on button loses its shadow and moves onto it, the way a
+   sticker presses flat. Nothing moves under reduced motion — the transform is
+   instant either way, but the tokens.css blanket rule kills the transition. */
+.btn:not(.ghost) { box-shadow: var(--shadow); transition: transform 0.08s var(--ease), box-shadow 0.08s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease); }
+.btn:not(.ghost):active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
 .btn.block { width: 100%; }
 .btn.lg { min-height: 60px; font-size: 1.05rem; }
 /* A button that is really a link — `mailto:` is a destination, so it is an anchor and
@@ -138,18 +148,26 @@ details.compat b { color: var(--ink); font-weight: 600; }
 
 /* --- brand ---------------------------------------------------------------- */
 
-/* Mark and name as one lockup, so they cannot drift apart or wrap between. */
+/* The name, hand-lettered on a stuck-on label. The tilt is the one place in the app
+   where a rotation is unambiguously right: it is a small fixed-width element, so the
+   corner lift is a couple of pixels, and a wordmark is exactly the thing that gets
+   stuck on slightly crooked. */
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
   white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: var(--t-hand);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 0.3rem 0.8rem 0.35rem;
+  border: var(--ink-w) solid var(--ink-line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform: rotate(-2deg);
 }
-/* `block` because an inline svg sits on the text baseline and leaves a descender's
-   worth of space under the tile, which reads as a mark hung too high. */
-.brand .logo { flex: none; display: block; }
 
 /* The phone header. Deliberately quiet and deliberately short: the screen below it
    is glanced at from a treadmill, and every pixel spent here is a pixel off the
@@ -181,7 +199,7 @@ details.compat b { color: var(--ink); font-weight: 600; }
   gap: 0.5rem;
   min-height: 40px;
   padding: 0.35rem 0.75rem 0.35rem 0.6rem;
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   border-radius: var(--radius-pill);
   background: var(--panel);
   cursor: pointer;
@@ -259,7 +277,7 @@ details.compat b { color: var(--ink); font-weight: 600; }
   margin: 0 0 0.9rem;
   overflow: hidden;
   background: var(--panel-2);
-  border-block: 1px solid var(--line);
+  border-block: var(--ink-w) solid var(--ink-line);
 }
 .tread-belt {
   height: 100%;
@@ -360,15 +378,20 @@ details.compat b { color: var(--ink); font-weight: 600; }
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: var(--t-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: var(--t-sm);
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--muted);
   margin-bottom: 0.4rem;
 }
+/* Outlined, and taller than the 8px rule it was, because an ink edge needs
+   something to contain. It stays a rounded pill against the squared-off tread
+   strip above it — the two must never be mistaken for one another, and now that
+   both are drawn in ink the shape is the only thing keeping them apart. */
 .meter-track {
-  height: 8px;
+  height: 14px;
   border-radius: var(--radius-pill);
+  border: var(--ink-w) solid var(--ink-line);
   background: var(--seq-track);
   overflow: hidden;
 }
@@ -376,6 +399,11 @@ details.compat b { color: var(--ink); font-weight: 600; }
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--accent);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(255 255 255 / 22%) 0 6px,
+    transparent 6px 12px
+  );
   transition: width 0.4s var(--ease);
 }
 .meter-goal-btn {
@@ -384,9 +412,9 @@ details.compat b { color: var(--ink); font-weight: 600; }
   padding: 0;
   color: var(--muted);
   font: inherit;
-  font-size: var(--t-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: var(--t-sm);
+  text-transform: none;
+  letter-spacing: 0;
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
@@ -447,7 +475,7 @@ details.compat b { color: var(--ink); font-weight: 600; }
   height: 72px;
   flex: none;
   border-radius: 50%;
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   background: var(--panel-2);
   color: var(--ink);
   font-size: 1.75rem;
@@ -482,24 +510,29 @@ details.compat b { color: var(--ink); font-weight: 600; }
 .preset {
   min-height: var(--tap);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   background: var(--panel-2);
   color: var(--ink);
   cursor: pointer;
   padding: 0.4rem 0.5rem;
   line-height: 1.15;
 }
+/* Filled rather than tinted. A 14% wash of the accent over cream is a shade of
+   cream; the speed you are actually walking at should be legible across a room. */
 .preset[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--ink-line);
+  background: var(--sticker-sage);
+  color: var(--sticker-ink);
+  box-shadow: var(--shadow);
 }
+.preset[aria-pressed='true'] .p-k { color: var(--sticker-ink); }
 .preset:disabled { opacity: 0.4; cursor: not-allowed; }
 .preset .p-v { display: block; font-weight: 600; font-size: 1.05rem; }
 .preset .p-k {
   display: block;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--muted);
 }
 
@@ -603,7 +636,7 @@ details.mode { margin: 0 0 var(--gap); padding-inline: 0.25rem; }
 }
 .sheet {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   border-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
   width: 100%;
@@ -665,7 +698,7 @@ details.mode { margin: 0 0 var(--gap); padding-inline: 0.25rem; }
   min-height: var(--tap);
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   background: var(--panel-2);
   color: var(--ink);
   font-size: 1.05rem;
@@ -780,19 +813,30 @@ pre.log { margin: 0; }
 
 /* --- generic -------------------------------------------------------------- */
 
+/* The page name and every card heading are handwritten; every label attached to a
+   number stays set in the body face, upright and uppercase. That split is the
+   whole typographic idea — the headings are what somebody wrote in the book, the
+   labels are what the machine printed. Nothing that ticks is ever in the display
+   face: Gochi Hand has no tabular figures, and a duration that changes width as
+   it counts is the one thing the readouts here cannot do. */
 h1.page {
-  font-size: 1.25rem;
-  margin: 0 0 0.15rem;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 400;
+  margin: 0 0 0.1rem;
+  letter-spacing: 0;
+  line-height: 1.1;
 }
 .page-sub { color: var(--muted); font-size: var(--t-sm); margin: 0 0 1rem; }
 
 .section-title {
-  font-size: var(--t-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin: 1.25rem 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: var(--t-hand);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  margin: 1.5rem 0 0.5rem;
 }
 
 .empty {
@@ -890,27 +934,34 @@ a { color: var(--accent); }
 .day-lead {
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
+  gap: 0.5rem 2rem;
   flex-wrap: wrap;
-  gap: 1rem 2.5rem;
 }
+/* Distance over steps, stacked, rather than spread across the card. The lead number is
+   now the only thing on its own line, and two figures hanging off its baseline read as
+   belonging to it; the same two at opposite ends of the card read as three unrelated
+   things, which is what the space-between version actually looked like. */
+.day-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-bottom: 0.5rem;
+}
+.day-side .stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  text-align: left;
+}
+.day-side .stat .v { font-size: var(--t-lg); }
+.day-side .stat .k { margin-top: 0; }
 .day-primary .v {
   display: block;
   font-size: var(--t-hero);
   font-weight: 650;
   line-height: 1;
 }
-.day-primary .k {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: var(--t-label);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-/* The two beside it hang left off the lead rather than centring in their columns,
-   which would leave the row reading as three unrelated things. */
-.day-lead .stat { text-align: left; }
+
 /* The meter under the lead is the same ratio the page used to state twice; it needs
    room from the figures above it. */
 .day-lead + .meter { margin-top: 1.25rem; }
@@ -1121,6 +1172,289 @@ table.data th:first-child, table.data td:first-child { text-align: left; }
 table.data th { color: var(--muted); font-weight: 500; }
 .scroll-x { overflow-x: auto; }
 
+/* --- Today's grid --------------------------------------------------------- */
+
+/* One column on a phone, where every card is the width of the screen. The desktop
+   block at the foot of this file turns both of these into the two rows the design
+   is built around: the day and its note, then the three cards under them. */
+.today-lead,
+.today-row {
+  display: grid;
+  gap: var(--gap);
+}
+/* The cards inside a grid row carry their own gap, so their own bottom margin would
+   double it — and in the three-across row it would leave them hanging at different
+   heights depending on which had the most in it. */
+.today-lead > .card,
+.today-row > .card,
+.today-lead > .funfact {
+  margin-bottom: 0;
+}
+.today-lead { margin-bottom: var(--gap); }
+.today-row { margin-bottom: var(--gap); }
+/* Stretch, so three cards of different content still rule off level with each other. */
+.today-row > .card { align-self: stretch; }
+
+/* A tag stuck to the top edge of a card, half on and half off it. Used for the day's
+   session count, which is a clause about the card rather than a figure on it. */
+.card-tag {
+  position: absolute;
+  top: calc(var(--ink-w) * -1 - 0.7rem);
+  right: 1.25rem;
+  padding: 0.15rem 0.7rem 0.2rem;
+  border: var(--ink-w) solid var(--ink-line);
+  border-radius: var(--radius-pill);
+  background: var(--sticker-slate);
+  color: var(--sticker-ink);
+  font-size: var(--t-label);
+  font-weight: 700;
+  white-space: nowrap;
+  transform: rotate(1.5deg);
+  box-shadow: var(--shadow);
+}
+/* The tag is positioned against this card, and the day's card is the only one that has
+   one — but a card is a shared primitive, so the containing block is set here rather
+   than by adding a modifier class for one property. */
+.card { position: relative; }
+
+/* "Today you walked" — the handwritten line over the day's minutes. It replaces the
+   uppercase label that used to sit under them: a label under a 72px number reads as a
+   caption, and this reads as somebody writing the day down. */
+.lead-hand {
+  font-family: var(--font-display);
+  font-size: var(--t-hand);
+  color: var(--muted);
+  margin: 0 0 0.1rem;
+  line-height: 1.1;
+}
+
+/* --- streak chain --------------------------------------------------------- */
+
+/* The week as a strip of seven, filled left to right. It answers "am I keeping
+   this up" for the last seven days only; the 30-day columns and the heatmap on
+   History answer it over a longer run, and this is deliberately not a third
+   chart. It lives in the content column rather than the rail, like every other
+   accumulated figure — see "Each region reports once" in docs/design.md.
+
+   The strip is aria-hidden and the same fact is given once as text above it:
+   seven list items each announcing "stuck" or "not stuck" is noise for something
+   a screen reader can state in four words. */
+.streak {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.streak-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.streak-n {
+  font-family: var(--font-display);
+  font-size: var(--t-hand);
+  line-height: 1.1;
+}
+.streak-best { font-size: var(--t-sm); color: var(--muted); }
+
+.streak-chain {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 20rem;
+}
+.streak-chain li {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: var(--ink-w) solid var(--ink-line);
+  background: var(--sticker-mustard);
+  color: var(--sticker-ink);
+  display: grid;
+  place-items: center;
+}
+.streak-chain li svg { width: 55%; height: 55%; display: block; }
+/* Today, met: the newest sticker, still crooked from being pressed on. */
+.streak-chain li.today {
+  background: var(--sticker-sage);
+  transform: rotate(-6deg);
+}
+/* A day that has not happened yet, or one that was missed: the outline of a
+   sticker with nothing in it. Dashed rather than faint, so it reads as a space
+   left for something rather than a disabled control. */
+.streak-chain li.blank {
+  background: var(--sticker-empty);
+  border-style: dashed;
+  border-color: var(--muted);
+}
+
+/* --- fun fact ------------------------------------------------------------- */
+
+/* A distance is a number nobody has a feel for. This is the one card on the
+   screen that is not a measurement: it restates a figure already on the page as
+   something with a size you can picture. It never introduces a number of its
+   own, and it only ever speaks about a figure the connected pad actually
+   reports — see src/lib/landmarks.ts. */
+.funfact {
+  /* Torn on two corners, square on the other two. */
+  border-radius: 6px var(--radius) 6px var(--radius);
+  background: var(--note-paper);
+  color: var(--note-ink);
+  border: var(--ink-w) solid var(--ink-line);
+  box-shadow: var(--shadow);
+  padding: var(--pad);
+  margin-bottom: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  /* Not rotated, and that is a correction rather than an omission. A tilt is what
+     makes a small sticker read as stuck on, but this card is the full width of the
+     content column: at 700px even half a degree lifts one corner thirteen pixels
+     above the other, which reads as a broken layout and not as a note dropped on a
+     page. The torn corners carry it instead. */
+}
+.funfact-k {
+  font-family: var(--font-display);
+  font-size: var(--t-hand);
+  margin: 0;
+  line-height: 1.1;
+}
+.funfact-v {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+.funfact-next {
+  margin: 0;
+  font-size: var(--t-sm);
+  /* --muted is solved against the card surfaces, not against the note, so the note
+     carries its own second tone: 68% of its ink over its own paper, measured at
+     4.1:1 light and 4.2:1 dark. */
+  color: color-mix(in srgb, var(--note-ink) 68%, var(--note-paper));
+}
+.funfact .table-toggle {
+  align-self: flex-start;
+  color: var(--note-ink);
+  font-weight: 700;
+}
+
+/* --- sticker sheet -------------------------------------------------------- */
+
+/* Badges, as a page in a sticker book: the ones earned are stuck on, the rest
+   are outlines waiting. Every badge is named in text beside its drawing, because
+   a picture of a bird is not the word "Early Bird" to anybody who cannot see it. */
+/* Three across on a phone, all six on one row in the desktop column — see the
+   desktop block at the foot of this file. auto-fill was tried first and is wrong
+   here: it lays out as many tracks as fit, so six stickers in a 700px card sat
+   hard left under a third of a card of nothing. */
+.stickers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 0.5rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sticker {
+  position: relative;
+  aspect-ratio: 1;
+  /* Capped and centred in its track, so a wide column spreads the stickers out
+     rather than inflating them. */
+  max-width: 4.75rem;
+  margin-inline: auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--sticker-ink);
+  /* The white die-cut edge every sticker has, with the ink outline outside it.
+     A border cannot draw both, so the outer ring is a spread shadow. */
+  border: 3px solid var(--panel);
+  box-shadow: 0 0 0 var(--ink-w) var(--ink-line), var(--shadow);
+}
+.sticker svg { width: 52%; height: 52%; display: block; }
+/* Four fills, cycled, so no two neighbours in a row of four match. */
+.sticker[data-fill='sage'] { background: var(--sticker-sage); }
+.sticker[data-fill='rose'] { background: var(--sticker-rose); }
+.sticker[data-fill='mustard'] { background: var(--sticker-mustard); }
+.sticker[data-fill='slate'] { background: var(--sticker-slate); }
+/* Barely crooked, and deterministic rather than random: a sticker that lands at
+   a different angle on every render is a sticker being re-stuck every second. */
+.stickers li:nth-child(3n + 1) .sticker { transform: rotate(-3deg); }
+.stickers li:nth-child(3n + 2) .sticker { transform: rotate(2deg); }
+.stickers li:nth-child(3n) .sticker { transform: rotate(-1deg); }
+
+.sticker.locked {
+  background: var(--sticker-empty);
+  border-color: transparent;
+  box-shadow: none;
+  outline: var(--ink-w) dashed var(--muted);
+  outline-offset: -2px;
+  color: var(--muted);
+  transform: none;
+}
+.stickers li:nth-child(n) .sticker.locked { transform: none; }
+
+.sticker-name {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.sticker-name.earned { color: var(--ink); font-weight: 700; }
+
+
+/* A sticker earned today, called out under the day's walks rather than thrown over
+   the screen. It is a record of something that happened, not a celebration that
+   interrupts a walk — the same reason ambient mode is not a celebration screen. */
+.badge-new {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border: var(--ink-w) solid var(--ink-line);
+  border-radius: var(--radius-sm);
+  background: var(--sticker-rose);
+  color: var(--sticker-ink);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+.badge-new svg { flex: none; width: 18px; height: 18px; }
+
+/* --- quests --------------------------------------------------------------- */
+
+/* Three a day, ticked or not, and no points anywhere. Scoring was the first
+   thing tried and the first thing cut: a walking pad reports minutes, distance
+   and sometimes steps, so any point total is a number this app invented, and
+   every figure on every other screen in it is one the pad actually sent. A tick
+   is the smallest thing that still says "that one is done". */
+.quests { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.6rem; }
+.quest { display: flex; align-items: center; gap: 0.6rem; font-size: var(--t-sm); }
+.quest-box {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: var(--ink-w) solid var(--ink-line);
+  background: var(--panel-2);
+  display: grid;
+  place-items: center;
+  color: var(--sticker-ink);
+}
+.quest.done .quest-box { background: var(--sticker-sage); }
+.quest.done .quest-label { color: var(--muted); text-decoration: line-through; }
+.quest-box svg { width: 13px; height: 13px; display: block; }
+.quest-label { flex: 1; min-width: 0; text-wrap: pretty; }
+.quest-progress { flex: none; color: var(--muted); font-size: var(--t-label); }
+
 /* --- desktop -------------------------------------------------------------- */
 
 /* 64rem must match DESKTOP_MIN_PX in src/lib/viewport.ts: the shell branches on it
@@ -1173,10 +1507,12 @@ table.data th { color: var(--muted); font-weight: 500; }
     position: static;
     display: block;
     border-top: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 0;
     padding-bottom: 0;
     backdrop-filter: none;
-    background: var(--panel);
+    /* Transparent, so the page's grain runs behind the nav rather than stopping at a
+       panel edge across the top of it. */
+    background: transparent;
   }
   .tabbar.top .tabbar-inner {
     max-width: var(--maxw-desktop);
@@ -1184,29 +1520,41 @@ table.data th { color: var(--muted); font-weight: 500; }
     gap: 0.25rem;
     align-items: center;
   }
-  /* Typography and the mark come from .brand; this only pushes the tabs right. */
-  .tabbar.top .wordmark { flex: 1; }
+  /* Typography comes from .brand; this only pushes the tabs right. The tilt on the
+     wordmark would otherwise be clipped by the bar's own overflow. */
+  .tabbar.top .wordmark { margin: 0 auto 0 0.15rem; }
+  /* Pills rather than underlined labels. An underline is a quiet way to mark the
+     current section and this design is not quiet about anything else; a filled sticker
+     is what the rest of the page uses to say "this one". */
   .tabbar.top a {
     flex: none;
     flex-direction: row;
     gap: 0.5rem;
-    min-height: 3.25rem;
-    padding: 0 0.9rem;
+    min-height: 2.4rem;
+    margin: 0.55rem 0;
+    padding: 0 1rem;
     font-size: var(--t-sm);
+    font-weight: 700;
     text-transform: none;
     letter-spacing: 0;
-    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    border: var(--ink-w) solid transparent;
+    border-radius: var(--radius-pill);
   }
-  .tabbar.top a:hover { color: var(--ink); }
-  .tabbar.top a[aria-current='page'] { border-bottom-color: var(--accent); }
-  .tabbar.top svg { width: 18px; height: 18px; }
+  .tabbar.top a:hover { color: var(--ink); border-color: var(--line); }
+  .tabbar.top a[aria-current='page'] {
+    background: var(--sticker-mustard);
+    border-color: var(--ink-line);
+    color: var(--sticker-ink);
+    box-shadow: var(--shadow);
+  }
 
   /* A bottom sheet is a phone gesture. With a pointer, this is a dialog. */
   .sheet-backdrop { align-items: center; }
   .sheet {
     max-width: var(--maxw-sheet);
     max-height: 82dvh;
-    border: 1px solid var(--line);
+    border: var(--ink-w) solid var(--ink-line);
     border-radius: var(--radius);
     padding-bottom: var(--pad);
   }
@@ -1216,6 +1564,17 @@ table.data th { color: var(--muted); font-weight: 500; }
 
   /* Two columns of room: let the day's sessions breathe rather than stacking. */
   .content .stat .v { font-size: 2rem; }
+
+  /* Three across in the Today row, which is where the sheet lives; six would make
+     each sticker the size of a full stop in a third of a column. */
+  .content .stickers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* The day and its note, two thirds and one third. The note is the narrow one on
+     purpose: it is three lines of prose, and prose set across two thirds of a 76rem
+     page is unreadable for the same reason the legal screen caps its measure. */
+  .today-lead { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  /* Equal thirds, and stretched, so the three rule off level. */
+  .today-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   /* The charts are handed a wider viewBox up here (see Today/History), so their
      text is drawn near 1:1 and can afford the extra unit. */

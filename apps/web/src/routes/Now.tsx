@@ -9,6 +9,7 @@ import { FeedbackSheet } from '../components/FeedbackSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
 import { TreadStrip } from '../components/TreadStrip.js';
+import { StreakChain } from '../components/StreakChain.js';
 import { Brand } from '../components/Logo.js';
 import {
   connected,
@@ -147,6 +148,19 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           <ConnectPanel />
           {hasRecord && numbers}
         </>
+      )}
+
+      {/* The streak, under the controls it is there to argue for.
+          It bends the rule that the rail holds no accumulated figures, and does so
+          deliberately: the rule exists to stop a number being stated twice in one
+          viewport, and this one is stated nowhere else on the screen. It is here rather
+          than in the column because it is the only figure in the app whose job is to
+          make somebody press Start, and Start is here. Nothing it shows is a live
+          reading, so it never competes with the numbers the belt is sending. */}
+      {hasRecord && (
+        <div class="card">
+          <StreakChain />
+        </div>
       )}
 
       {connected.value && (
