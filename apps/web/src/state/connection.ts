@@ -407,6 +407,16 @@ async function begin(kind: 'start' | 'resume') {
     holdSession(false);
     if (attempt === 1) {
       log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
+      // Said up front rather than only after three refusals: the pad has already shown
+      // the shape of one in standby, and the person pressing the button is the one who
+      // can wake it. The start still goes out — the signature is a strong reading of
+      // the log, not a rule the pad has been seen to keep.
+      if (d.asleep === true) {
+        log(
+          'the pad looks asleep — expect it to refuse until it is woken from its panel or remote',
+          'err'
+        );
+      }
       // Once per press, not per retry: the retries are the app's doing, and counting
       // them as starts would inflate exactly the number the refusal events divide by.
       trackEvent('belt_start', { kind });
@@ -540,16 +550,30 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
       // It stays a hint, not a diagnosis — a locked pad refusing starts is KS+Fit's
       // reading, not something yet observed on the wire — but it is the one message
       // here that ends in a switch the user can actually flip.
+      //
+      // And when the pad has the shape of one in standby — its panel kept control at
+      // the handshake and it never sent its settings — say that, and say what wakes it.
+      // From a real KS-C2 left stopped for an hour: three refusals, a disconnect, a
+      // reconnect, three more refusals, identical to the byte. Reconnecting is exactly
+      // what that log shows not working, so the advice here must not be to reconnect.
+      // The vendor's own documentation is that standby stops the motor and sensor
+      // responding and that the panel or remote wakes it; nothing sent over Bluetooth
+      // has been seen to.
       const lock = driver.value?.childLockOn === true;
+      const asleep = driver.value?.asleep === true;
+      const refusedAll =
+        `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused each one`;
       setStatus(
         refused
           ? lock
-            ? `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
-                'each one — and the pad reports its child lock is on. Unlock it from the ' +
-                'panel, then try again.'
-            : `${capitalise(kind)} was sent ${MAX_START_ATTEMPTS} times and the belt refused ` +
-                "each one — its own panel still has control. Use the treadmill's own " +
-                'controls, or disconnect and reconnect.'
+            ? `${refusedAll} — and the pad reports its child lock is on. Unlock it from the ` +
+              'panel, then try again.'
+            : asleep
+              ? `${refusedAll} — the pad looks asleep: it never handed control to the app ` +
+                'and sent none of its settings when it connected. Wake it from its panel ' +
+                `or remote, then press ${capitalise(kind)} again. Reconnecting will not help.`
+              : `${refusedAll} — its own panel still has control. Press a button on the ` +
+                "treadmill's panel or remote to wake it, then try again."
           : `${capitalise(kind)} was sent but the belt never reported movement — it may ` +
               "have handed control back to its own panel. Use the treadmill's own " +
               'controls, or disconnect and reconnect.',
@@ -558,11 +582,11 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
       log(
         refused
           ? `${kind} refused ${MAX_START_ATTEMPTS} times — the belt never moved` +
-              (lock ? " (the pad's child lock is on)" : '')
+              (lock ? " (the pad's child lock is on)" : asleep ? ' (the pad looks asleep)' : '')
           : `${kind} unconfirmed after ${START_CONFIRM_MS / 1000}s — the belt never moved`,
         'err'
       );
-      trackEvent('start_unconfirmed', { kind, refused, childLock: lock });
+      trackEvent('start_unconfirmed', { kind, refused, childLock: lock, asleep });
     }
   };
 

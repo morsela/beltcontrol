@@ -296,6 +296,37 @@ verdict is only ever about the command; movement is still confirmed the one way 
 the belt reporting it. The retry sends nothing new and changes no ordering — it is the same two
 writes the capture shows, and it stops the moment a stop, pause or disconnect arrives.
 
+**A pad in standby refuses everything, and reconnecting does not wake it.** A KS-C2 left
+stopped for about an hour — the vendor's manuals say the pad enters standby after ten minutes
+idle, and that "the motor and sensor stop responding" in it — looks like this, twice over,
+identical across a disconnect and reconnect:
+
+```
+--> props ControlMode 1                                   ← handshake; no echo comes back
+--> servers getProp 1 9 15 2 10 11 12 13 14
+<-- servers 0
+<-- props ControlMode 2 runState 0 runState 0 CurrentSpeed 0.0 RunningTotalTime 0 ...
+--> props ControlMode 1 / props runState 1
+<-- props Error ErrorCode -5000                            ← refused
+<-- props runState 0
+--> props ControlMode 1 / props runState 1                  ← ×3, all refused
+```
+
+Three things are missing that a pad that is awake always sends: the `props ControlMode 1` echo
+to the handshake, the config dump after the first `servers getProp` (`servers 0` arrives on its
+own — the network module answered, the motor controller behind it did not), and so any
+`mcu_version` in the firmware line. Contrast the refusal capture above, where the config dump
+*was* present (`ChildLockSwitch 0` on the `ControlMode 2` line) and the third try landed.
+
+The driver reads the two halves together — `ControlMode 2` reported, no config key ever seen —
+as `asleep`, logs it once, and the app's failure message after three refusals says to wake the
+pad from its panel or remote rather than to reconnect, which is exactly what that log shows
+not working. It is a strong reading of one pad's log, not a rule the pad has been seen to
+keep: the start still goes out, and `asleep` clears the moment a config key or a
+`ControlMode 1` arrives. The vendor's own remedy is the panel or the remote; nothing sent over
+this interface — `ControlMode 1` included, which the handshake and every start already write —
+has been seen to wake a pad in standby.
+
 **Pause is `runState 0` — the same bytes as stop.** For a long time this was open:
 KS+Fit's BLE layer visibly carries a `setPause` alongside `setStart`/`setStop` and warns
 that *"speed adjustment is not supported when the device is paused"*, but the command

@@ -89,11 +89,17 @@
 
 <h2>It connects, but the belt won't start</h2>
 <p>
-  Common on the KS-C2, and the pad does tell us why. Three things to check, in order:
+  Common on the KS-C2, and the pad does tell us why. Four things to check, in order:
 </p>
 <ul>
   <li><strong>The child lock is on.</strong> The pad reports this, and when it does, the
     app says so instead of giving you generic advice. Turn it off at the panel.</li>
+  <li><strong>The pad is asleep.</strong> KingSmith pads go into standby after about ten
+    minutes idle, and in standby the motor stops responding — to the app as much as to
+    anything else. Bluetooth stays up, so it connects fine and then refuses every start.
+    The app recognises the shape of this (the pad keeps control on its own panel and never
+    sends its settings) and says so. Wake it from its panel or remote, then press Start.
+    Disconnecting and reconnecting does not wake it.</li>
   <li><strong>The treadmill's own panel still has control.</strong> After a stop, control
     goes back to the pad itself, and in that state it accepts a start command and then
     ignores it — the belt just doesn't move. The app takes control back on every start for
