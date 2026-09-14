@@ -107,6 +107,12 @@
      be the brightest thing on a dark screen. Ink on it: 11.2:1 here. */
   --note-paper: #efe3b8;
   --note-ink: #2b2a27;
+  /* The blueprint pinned to that note: a fifth surface beside the four fills, and the
+     one that carries light ink rather than --sticker-ink. A blueprint is light lines
+     on blue by definition — the cyanotype is the reference — and none of the four
+     fills is solved for that. Lines on it: 7.4:1 here. */
+  --blueprint-paper: #2b5077;
+  --blueprint-ink: #f4f1ea;
   /* Ink drawn on any of the four fills above. Dark, in both themes — the dark theme
      deepens it along with the fills rather than inverting it. */
   --sticker-ink: #2b2a27;
@@ -243,6 +249,10 @@
        of this theme is doing. Ink measured on it at 7.0:1. */
     --note-paper: #544b2b;
     --note-ink: #ede7d9;
+    /* Deeper than the light sheet, for the reason the note is: at card size the light
+       blue was the brightest thing on a dark screen. Lines on it: 8.5:1. */
+    --blueprint-paper: #233b57;
+    --blueprint-ink: #d5dfeb;
 
     /* Dark steps are solved against the dark surface, not flipped: monotone,
        ΔL ≥ 0.09, lightest step 2.04:1 against the card, same 155° hue. */

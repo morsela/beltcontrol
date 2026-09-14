@@ -2,6 +2,8 @@ import { useState } from 'preact/hooks';
 import { todayTotals, lifetimeTotals } from '../state/session.js';
 import { LANDMARKS, landmarkFor } from '../lib/landmarks.js';
 import { fmtMiles } from '../lib/format.js';
+import { isDesktop } from '../lib/viewport.js';
+import { Blueprint } from './Blueprint.js';
 
 /** Longest first, reversed once at module load rather than on every render. */
 const LANDMARKS_DESC = [...LANDMARKS].reverse();
@@ -49,6 +51,11 @@ export function FunFact() {
       <p class="funfact-v">
         {fmtMiles(distKm)} miles {usingDay ? 'today' : 'in total'} is {pick.text}.
       </p>
+      {/* The same comparison drawn: the walk dimensioned across the top, the landmark
+          at the same scale beneath it. A narrower viewBox on desktop, where the note is
+          a third of a column, so the lettering on the sheet stays readable — the same
+          arrangement the charts use. */}
+      <Blueprint landmark={pick} distKm={distKm} width={isDesktop.value ? 220 : 320} />
       {fact.next && (
         <p class="funfact-next">
           Next up at {fmtMiles(fact.next.km)} mi: {fact.next.text}.

@@ -1341,6 +1341,27 @@ table.data th { color: var(--muted); font-weight: 500; }
   color: var(--note-ink);
   font-weight: 700;
 }
+/* The blueprint on the note. It is the width of the note and not rotated, for the
+   reason the note itself is not — see the comment on .funfact. The sheet's own paper
+   and ink are tokens, so the drawing follows the theme; everything inside it is
+   stroked in currentColor. */
+.blueprint {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0.2rem 0;
+  color: var(--blueprint-ink);
+  border-radius: 4px;
+}
+/* Drafting lettering: the mono face, small caps by way of uppercase, spaced. It is
+   the one place a number is set in something other than the body face — it is a
+   dimension on a drawing, not a readout, and it does not tick. */
+.blueprint-text {
+  font: 700 9px / 1 var(--mono);
+  fill: currentColor;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
 /* --- sticker sheet -------------------------------------------------------- */
 
