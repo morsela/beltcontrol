@@ -327,6 +327,38 @@ keep: the start still goes out, and `asleep` clears the moment a config key or a
 this interface — `ControlMode 1` included, which the handshake and every start already write —
 has been seen to wake a pad in standby.
 
+**A start carries no speed, and a speed written before the belt moves is dropped.** The pad
+moves off at its own fixed 1.0 km/h whatever the app asked for, and climbs only when a
+`props CurrentSpeed` reaches it — so every start is followed by one. That write has to wait
+for the belt to actually be running. Sent while the pad is still reporting `runState 0` it is
+taken and discarded, with no error and no echo:
+
+```
+18:34:14  --> props ControlMode 1 / props runState 1
+18:34:17  --> props CurrentSpeed 3.2            ← still runState 0 here
+18:34:19  <-- props runState 1 CurrentSpeed 0.0 ← only now under way
+18:34:20  <-- props CurrentSpeed 1.1
+18:34:21  <-- props CurrentSpeed 1.0            ← the pad's own start speed, and it stayed there
+```
+
+The walk above ran at 1.0 km/h (0.6 mph) against a 3.2 setpoint until the stepper was touched
+— and that worked only because it writes the same value again, to a belt that is by then
+moving:
+
+```
+18:34:55  --> props CurrentSpeed 3.5
+18:34:56  --> props CurrentSpeed 3.2
+18:34:57  <-- props CurrentSpeed 1.1 → 1.8 → 2.5 → 3.1 → 3.2   ← taken, and it ramps
+```
+
+The pad says nothing either way about a setpoint, so the only evidence that one landed is the
+belt climbing toward it. `bringUpToTarget` in `state/connection.ts` therefore waits for the
+belt to report movement before writing the target at all, then watches `CurrentSpeed`: reached
+when it is within 0.2 km/h of the target, and written again when it stops climbing short of it
+for 2.5 s. Three attempts, matching the start retry, and then it says so rather than leaving a
+walk quietly running at the pad's crawl. The ramp is roughly 0.5 km/h per second, which is why
+this waits on the belt going still rather than on a fixed deadline.
+
 **Pause is `runState 0` — the same bytes as stop.** For a long time this was open:
 KS+Fit's BLE layer visibly carries a `setPause` alongside `setStart`/`setStop` and warns
 that *"speed adjustment is not supported when the device is paused"*, but the command

@@ -79,6 +79,16 @@ export function simulatedDriver(
       return rejectPause ? 'stopped' : 'paused';
     },
     async setSpeed(kmh: number) {
+      // A real pad drops a speed written before the belt is actually moving — it is
+      // told to run, it has not started yet, and the setpoint goes nowhere with nothing
+      // said about it. That is what used to leave a walk running at the pad's own
+      // 1.0 km/h crawl for its whole length, so the simulator has to do it too: a
+      // simulator that takes a write the hardware ignores is a simulator that hides the
+      // one bug it exists to catch. See `bringUpToTarget` in state/connection.ts.
+      if (speed <= 0) {
+        self.onLog?.(`simulator: not moving yet — ${kmh.toFixed(1)} km/h dropped`);
+        return;
+      }
       target = kmh;
     },
     async setMode(mode: number) {

@@ -71,6 +71,11 @@ export interface AnalyticsEvents {
   belt_self_stopped: undefined;
   /** The write itself failed, so the command never reached the belt. */
   control_failed: { command: 'start' | 'resume' | 'stop' | 'pause' | 'speed'; reason: string };
+  /** The belt started but would not take the chosen speed, and held the pad's own
+   *  start speed through every re-send. Counts the units that need the setpoint
+   *  written more than once — the whole reason the app re-reads the belt after
+   *  writing one rather than trusting the write. */
+  start_speed_unapplied: { attempts: number };
 
   // --- sessions and data ------------------------------------------------------
   session_recorded: { minutes: number; protocol: string | null };
