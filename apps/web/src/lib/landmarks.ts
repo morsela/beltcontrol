@@ -19,11 +19,46 @@
 // else. Each is a full end-to-end length rather than a span or a deck, because that is
 // the thing a person would say they had walked.
 
+/**
+ * How the blueprint under the card draws a landmark. Seven silhouettes for fourteen
+ * entries: the drawing is there to give the length a shape, and a suspension bridge
+ * looks like a suspension bridge whichever harbour it crosses.
+ *
+ *   suspension  two towers and a cable, in elevation
+ *   arch        one arch over a deck, in elevation
+ *   street      two kerbs and a centre line, in plan
+ *   loop        a circuit, in plan, with a start mark
+ *   park        a walled rectangle with trees, in plan
+ *   island      a tapered outline, in plan
+ *   route       a winding line from a start to a finish
+ */
+export type LandmarkShape =
+  | 'suspension'
+  | 'arch'
+  | 'street'
+  | 'loop'
+  | 'park'
+  | 'island'
+  | 'route';
+
+/** Every shape the blueprint knows how to draw, for the test that pins the list. */
+export const LANDMARK_SHAPES: readonly LandmarkShape[] = [
+  'suspension',
+  'arch',
+  'street',
+  'loop',
+  'park',
+  'island',
+  'route',
+] as const;
+
 /** One comparable thing, and how long it is. */
 export interface Landmark {
   km: number;
   /** Reads after "is": "1.15 mi is **the Brooklyn Bridge, end to end**." */
   text: string;
+  /** What the blueprint draws it as. */
+  shape: LandmarkShape;
 }
 
 /**
@@ -33,20 +68,20 @@ export interface Landmark {
  * than that has not really started, and the comparisons get silly.
  */
 export const LANDMARKS: readonly Landmark[] = [
-  { km: 0.325, text: 'the Millennium Bridge in London, end to end' },
-  { km: 0.545, text: 'once around the outside of the Colosseum' },
-  { km: 0.93, text: 'the Mall, from Trafalgar Square to Buckingham Palace' },
-  { km: 1.149, text: 'the Sydney Harbour Bridge, end to end' },
-  { km: 1.81, text: 'the Royal Mile in Edinburgh, top to bottom' },
-  { km: 1.825, text: 'the Brooklyn Bridge, end to end' },
-  { km: 1.91, text: 'the Champs-Élysées, end to end' },
-  { km: 2.1, text: 'the Hollywood Walk of Fame, end to end' },
-  { km: 2.737, text: 'the Golden Gate Bridge, end to end' },
-  { km: 4.02, text: 'the length of Central Park, south gate to north gate' },
-  { km: 6.8, text: 'the Las Vegas Strip, end to end' },
-  { km: 9.65, text: 'the full loop road around Central Park' },
-  { km: 21.6, text: 'the length of Manhattan, tip to tip' },
-  { km: 42.195, text: 'a marathon' },
+  { km: 0.325, text: 'the Millennium Bridge in London, end to end', shape: 'suspension' },
+  { km: 0.545, text: 'once around the outside of the Colosseum', shape: 'loop' },
+  { km: 0.93, text: 'the Mall, from Trafalgar Square to Buckingham Palace', shape: 'street' },
+  { km: 1.149, text: 'the Sydney Harbour Bridge, end to end', shape: 'arch' },
+  { km: 1.81, text: 'the Royal Mile in Edinburgh, top to bottom', shape: 'street' },
+  { km: 1.825, text: 'the Brooklyn Bridge, end to end', shape: 'suspension' },
+  { km: 1.91, text: 'the Champs-Élysées, end to end', shape: 'street' },
+  { km: 2.1, text: 'the Hollywood Walk of Fame, end to end', shape: 'street' },
+  { km: 2.737, text: 'the Golden Gate Bridge, end to end', shape: 'suspension' },
+  { km: 4.02, text: 'the length of Central Park, south gate to north gate', shape: 'park' },
+  { km: 6.8, text: 'the Las Vegas Strip, end to end', shape: 'street' },
+  { km: 9.65, text: 'the full loop road around Central Park', shape: 'loop' },
+  { km: 21.6, text: 'the length of Manhattan, tip to tip', shape: 'island' },
+  { km: 42.195, text: 'a marathon', shape: 'route' },
 ] as const;
 
 export interface LandmarkFact {

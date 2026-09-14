@@ -193,6 +193,22 @@ gets no card rather than an empty one. The landmark list in
 `apps/web/src/lib/landmarks.ts` is deliberately short: every entry is a factual claim this
 app makes to its users, so it is a list that can be checked rather than a long one.
 
+**The blueprint under it draws the same comparison, and admits when it cannot.** A
+distance restated as a bridge is still a sentence; the sheet pinned beneath it is the
+bridge, in elevation, dimensioned against the walk at the same scale, so a landmark a
+third as long as the day's distance is a third of the width and the reader sees "three of
+these" without the card printing a multiplier nobody measured. The only figures on the
+sheet are the two lengths, both through `fmtMiles`, and the landmark's is the same kind of
+figure the "next up" line already states. Fourteen landmarks share seven silhouettes —
+suspension, arch, street, loop, park, island, route — because the drawing is there to give
+a length a shape, not to be a likeness. "Another one" cycles back down the list, and
+against a marathon the Millennium Bridge is under one percent of the width; below a floor
+the landmark is held at the floor and the walk's dimension line takes a break mark, the
+draughtsman's sign for a length cut short, with the accessible label saying "not to scale"
+in words. It is blue because a blueprint is, which makes it the fifth surface beside the
+four sticker fills and the one with light ink: the pair is its own two tokens, measured in
+both themes like the rest. It is not rotated, for the reason the note it sits on is not.
+
 **Badges are derived, never stored.** No session record carries an earned-at timestamp and
 none was added: the sessions are the evidence and a sticker is a reading of them, which
 also means an imported backup lights up the sheet it should have lit up rather than
