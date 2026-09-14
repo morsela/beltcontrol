@@ -546,6 +546,61 @@ describe('ks1234Driver', () => {
       expect(logs.join('\n')).toMatch(/pad firmware: MCU 0005, module 0014/);
     });
 
+    // From a real KS-C2 left stopped for an hour, twice over: no `ControlMode 1` echo
+    // to the handshake, no config dump, `ControlMode 2` in the first telemetry line,
+    // and every start refused with -5000 — identical across a disconnect and reconnect.
+    describe('the standby signature', () => {
+      it('is null until the pad has said which mode it is in', async () => {
+        const { d } = await attached();
+        expect(d.asleep).toBeNull();
+      });
+
+      it('reads panel control with no config dump as a pad asleep, and says so once', async () => {
+        const { d, notify, logs } = await attached();
+        push(notify, 'props ControlMode 2 runState 0 runState 0 CurrentSpeed 0.0 RunningTotalTime 0');
+        expect(d.asleep).toBe(true);
+        push(notify, 'props ControlMode 2 runState 0');
+        expect(d.asleep).toBe(true);
+        expect(logs.filter((l) => /looks asleep/.test(l))).toHaveLength(1);
+        expect(logs.join('\n')).toMatch(/panel or remote/);
+      });
+
+      it('is not fooled by the panel holding control on a pad that sent its settings', async () => {
+        // The capture the retry was built on: config dump present, ControlMode 2,
+        // refused twice, accepted on the third try. Awake, just reluctant.
+        const { d, notify, logs } = await attached();
+        push(notify, 'props ControlMode 2 ChildLockSwitch 0 runState 0 CurrentSpeed 0.0');
+        expect(d.asleep).toBe(false);
+        expect(logs.join('\n')).not.toMatch(/looks asleep/);
+      });
+
+      it('clears once the config dump arrives, however late', async () => {
+        const { d, notify } = await attached();
+        push(notify, 'props ControlMode 2 runState 0');
+        expect(d.asleep).toBe(true);
+        push(notify, 'props mcu_version "0005" Max 6.0');
+        expect(d.asleep).toBe(false);
+      });
+
+      it('clears when the pad hands control to the app', async () => {
+        const { d, notify } = await attached();
+        push(notify, 'props ControlMode 2 runState 0');
+        expect(d.asleep).toBe(true);
+        push(notify, 'props ControlMode 1');
+        expect(d.asleep).toBe(false);
+      });
+
+      it('is a fresh question on every attach', async () => {
+        const { d, notify } = await attached();
+        push(notify, 'props ControlMode 2 runState 0');
+        expect(d.asleep).toBe(true);
+        await d.detach();
+        const { server } = padServer();
+        await d.attach(server as unknown as BluetoothRemoteGATTServer);
+        expect(d.asleep).toBeNull();
+      });
+    });
+
     it('publishes neither as telemetry', async () => {
       // Device state stays on the driver; a frame carrying only identity must not
       // reach `live`, where its absent keys would say nothing and its presence would

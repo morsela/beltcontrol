@@ -55,8 +55,15 @@ export interface AnalyticsEvents {
    *  minus these. `refused` separates a pad that answered no to every retry from one
    *  that said nothing at all — the two failure modes some units are known for.
    *  `childLock` is whether the pad had reported its lock engaged, which is how often
-   *  the lock actually explains these — the hypothesis the hint in the UI rests on. */
-  start_unconfirmed: { kind: 'start' | 'resume'; refused: boolean; childLock: boolean };
+   *  the lock actually explains these — the hypothesis the hint in the UI rests on.
+   *  `asleep` is whether the pad had shown the standby signature (panel control at the
+   *  handshake, no config dump) — the same kind of hypothesis, checked the same way. */
+  start_unconfirmed: {
+    kind: 'start' | 'resume';
+    refused: boolean;
+    childLock: boolean;
+    asleep: boolean;
+  };
   stop_unconfirmed: { kind: 'stop' | 'pause' };
   /** Unit answered pause with "op code not supported" and was stopped instead. */
   pause_rejected: undefined;

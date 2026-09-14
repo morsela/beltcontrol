@@ -263,6 +263,28 @@ std     ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/</code><
   refusal — a sibling model may well answer <code>-5003</code> — and treat none of the
   <code>-400x</code> codes that way, because none of them mean refused.
 </p>
+<p>
+  <strong>A pad in standby refuses everything, and reconnecting does not wake it.</strong>
+  KingSmith's manuals say the pad enters standby after ten minutes idle and that the motor
+  and sensor stop responding in it. Bluetooth stays up. A KS-C2 left stopped for an hour
+  connects, handshakes, and then looks like this — twice, identically, across a disconnect
+  and reconnect:
+</p>
+<pre><code>--&gt; props ControlMode 1                                  ← handshake; no echo comes back
+&lt;-- props ControlMode 2 runState 0 CurrentSpeed 0.0 ...    ← panel holds control, no settings
+--&gt; props ControlMode 1 / props runState 1
+&lt;-- props Error ErrorCode -5000                           ← refused, three times over</code></pre>
+<p>
+  Three things a pad that is awake always sends are missing: the <code>ControlMode 1</code>
+  echo to the handshake, the config dump after the first <code>servers getProp</code>
+  (<code>servers 0</code> arrives alone — the network module answered, the motor controller
+  behind it did not), and with it any <code>mcu_version</code>. The refusal capture above had
+  the config dump and landed on the third try; this one never does. The driver reads panel
+  control with no config dump as the pad being asleep, and the app says to wake it from its
+  panel or remote rather than to reconnect. Nothing sent over this interface —
+  <code>ControlMode 1</code> included, which every start already writes — has been seen to
+  wake it.
+</p>
 
 <h3>Pause is stop, and the pad is what makes it a pause</h3>
 <p>

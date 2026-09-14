@@ -99,6 +99,12 @@ export interface Driver {
    *  own advice points at when a start is refused — `null` until the pad has said.
    *  Absent on protocols that carry no such switch. */
   childLockOn?: boolean | null;
+  /** The pad answered the handshake with its own panel holding control and never sent
+   *  its settings: the shape of a KingSmith pad in standby, which no command on this
+   *  interface has been seen to wake. `null` until the pad has said which mode it is
+   *  in; `false` once it has handed control over or sent its config. Absent on
+   *  protocols that carry no such signal. */
+  asleep?: boolean | null;
 
   attach(server: BluetoothRemoteGATTServer): Promise<void>;
   detach(): Promise<void>;
@@ -1195,6 +1201,26 @@ const KS_VENDOR_ERROR_MIN = -9999;
 const KS_START_VERDICT_MS = 1500;
 
 /**
+ * The keys the connect-time config dump carries and nothing else does.
+ *
+ * A pad that is awake answers the first `servers getProp` with `servers 0` and then a
+ * dump of these, before the handshake has even reached `props ControlMode 1`. A pad in
+ * standby answers `servers 0` alone — the network module is up, the motor controller
+ * behind it is not — and then reports `ControlMode 2` with no config ever arriving.
+ * Their absence is half of the standby signature; see `asleep`.
+ */
+const KS_CONFIG_KEYS = [
+  'mcu_version',
+  'ChildLockSwitch',
+  'Max',
+  'StartSpeed',
+  'VelocitySensitivity',
+  'PanelDisplay',
+  'unit',
+  'initial',
+];
+
+/**
  * The window a start's answer may arrive in, and the promise the caller reads it from.
  * `open` is what makes `settle` idempotent: the pad answering, the timeout and a
  * detach all race for the same slot, and any of them may get there first.
@@ -1245,6 +1271,22 @@ export function ks1234Driver(): Driver {
   /** The pad's answer to the most recent `start()`; null before the first one. */
   let lastStart: StartWindow | null = null;
 
+  // The two halves of the standby signature, kept apart from the verdict machinery
+  // because they describe the pad, not a command. Both reset on attach: a pad woken
+  // from its panel comes back as a fresh connection.
+  let controlMode: number | null = null;
+  let configSeen = false;
+  function noteAsleep() {
+    const was = self.asleep;
+    self.asleep = controlMode == null ? null : controlMode === 2 && !configSeen;
+    if (self.asleep && was !== true) {
+      self.onLog?.(
+        'the pad kept control on its own panel and sent none of its settings — it looks ' +
+          'asleep (standby). Wake it from its panel or remote before starting.'
+      );
+    }
+  }
+
   /**
    * Open a window for the pad to answer the start that is about to be written.
    *
@@ -1286,9 +1328,18 @@ export function ks1234Driver(): Driver {
      *  Surfaced because KS+Fit's own advice for a refused start points at the lock
      *  first — see `watchForStart` in state/connection.ts. */
     childLockOn: null,
+    /** See `Driver.asleep`. From a real KS-C2 left stopped for an hour: no `ControlMode 1`
+     *  echo to the handshake, no config dump, `ControlMode 2` in the first telemetry
+     *  line, and every start refused with `-5000` on two connections in a row. The
+     *  vendor's own documentation says the motor and sensor stop responding in standby
+     *  and that the panel or remote wakes it; nothing on the wire has been seen to. */
+    asleep: null,
 
     async attach(server: BluetoothRemoteGATTServer) {
       closed = false;
+      controlMode = null;
+      configSeen = false;
+      self.asleep = null;
       const svc = await server.getPrimaryService(UUID.ks1234Service);
       writeCh = await svc.getCharacteristic(UUID.ks1234Write);
       notifyCh = await svc.getCharacteristic(UUID.ks1234Notify);
@@ -1516,6 +1567,23 @@ export function ks1234Driver(): Driver {
       if (!p) return;
 
       if (p.mcu_version != null) noteFirmware({ mcu: p.mcu_version });
+
+      // Config keys before the mode: the real dump carries both on one line
+      // (`props ControlMode 1 ChildLockSwitch 0 runState 0`), and a pad that sent its
+      // settings is awake whatever mode it reports.
+      let modeOrConfigChanged = false;
+      if (!configSeen && KS_CONFIG_KEYS.some((k) => p[k] != null)) {
+        configSeen = true;
+        modeOrConfigChanged = true;
+      }
+      if (p.ControlMode != null) {
+        const mode = Number(p.ControlMode);
+        if (Number.isFinite(mode) && mode !== controlMode) {
+          controlMode = mode;
+          modeOrConfigChanged = true;
+        }
+      }
+      if (modeOrConfigChanged) noteAsleep();
 
       // Device state rather than telemetry, so it lives on the driver, not in `live`.
       if (p.ChildLockSwitch != null) {

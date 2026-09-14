@@ -321,7 +321,47 @@ describe('doStart', () => {
       await vi.advanceTimersByTimeAsync(10_500);
 
       expect(status.value.text).toMatch(/own panel still has control/);
+      expect(status.value.text).toMatch(/panel or remote/);
       expect(status.value.text).not.toMatch(/child lock/);
+      // A real KS-C2 refused three starts, was disconnected and reconnected, and refused
+      // three more identically. Reconnecting is not advice this message may give.
+      expect(status.value.text).not.toMatch(/reconnect/);
+    });
+
+    it('says the pad looks asleep when it has the standby signature', async () => {
+      // The same KS-C2, left stopped for an hour: no ControlMode 1 echo, no config
+      // dump, and -5000 to every start. The vendor's documentation says the panel or
+      // remote wakes it; the app's job is to point there, not at the connect button.
+      const { d } = answeringPad(['refused', 'refused', 'refused'], { asleep: true });
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(status.value.kind).toBe('err');
+      expect(status.value.text).toMatch(/looks asleep/);
+      expect(status.value.text).toMatch(/wake it from its panel or remote/i);
+      expect(status.value.text).toMatch(/reconnecting will not help/i);
+      expect(status.value.text).not.toMatch(/own panel still has control/);
+    });
+
+    it('lets the child lock outrank the standby reading', async () => {
+      // The lock is a switch the pad has named; standby is a shape read off the log.
+      const { d } = answeringPad(['refused', 'refused', 'refused'], {
+        childLockOn: true,
+        asleep: true,
+      });
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(status.value.text).toMatch(/child lock is on/);
+      expect(status.value.text).not.toMatch(/looks asleep/);
     });
 
     it('does not re-send it to a belt that is moving anyway', async () => {
