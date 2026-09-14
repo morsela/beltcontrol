@@ -71,6 +71,13 @@ export interface AnalyticsEvents {
   belt_self_stopped: undefined;
   /** The write itself failed, so the command never reached the belt. */
   control_failed: { command: 'start' | 'resume' | 'stop' | 'pause' | 'speed'; reason: string };
+  /** The belt did not take the chosen speed on the first write and it had to be sent
+   *  again. `attempts` is how many writes that took in total, `applied` whether the
+   *  belt ever got there — a pad that needs the setpoint repeated and one that never
+   *  takes it at all are different hardware problems, and the first is invisible in a
+   *  "gave up" event. A setpoint taken first time emits nothing: that is the ordinary
+   *  case, and it is `belt_start` minus these. */
+  start_speed_rewritten: { attempts: number; applied: boolean };
 
   // --- sessions and data ------------------------------------------------------
   session_recorded: { minutes: number; protocol: string | null };

@@ -25,12 +25,6 @@ import {
   restoreOpenSession,
 } from './session.js';
 
-/** The belt moves off at its own fixed low speed the instant `start` lands, whatever
- *  target was asked for, and some units ignore a `setSpeed` sent before it is actually
- *  moving — confirmed on real hardware. So `doStart` waits this long before setting the
- *  speed the user chose. */
-const SPEED_SETTLE_MS = 600;
-
 export type Phase = 'idle' | 'choosing' | 'connecting' | 'connected' | 'error';
 
 export const phase = signal<Phase>('idle');
@@ -299,6 +293,7 @@ async function teardown() {
   stopPolling();
   clearStopWatch();
   clearStartWatch();
+  cancelSpeedApply();
   stopSessionTracking();
   closeSession('ended (disconnected)');
   try {
@@ -370,6 +365,7 @@ async function begin(kind: 'start' | 'resume') {
   // `running` up and this flag down that is precisely the shape the self-stop watcher
   // reads as "the belt stopped by itself" — it would file the walk mid-retry.
   const gen = ++startGeneration;
+  const speedGen = ++speedGeneration;
   startPending.value = true;
 
   let verdict: StartVerdict = 'unknown';
@@ -445,16 +441,11 @@ async function begin(kind: 'start' | 'resume') {
 
   watchForStart(kind, verdict === 'refused');
 
-  try {
-    // Some units ignore a speed set before the belt is actually moving.
-    await new Promise((r) => setTimeout(r, SPEED_SETTLE_MS));
-    if (d.capabilities.speed) await d.setSpeed(settings.value.targetKmh);
-  } catch (e) {
-    // A failed speed write says nothing about whether the belt started, so `running`
-    // and the confirmation watch both stand. Report it and let the watch play out.
-    trackEvent('control_failed', { command: 'speed', reason: errName(e) });
-    fail(e);
-  }
+  // Deliberately not awaited. Getting the belt up to the chosen speed outlives the
+  // press — it waits for the belt to report movement first, which is a second or two
+  // away at best and ten away at worst — while `begin` resolves when the start has been
+  // written, as it always did. Nothing awaits it anyway: both callers `void` it.
+  if (d.capabilities.speed) void bringUpToTarget(d, speedGen);
 }
 
 /** How long to wait for the belt to report movement before saying it never confirmed.
@@ -595,6 +586,254 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
   startWatch = window.setInterval(check, 250);
 }
 
+// --- bringing the belt up to the chosen speed ------------------------------
+
+/**
+ * Breathing room between the belt reporting movement and the speed write. The pad is
+ * still bringing the motor up in that first instant, and a setpoint written into it is
+ * the same lost write one second later.
+ */
+const SPEED_SETTLE_MS = 600;
+
+/** How often the belt's own reports are re-read while it is being brought up to speed.
+ *  The same tick as the start and stop watches. */
+const SPEED_POLL_MS = 250;
+
+/** Within this of the target, the belt is at the speed that was asked for. Wider than
+ *  the wire's 0.1 km/h resolution: a pad reporting 3.1 for a 3.2 setpoint has plainly
+ *  taken it, and a walk sitting 0.1 km/h low is not worth another write. */
+const SPEED_REACHED_KMH = 0.2;
+
+/** A move toward the target smaller than this is noise in the pad's own reporting, not
+ *  a belt still on its way to the setpoint. */
+const SPEED_CLOSING_KMH = 0.05;
+
+/** How long the belt may sit away from the target without closing on it before the
+ *  write is taken as lost. Comfortably longer than the ~1s gap between frames on a pad
+ *  that reports its speed only when it changes. */
+const SPEED_STALL_MS = 2_500;
+
+/** How many times the target is worth writing at a belt that is not taking it. Three,
+ *  matching the start retry, and for the same reason: past that the pad is refusing
+ *  rather than racing, and a treadmill with somebody standing on it is not a thing to
+ *  keep writing at. */
+const MAX_SPEED_ATTEMPTS = 3;
+
+/**
+ * Bumped by everything that makes an outstanding "bring it up to speed" job moot: a
+ * stop, a pause, a disconnect, or another start.
+ *
+ * Separate from `startGeneration`, which cannot double as this job's cancellation
+ * token: that one is bumped the moment a start is *confirmed*, which is the exact
+ * moment this job has been waiting for and is about to begin.
+ */
+let speedGeneration = 0;
+
+/** Abandon any speed job still in flight, without touching the start watch. */
+function cancelSpeedApply() {
+  speedGeneration++;
+}
+
+/** What the belt did with a setpoint it was given. */
+type SpeedOutcome =
+  /** It is at the speed that was asked for. */
+  | 'reached'
+  /** It stopped climbing short of it — a write the pad dropped. */
+  | 'stalled'
+  /** It reports no speed at all, so there is nothing to read either way. */
+  | 'unknown'
+  /** The walk moved on: stopped, paused, disconnected, or started again. */
+  | 'cancelled';
+
+/**
+ * Get the belt to the speed the user chose.
+ *
+ * A start does not carry one. The belt moves off at the pad's own fixed crawl — 1.0
+ * km/h on a KS-C2 — whatever target was asked for, and climbs only when a `setSpeed`
+ * reaches it, which is why every start is followed by one.
+ *
+ * That write has to wait for the belt to actually be moving. A pad told to run but not
+ * yet running takes the speed, drops it, and says nothing about having done so. From a
+ * real KS-C2 log, target already 3.2 km/h and the write on the old fixed 600ms timer:
+ *
+ * ```
+ * 18:34:14  --> props ControlMode 1 / props runState 1
+ * 18:34:17  --> props CurrentSpeed 3.2         ← the pad was still reporting runState 0
+ * 18:34:19  <-- props runState 1 CurrentSpeed 0.0    ← only now is it under way
+ * 18:34:20  <-- props CurrentSpeed 1.1         ← its own start speed, and there it stayed
+ * ```
+ *
+ * The walk then ran at 0.6 mph for as long as nobody touched the stepper — and a press
+ * of + or − fixed it precisely because it writes the same value again to a belt that is
+ * by then moving. So: wait for the belt to say it is moving, write the target, and then
+ * read back what the belt did about it rather than trusting the write a second time.
+ */
+async function bringUpToTarget(d: Driver, gen: number) {
+  if (!(await waitForMovement(gen))) return;
+  if (!(await hold(SPEED_SETTLE_MS, gen))) return;
+
+  for (let attempt = 1; attempt <= MAX_SPEED_ATTEMPTS; attempt++) {
+    // Read fresh per attempt: somebody pressing + while this is going on has changed
+    // what the belt should be doing, and their target is the one that counts.
+    const target = settings.value.targetKmh;
+    try {
+      await d.setSpeed(target);
+    } catch (e) {
+      // Checked before reporting, not after, which is the difference between a write
+      // that failed and a write nobody wanted any more. A pad that drops the link
+      // mid-write fails this one on the way out, and the disconnect has already put the
+      // one message worth reading on the chip — "belt keeps its current state, use its
+      // own controls". Overwriting it with a raw GATT error takes that away and counts
+      // a `control_failed` against a command that was already moot.
+      if (gen !== speedGeneration) return;
+      // Otherwise: a failed speed write says nothing about whether the belt started, so
+      // `running` and the start confirmation both stand. Report it and let them play out.
+      trackEvent('control_failed', { command: 'speed', reason: errName(e) });
+      fail(e);
+      return;
+    }
+    if (gen !== speedGeneration) return;
+
+    const outcome = await settlesAtTarget(gen);
+    if (outcome === 'reached') {
+      // Only once the first write has failed to take: a setpoint the belt accepts
+      // straight away is the ordinary case and is already covered by `belt_start`.
+      // This is the other half of `applied: false` below — the pads that need the
+      // write repeated but do get there, which is the population the read-back exists
+      // for and the one a "gave up after three" event alone cannot show.
+      if (attempt > 1) {
+        trackEvent('start_speed_rewritten', { attempts: attempt, applied: true });
+      }
+      return;
+    }
+    // Cancelled, or a pad that reports no speed at all: nothing to re-send at, and
+    // nothing that can honestly be said about whether the setpoint landed.
+    if (outcome !== 'stalled') return;
+    if (attempt === MAX_SPEED_ATTEMPTS) break;
+
+    log(
+      `the belt is holding ${mphText(live.value.speedKmh)} — setting ` +
+        `${mphText(target)} again (attempt ${attempt + 1} of ${MAX_SPEED_ATTEMPTS})`
+    );
+  }
+
+  // Surfaced rather than left in the protocol log: the belt is running, so nothing else
+  // on screen looks wrong, and a walk quietly held at the pad's crawl is exactly the
+  // failure that went unexplained long enough to be reported as "it never goes to the
+  // target". The stepper is the way out, and it is one press away.
+  const stuck = mphText(live.value.speedKmh);
+  setStatus(
+    `The belt is running at ${stuck} and will not take the ` +
+      `${mphText(settings.value.targetKmh)} that was asked for. Press + or − to set it, ` +
+      "or use the treadmill's own controls.",
+    'err'
+  );
+  log(
+    `speed unapplied after ${MAX_SPEED_ATTEMPTS} attempts — the belt is holding ${stuck}`,
+    'err'
+  );
+  trackEvent('start_speed_rewritten', { attempts: MAX_SPEED_ATTEMPTS, applied: false });
+}
+
+/** `x.y mph`, or `an unreported speed` when the pad has not said. */
+function mphText(kmh: number | null | undefined) {
+  return kmh == null ? 'an unreported speed' : `${toMph(kmh).toFixed(1)} mph`;
+}
+
+/** Whether this job is still the one the app wants, by everything outside it: the walk
+ *  has not moved on, and the belt has not been given up on. */
+function speedJobWanted(gen: number) {
+  return gen === speedGeneration && running.value;
+}
+
+/** Resolve after `ms`, true only if this job is still wanted. */
+function hold(ms: number, gen: number): Promise<boolean> {
+  return new Promise((r) => setTimeout(() => r(speedJobWanted(gen)), ms));
+}
+
+/**
+ * Wait for the belt to report movement, on the same deadline the start confirmation
+ * uses.
+ *
+ * False when it never did — and the speed is then deliberately not written at all.
+ * `watchForStart` has by that point told the user the belt never moved, and a setpoint
+ * aimed at a stationary pad is the write this whole path exists to stop making.
+ */
+function waitForMovement(gen: number): Promise<boolean> {
+  if (confirmedRunning.value) return Promise.resolve(speedJobWanted(gen));
+
+  return new Promise((resolve) => {
+    const deadline = Date.now() + START_CONFIRM_MS;
+    const timer = window.setInterval(() => {
+      const moving = confirmedRunning.value;
+      if (!moving && speedJobWanted(gen) && Date.now() < deadline) return;
+      window.clearInterval(timer);
+      resolve(moving && speedJobWanted(gen));
+    }, SPEED_POLL_MS);
+  });
+}
+
+/**
+ * Whether the belt gets to the speed it was just given, by its own reports.
+ *
+ * `reached` as soon as it is within `SPEED_REACHED_KMH` of the target, which is read
+ * fresh every tick so a stepper press part way through changes what this is waiting for
+ * rather than racing it. `stalled` once the belt has stopped closing on the target,
+ * which is what a dropped write looks like from here: the pad holding its own start
+ * speed, perfectly steady, indefinitely.
+ *
+ * A stall rather than a fixed deadline, because the ramp is the slow part — a KS-C2
+ * climbs about 0.5 km/h a second, so a deadline generous enough for the top of the range
+ * would be spent in full on the common case of a write that never landed at all.
+ *
+ * Distance to the target rather than speed alone, so a belt on its way *down* to a lower
+ * setpoint reads as progress too. It is the rarer direction — a start always begins at
+ * the pad's crawl, below anything worth walking at — but a belt decelerating correctly
+ * is not a pad ignoring the write, and re-sending at one is a write for nothing.
+ */
+function settlesAtTarget(gen: number): Promise<SpeedOutcome> {
+  return new Promise((resolve) => {
+    const gap = () => Math.abs((live.value.speedKmh ?? 0) - settings.value.targetKmh);
+    let best = gap();
+    let closedAt = Date.now();
+    let hasMoved = isMoving.value;
+
+    const timer = window.setInterval(() => {
+      const finish = (outcome: SpeedOutcome) => {
+        window.clearInterval(timer);
+        resolve(outcome);
+      };
+      // `running` as well as the generation: a start that ran out its confirmation
+      // window ends this job without anything having been cancelled.
+      if (!speedJobWanted(gen)) return finish('cancelled');
+
+      // A belt that has been seen moving and now reports zero has stopped, and the
+      // setpoint is moot however that came about. Waited on directly rather than on
+      // `running`, which is 3s behind it on a protocol that carries no state code at
+      // all — long enough for the 2.5s stall below to read a stopped belt as a dropped
+      // write and put one more speed on the wire at it.
+      //
+      // And only once movement has actually been reported: a KS-C2 confirms a start
+      // with `runState 1 CurrentSpeed 0.0` and takes a second or two to report any
+      // speed, which is a belt spinning up, not one at rest.
+      hasMoved ||= isMoving.value;
+      if (hasMoved && confirmedStopped.value) return finish('cancelled');
+
+      const now = gap();
+      if (now <= SPEED_REACHED_KMH) return finish('reached');
+      if (now < best - SPEED_CLOSING_KMH) {
+        best = now;
+        closedAt = Date.now();
+        return;
+      }
+      if (Date.now() - closedAt < SPEED_STALL_MS) return;
+      // A pad that has reported no speed at all is not evidence of anything, and a
+      // re-send aimed at silence is just a second write. Leave it as sent.
+      finish(live.value.speedKmh == null ? 'unknown' : 'stalled');
+    }, SPEED_POLL_MS);
+  });
+}
+
 /** How long to wait for the belt to report zero before saying it never confirmed.
  *  A pad decelerating from walking speed reports zero within a second or two. */
 const STOP_CONFIRM_MS = 6_000;
@@ -690,6 +929,7 @@ export async function doPause() {
   if (!d) return;
   try {
     clearStartWatch(); // a pause supersedes any start still waiting to be confirmed
+    cancelSpeedApply(); // and the belt is not to be brought up to anything
     setStatus('pausing…');
     const outcome = await d.pause();
 
@@ -720,6 +960,7 @@ export async function doStop() {
   if (!d) return;
   try {
     clearStartWatch(); // a stop supersedes any start still waiting to be confirmed
+    cancelSpeedApply(); // and the belt is not to be brought up to anything
     setStatus('stopping…');
     await d.stop();
     // Stop ends the walk, so the pause hold goes with it — pausing and then stopping

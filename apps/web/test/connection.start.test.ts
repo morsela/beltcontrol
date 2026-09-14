@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  disconnect,
   doStart,
   doResume,
   doStop,
@@ -10,6 +11,8 @@ import {
   stopPending,
 } from '../src/state/connection.js';
 import { ingest, live, resetTelemetry } from '../src/state/telemetry.js';
+import { updateSettings } from '../src/state/settings.js';
+import { setAnalyticsProvider } from '../src/lib/analytics.js';
 import { status } from '../src/state/log.js';
 import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 
@@ -80,6 +83,24 @@ function answeringPad(verdicts: StartVerdict[], over: Partial<Driver> = {}) {
 /** Long enough for three attempts, the two retry gaps between them, and the settle. */
 async function retries() {
   await vi.advanceTimersByTimeAsync(2500);
+}
+
+/** Long enough for the belt-is-moving check, the settle after it, and one speed write. */
+async function upToSpeed() {
+  await vi.advanceTimersByTimeAsync(1200);
+}
+
+/** A pad that records every speed it is asked for and does nothing else about them —
+ *  what the belt then reports is the test's to say, frame by frame, as it is on the wire. */
+function speedPad(over: Partial<Driver> = {}) {
+  const writes: number[] = [];
+  const d = fakePad({
+    setSpeed: async (kmh: number) => {
+      writes.push(kmh);
+    },
+    ...over,
+  });
+  return { d, writes };
 }
 
 describe('doStart', () => {
@@ -212,10 +233,14 @@ describe('doStart', () => {
     await settle();
     await p;
 
+    // The speed only goes out once the belt is moving — see the suite below — so this
+    // is what it takes to reach the failing write at all.
+    ingest({ speedKmh: 1.0, state: 1, stateLabel: 'running' });
+    await upToSpeed();
+
     // The start itself went out. A failed follow-up speed write says nothing about
-    // whether the belt moved, so the confirmation is still the thing to wait on.
+    // whether the belt moved, so the start confirmation still stands.
     expect(running.value).toBe(true);
-    expect(startPending.value).toBe(true);
     expect(status.value.kind).toBe('err');
   });
 
@@ -456,5 +481,343 @@ describe('doStart', () => {
     expect(startPending.value).toBe(false);
     expect(status.value.kind).toBe('err');
     expect(status.value.text).toMatch(/not sent/);
+  });
+
+  /**
+   * A start carries no speed. The belt moves off at the pad's own crawl — 1.0 km/h on a
+   * KS-C2 — and climbs only when a `setSpeed` reaches it.
+   *
+   * That write used to go out on a fixed 600ms timer, which put it in front of a pad
+   * still reporting `runState 0`, where it was taken and dropped without a word. Every
+   * walk then ran at 0.6 mph for its whole length unless somebody pressed + or − — and
+   * that worked only because it wrote the same value a second time, to a belt that was
+   * by then moving. The log that settled it is quoted in `bringUpToTarget`.
+   */
+  describe('bringing the belt up to the chosen speed', () => {
+    /** 2.0 mph — the "desk" preset, and the target in the report. */
+    const TARGET = 3.2;
+
+    beforeEach(() => {
+      updateSettings({ targetKmh: TARGET });
+    });
+
+    afterEach(() => {
+      updateSettings({ targetKmh: 1.0 });
+      setAnalyticsProvider(null);
+    });
+
+    /** The pad reporting its own start speed, which is where the bug left every walk. */
+    function crawls() {
+      ingest({ speedKmh: 1.0, state: 1, stateLabel: 'running' });
+    }
+
+    it('writes nothing at a belt that has not reported movement', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await vi.advanceTimersByTimeAsync(3000);
+      await p;
+
+      expect(writes).toEqual([]);
+    });
+
+    it('writes the target once the belt says it is moving', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      expect(writes).toEqual([]);
+
+      crawls();
+      await upToSpeed();
+
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('brings a resumed walk up to the target too', async () => {
+      // The capture behind all of this is a resume: same command, same race, and a
+      // walk picked back up at 0.6 mph.
+      const { d, writes } = speedPad();
+      driver.value = d;
+      paused.value = true;
+
+      const p = doResume();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('leaves it at one write when the belt takes it', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+
+      // A pad that took the setpoint ramps, roughly as the real one does.
+      for (const kmh of [1.8, 2.5, 3.1, 3.2]) {
+        ingest({ speedKmh: kmh });
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      await vi.advanceTimersByTimeAsync(8000);
+
+      expect(writes).toEqual([TARGET]);
+      expect(status.value.kind).not.toBe('err');
+    });
+
+    it('waits out a slow ramp rather than writing over it', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+
+      // Climbing, but slowly, and never resting long enough to look stalled.
+      for (let kmh = 1.2; kmh < 3.2; kmh += 0.2) {
+        ingest({ speedKmh: Number(kmh.toFixed(1)) });
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('waits out a belt on its way down to a lower setpoint', async () => {
+      // The rarer direction, and the one a climb-only check would have re-sent into:
+      // a belt decelerating correctly is not a pad ignoring the write.
+      const { d, writes } = speedPad();
+      driver.value = d;
+      ingest({ speedKmh: 5.0, state: 1, stateLabel: 'running' }); // started from the panel
+
+      const p = doStart();
+      await settle();
+      await p;
+      await upToSpeed();
+      expect(writes).toEqual([TARGET]);
+
+      for (const kmh of [4.4, 3.9, 3.5, 3.2]) {
+        ingest({ speedKmh: kmh });
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('writes it again when the belt holds a speed above the target', async () => {
+      // The other half of measuring the distance to the setpoint rather than the speed:
+      // a belt sitting above the target has not taken the write either.
+      const { d, writes } = speedPad();
+      driver.value = d;
+      ingest({ speedKmh: 5.0, state: 1, stateLabel: 'running' });
+
+      const p = doStart();
+      await settle();
+      await p;
+      await upToSpeed();
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(writes).toEqual([TARGET, TARGET]);
+    });
+
+    it('writes it again when the belt holds the start speed instead', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+      expect(writes).toEqual([TARGET]);
+
+      // Nothing more from the pad: 1.0 km/h, steady, which is exactly what a dropped
+      // write looks like from here.
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(writes).toEqual([TARGET, TARGET]);
+    });
+
+    it('gives up after three and says which speed the belt is holding', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      expect(writes).toEqual([TARGET, TARGET, TARGET]);
+      expect(running.value).toBe(true); // it is walking, just not at the speed asked for
+      expect(status.value.kind).toBe('err');
+      expect(status.value.text).toMatch(/running at 0.6 mph/);
+      expect(status.value.text).toMatch(/2.0 mph/);
+      expect(status.value.text).toMatch(/press \+ or −/i);
+    });
+
+    it('stops writing at a belt that reports no speed at all', async () => {
+      // Confirmation by run state alone, and never a speed reading after it. Nothing
+      // to check the write against, so re-sending is just a second write into silence.
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      ingest({ state: 1, stateLabel: 'running' });
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      expect(writes).toEqual([TARGET]);
+      expect(status.value.kind).not.toBe('err');
+    });
+
+    it('abandons the job when somebody presses Stop part way through', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+      expect(writes).toEqual([TARGET]);
+
+      await doStop();
+      await vi.advanceTimersByTimeAsync(8000);
+
+      // No speed goes on the wire behind the back of whoever just stopped the belt.
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('stops writing at a belt that went to rest, without waiting on the self-stop watch', async () => {
+      // A protocol that carries no state code — FTMS — is only read as self-stopped
+      // after three seconds of zero, and the stall below fires at two and a half. Left
+      // to `running`, the belt going still reads as a dropped write and earns one more
+      // speed on the wire at a stopped belt.
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      ingest({ speedKmh: 1.0 }); // no state label: this pad has none to give
+      await upToSpeed();
+      expect(writes).toEqual([TARGET]);
+
+      ingest({ speedKmh: 0 });
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(writes).toEqual([TARGET]);
+    });
+
+    it('says nothing about a write that failed because the link went', async () => {
+      // The disconnect has already put the one message worth reading on the chip.
+      // A raw GATT error from the write it killed on the way out replaces it with
+      // something nobody can act on.
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      const { d } = speedPad({
+        setSpeed: async () => {
+          await disconnect();
+          throw new Error('GATT operation failed for unknown reason');
+        },
+      });
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+
+      expect(status.value.text).not.toMatch(/GATT/);
+      expect(track).not.toHaveBeenCalledWith('control_failed', expect.anything());
+    });
+
+    it('records a setpoint that only landed on the second write', async () => {
+      // The population this whole read-back exists for, and the one a "gave up after
+      // three" event cannot show: pads that do get there, but not first time.
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      const { d } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+      await vi.advanceTimersByTimeAsync(3000); // the first write is dropped; a second goes
+      ingest({ speedKmh: TARGET }); // and this one lands
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(track).toHaveBeenCalledWith('start_speed_rewritten', {
+        attempts: 2,
+        applied: true,
+      });
+    });
+
+    it('records a setpoint the belt never took', async () => {
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      const { d } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      expect(track).toHaveBeenCalledWith('start_speed_rewritten', {
+        attempts: 3,
+        applied: false,
+      });
+    });
+
+    it('records nothing when the belt takes the setpoint first time', async () => {
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      const { d } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+      ingest({ speedKmh: TARGET });
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(track).not.toHaveBeenCalledWith('start_speed_rewritten', expect.anything());
+    });
+
+    it('abandons the job when the belt stops itself', async () => {
+      const { d, writes } = speedPad();
+      driver.value = d;
+
+      const p = doStart();
+      await settle();
+      await p;
+      crawls();
+      await upToSpeed();
+
+      ingest({ speedKmh: 0, state: 5, stateLabel: 'stopped' });
+      await vi.advanceTimersByTimeAsync(8000);
+
+      expect(writes).toEqual([TARGET]);
+      expect(running.value).toBe(false);
+    });
   });
 });
