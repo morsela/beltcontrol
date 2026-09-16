@@ -13,7 +13,7 @@ import {
 import { ingest, live, resetTelemetry } from '../src/state/telemetry.js';
 import { updateSettings } from '../src/state/settings.js';
 import { setAnalyticsProvider } from '../src/lib/analytics.js';
-import { status } from '../src/state/log.js';
+import { clearLog, logLines, status } from '../src/state/log.js';
 import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 
 /**
@@ -115,6 +115,7 @@ describe('doStart', () => {
 
   afterEach(() => {
     driver.value = null;
+    setAnalyticsProvider(null);
     vi.useRealTimers();
   });
 
@@ -436,6 +437,62 @@ describe('doStart', () => {
       expect(counter.attempts).toBe(2);
       expect(running.value).toBe(true);
       expect(status.value.text).not.toMatch(/stopped on its own/);
+    });
+
+    // From a real KS-C2 in standby: three refusals, `runState 0` after the last one, and
+    // ten seconds later "belt reports itself stopped — nobody sent a stop" a moment before
+    // the real message. The deadline branch dropped `startPending` a beat before
+    // `running`, and in that beat the self-stop watcher saw a running belt reporting
+    // rest and filed a stop for a belt that never moved.
+    it('does not file a self-stop when the pad refused every attempt', async () => {
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      clearLog();
+      const { d } = answeringPad(['refused', 'refused', 'refused']);
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      // The pad's own account after the last refusal, newer than the last start.
+      ingest({ speedKmh: 0, state: 0, stateLabel: 'stopped' });
+      await vi.advanceTimersByTimeAsync(10_500);
+
+      expect(running.value).toBe(false);
+      expect(status.value.kind).toBe('err');
+      expect(status.value.text).toMatch(/refused each one/);
+      expect(logLines.value.map((l) => l.msg)).not.toContainEqual(
+        expect.stringMatching(/stopped on its own|nobody sent a stop/)
+      );
+      expect(track.mock.calls.map(([name]) => name)).not.toContain('belt_self_stopped');
+      expect(track).toHaveBeenCalledWith(
+        'start_unconfirmed',
+        expect.objectContaining({ refused: true })
+      );
+    });
+
+    // The same beat on the way out: a disconnect inside the confirmation window dropped
+    // `startPending` in teardown while `running` was still up, with the pad's last
+    // `runState 0` on record.
+    it('does not file a self-stop when the link goes while the pad is still refusing', async () => {
+      const track = vi.fn();
+      setAnalyticsProvider({ track });
+      clearLog();
+      const { d } = answeringPad(['refused', 'refused', 'refused']);
+      driver.value = d;
+
+      const p = doStart();
+      await retries();
+      await p;
+      ingest({ speedKmh: 0, state: 0, stateLabel: 'stopped' });
+      await disconnect();
+
+      expect(running.value).toBe(false);
+      expect(status.value.text).toBe('disconnected');
+      expect(logLines.value.map((l) => l.msg)).not.toContainEqual(
+        expect.stringMatching(/stopped on its own|nobody sent a stop/)
+      );
+      expect(track.mock.calls.map(([name]) => name)).not.toContain('belt_self_stopped');
     });
 
     it('leaves a refused resume paused, exactly as an unconfirmed one', async () => {

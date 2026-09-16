@@ -1,4 +1,4 @@
-import { signal, computed, effect } from '@preact/signals';
+import { signal, computed, effect, batch } from '@preact/signals';
 import { detectDriver, requestOptions } from '@beltcontrol/belt-drivers';
 import type { Driver, StartVerdict } from '@beltcontrol/belt-drivers';
 import {
@@ -292,6 +292,10 @@ function releaseDevice() {
 async function teardown() {
   stopPolling();
   clearStopWatch();
+  // Lowered ahead of the start watch, not after the detach below: dropping `startPending`
+  // with `running` still up is the one shape the self-stop watcher acts on, and a pad
+  // that was refusing when the link went has a `runState 0` on record for it to act on.
+  running.value = false;
   clearStartWatch();
   cancelSpeedApply();
   stopSessionTracking();
@@ -518,11 +522,20 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
       return;
     }
     if (Date.now() >= deadline) {
-      clearStartWatch();
       // Unlike an unconfirmed stop, this clears `running`: the evidence is that the
       // belt never moved, so leaving the UI pinned to Stop strands the user on a
       // control for a state the belt is not in.
-      running.value = false;
+      //
+      // Cleared in the same batch as `startPending`, because the self-stop watcher runs
+      // the instant that flag drops. With `running` still up for that instant, a pad
+      // that refused every attempt and then reported `runState 0` — newer than the last
+      // start, exactly as a KS-C2 in standby does — read as a belt that had stopped
+      // itself: "nobody sent a stop" in the log and a `belt_self_stopped` event, for a
+      // belt that never moved, a beat before the refusal message overwrote it.
+      batch(() => {
+        running.value = false;
+        clearStartWatch();
+      });
       // A resume that the belt ignored leaves the walk exactly where it was — still
       // paused, still held open — so put Resume back rather than quietly filing it.
       if (kind === 'resume') {
