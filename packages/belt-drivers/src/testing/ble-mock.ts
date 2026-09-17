@@ -1,5 +1,12 @@
 // A minimal fake of the slice of Web Bluetooth the drivers actually touch, so the
 // protocol code can be exercised without a treadmill — or a browser — in reach.
+//
+// Anything the fake has to agree with the drivers about is imported from them rather
+// than reimplemented here: hex formatting, because `hexWrites()` is compared against
+// the driver's own logged frames, and UUID canonicalisation, because `detectDriver`
+// matches the table this reports against what it expects to see.
+
+import { canonicalUuid, hex } from '../drivers.js';
 
 export interface CharOpts {
   /** Which write forms the stack advertises. Drivers prefer without-response. */
@@ -95,9 +102,10 @@ export class FakeCharacteristic {
     for (const l of [...this.listeners]) l({ target: { value: view } });
   }
 
-  /** Writes so far as space-separated hex — the driver's own log format. */
+  /** Writes so far as space-separated hex — the driver's own log format, because it
+   *  is the driver's own formatter. */
   hexWrites(): string[] {
-    return this.writes.map(toHex);
+    return this.writes.map((w) => hex(w));
   }
 
   /** Writes so far decoded as text — for the line-oriented 0x1234 protocol. */
@@ -105,9 +113,6 @@ export class FakeCharacteristic {
     return this.writes.map((w) => new TextDecoder().decode(w)).join('');
   }
 }
-
-export const toHex = (b: Uint8Array | number[]) =>
-  [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ');
 
 class FakeService {
   constructor(
@@ -122,12 +127,6 @@ class FakeService {
   }
 }
 
-/** The full form a real GATT table reports, which is what `getPrimaryServices` returns. */
-const fullUuid = (u: string | number) =>
-  typeof u === 'number'
-    ? `${u.toString(16).padStart(8, '0')}-0000-1000-8000-00805f9b34fb`
-    : String(u).toLowerCase();
-
 export class FakeServer {
   private readonly services = new Map<string | number, FakeService>();
   /** Set false to model a stack that does not implement enumeration. */
@@ -135,7 +134,9 @@ export class FakeServer {
 
   addService(uuid: string | number, chars: FakeCharacteristic[]) {
     const byUuid = new Map(chars.map((c) => [c.uuid, c]));
-    this.services.set(uuid, new FakeService(fullUuid(uuid), byUuid));
+    // The full form a real GATT table reports, which is what `getPrimaryServices`
+    // returns — and the same function `detectDriver` compares against.
+    this.services.set(uuid, new FakeService(canonicalUuid(uuid), byUuid));
     return this;
   }
 

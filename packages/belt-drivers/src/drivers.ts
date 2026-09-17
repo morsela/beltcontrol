@@ -400,6 +400,46 @@ async function writeChar(ch: BluetoothRemoteGATTCharacteristic, bytes: ArrayLike
 const charValue = (e: Event): DataView =>
   (e.target as BluetoothRemoteGATTCharacteristic).value as DataView;
 
+/** The only event a notifying characteristic fires, named once so a typo in it cannot
+ *  be a listener that is registered and never called. */
+const VALUE_CHANGED = 'characteristicvaluechanged';
+
+/** A characteristic and the listener attached to it, as `detach` holds them: either may
+ *  be null, because a driver nulls both together and an optional one may never have
+ *  been found at all. */
+type Subscription = [BluetoothRemoteGATTCharacteristic | null, ((e: Event) => void) | null];
+
+/** Route a characteristic's notifications to `fn`. */
+async function subscribe(ch: BluetoothRemoteGATTCharacteristic, fn: (e: Event) => void) {
+  ch.addEventListener(VALUE_CHANGED, fn);
+  await ch.startNotifications();
+}
+
+/**
+ * Undo `subscribe`, for however many characteristics a driver subscribed to.
+ *
+ * The listener comes off before the unsubscribe and the unsubscribe is allowed to fail:
+ * `stopNotifications()` rejects against a device that has already gone, which is the
+ * ordinary way a link ends, and a driver that cannot finish detaching leaves the app
+ * holding one that never let go. Taking the listener off first means a frame arriving
+ * during that rejection reaches nobody either way.
+ *
+ * Every driver tears down the same way, so it is written once: three of them were
+ * carrying a copy of this block and FTMS a fourth spelling of it, which is four places
+ * to fix a teardown that turns out to leak.
+ */
+async function unsubscribe(...subs: Subscription[]) {
+  for (const [ch, fn] of subs) {
+    if (!ch || !fn) continue;
+    ch.removeEventListener(VALUE_CHANGED, fn);
+    try {
+      await ch.stopNotifications();
+    } catch {
+      /* device already gone */
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Classic WalkingPad — service 0xfe00
 // ---------------------------------------------------------------------------
@@ -464,22 +504,14 @@ export function classicDriver(): Driver {
       writeCh = await svc.getCharacteristic(UUID.classicWrite);
 
       onNotify = (e) => self._parse(charValue(e));
-      notifyCh.addEventListener('characteristicvaluechanged', onNotify);
-      await notifyCh.startNotifications();
+      await subscribe(notifyCh, onNotify);
 
       // Wake the pad's app-control path before anything else.
       await self.poll();
     },
 
     async detach() {
-      if (notifyCh && onNotify) {
-        notifyCh.removeEventListener('characteristicvaluechanged', onNotify);
-        try {
-          await notifyCh.stopNotifications();
-        } catch {
-          /* device already gone */
-        }
-      }
+      await unsubscribe([notifyCh, onNotify]);
       notifyCh = writeCh = onNotify = null;
     },
 
@@ -809,8 +841,7 @@ export function ftmsDriver(): Driver {
         for (const k of FTMS_FRAME_FIELDS) if (d[k] !== undefined) out[k] = d[k];
         self.onData?.(out);
       };
-      dataCh.addEventListener('characteristicvaluechanged', onData);
-      await dataCh.startNotifications();
+      await subscribe(dataCh, onData);
 
       try {
         statusCh = await svc.getCharacteristic(UUID.ftmsStatus);
@@ -819,8 +850,7 @@ export function ftmsDriver(): Driver {
           const op = v.getUint8(0);
           self.onLog?.(`status: ${FTMS_STATUS[op] ?? `op 0x${op.toString(16)}`}`);
         };
-        statusCh.addEventListener('characteristicvaluechanged', onStatus);
-        await statusCh.startNotifications();
+        await subscribe(statusCh, onStatus);
       } catch {
         statusCh = null;
       }
@@ -852,26 +882,13 @@ export function ftmsDriver(): Driver {
         }
         pending.settle({ ok: res === 0x01, result: res });
       };
-      cpCh.addEventListener('characteristicvaluechanged', onCp);
-      await cpCh.startNotifications();
+      await subscribe(cpCh, onCp);
 
       await self._requestControl();
     },
 
     async detach() {
-      for (const [ch, fn] of [
-        [dataCh, onData],
-        [cpCh, onCp],
-        [statusCh, onStatus],
-      ] as [BluetoothRemoteGATTCharacteristic | null, ((e: Event) => void) | null][]) {
-        if (!ch || !fn) continue;
-        ch.removeEventListener('characteristicvaluechanged', fn);
-        try {
-          await ch.stopNotifications();
-        } catch {
-          /* device already gone */
-        }
-      }
+      await unsubscribe([dataCh, onData], [cpCh, onCp], [statusCh, onStatus]);
       dataCh = cpCh = statusCh = onData = onCp = onStatus = null;
       // An ack can no longer arrive for whatever was in flight, and every control-point
       // write shares one serialiser: dropping the request without settling it leaves its
@@ -1035,8 +1052,7 @@ export function fitshowDriver(): Driver {
       const svc = await server.getPrimaryService(UUID.fitshowService);
       notifyCh = await svc.getCharacteristic(UUID.fitshowNotify);
       onNotify = (e) => self.onLog?.(`rx ${hex(charValue(e))}`);
-      notifyCh.addEventListener('characteristicvaluechanged', onNotify);
-      await notifyCh.startNotifications();
+      await subscribe(notifyCh, onNotify);
       self.onLog?.(
         'FitShow detected. Control is not implemented — raw frames are logged below so the ' +
           'protocol can be decoded. Please share this log.'
@@ -1044,14 +1060,7 @@ export function fitshowDriver(): Driver {
     },
 
     async detach() {
-      if (notifyCh && onNotify) {
-        notifyCh.removeEventListener('characteristicvaluechanged', onNotify);
-        try {
-          await notifyCh.stopNotifications();
-        } catch {
-          /* device already gone */
-        }
-      }
+      await unsubscribe([notifyCh, onNotify]);
       notifyCh = onNotify = null;
     },
 
@@ -1345,8 +1354,7 @@ export function ks1234Driver(): Driver {
       notifyCh = await svc.getCharacteristic(UUID.ks1234Notify);
 
       onNotify = (e) => self._rx(charValue(e));
-      notifyCh.addEventListener('characteristicvaluechanged', onNotify);
-      await notifyCh.startNotifications();
+      await subscribe(notifyCh, onNotify);
 
       // The pad drops the link ~2-4s after connecting unless this completes, so it runs
       // immediately and in the same order the official app uses.
@@ -1358,14 +1366,7 @@ export function ks1234Driver(): Driver {
       // Nothing is going to answer now, and a caller awaiting the verdict of a start that
       // was in flight when the link went should not be left holding an unsettled promise.
       lastStart?.settle('unknown');
-      if (notifyCh && onNotify) {
-        notifyCh.removeEventListener('characteristicvaluechanged', onNotify);
-        try {
-          await notifyCh.stopNotifications();
-        } catch {
-          /* device already gone */
-        }
-      }
+      await unsubscribe([notifyCh, onNotify]);
       writeCh = notifyCh = onNotify = null;
       rxBuf = '';
     },
@@ -1637,8 +1638,15 @@ export { ksEncode, ksDecode, parseProps };
 // Detection — probe the GATT table in the order the app itself prefers.
 // ---------------------------------------------------------------------------
 
-/** 16-bit alias to the full form the GATT table reports, so the two can be compared. */
-const canonicalUuid = (u: number | string): string =>
+/**
+ * 16-bit alias to the full form the GATT table reports, so the two can be compared.
+ *
+ * Exported for the GATT fake under `/testing`, which has to report service UUIDs the
+ * way a real stack does. It kept its own copy of this until a reader noticed that a
+ * fake whose UUID canonicalisation is a second implementation can agree with itself
+ * and disagree with `detectDriver` — which is the one thing a fake must not do.
+ */
+export const canonicalUuid = (u: number | string): string =>
   typeof u === 'number'
     ? `${u.toString(16).padStart(8, '0')}-0000-1000-8000-00805f9b34fb`
     : String(u).toLowerCase();
