@@ -13,6 +13,7 @@
  */
 import { sessions, mergeSessions, sanitizeSession, type Session } from './session.js';
 import { settings, updateSettings, sanitizeSettings, type Settings } from './settings.js';
+import { isObj } from '../lib/validate.js';
 
 export const BACKUP_SCHEMA = 'walkingpad.backup.v1';
 
@@ -61,11 +62,6 @@ export function buildBackup(at = Date.now()): Backup {
 export function exportJson(at = Date.now()): string {
   return JSON.stringify(buildBackup(at), null, 2);
 }
-
-// --- validation ------------------------------------------------------------
-
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 // --- import ----------------------------------------------------------------
 

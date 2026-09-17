@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { download, stamped } from '../lib/download.js';
 import { trackEvent } from '../lib/analytics.js';
+import { ALL_STORAGE_KEYS, readRaw, removeStored } from '../lib/storage.js';
 
 /**
  * The screen of last resort.
@@ -15,22 +16,16 @@ import { trackEvent } from '../lib/analytics.js';
  * did. Clearing is the last button, not the first, and it names what it will destroy.
  */
 
-const KEYS = [
-  'wp.sessions.v1',
-  'wp.session.open.v1',
-  'wp.settings.v1',
-  'wp.desktopNotice.dismissed.v1',
-];
-
+// The key list comes from `lib/storage.ts` rather than being written out again here.
+// It used to be a second copy, kept in step by hand — so a fifth stored key added
+// anywhere in the app would have gone missing from both the rescue download and the
+// clear button below, which are the last two controls that still work once everything
+// else has failed.
 function rawDump(): string {
   const out: Record<string, string | null> = {};
-  for (const k of KEYS) {
-    try {
-      out[k] = localStorage.getItem(k);
-    } catch {
-      out[k] = null;
-    }
-  }
+  // `readRaw` swallows a storage that will not answer and reports it as absent, which
+  // is the right reading here: the dump is a record of what could be recovered.
+  for (const k of ALL_STORAGE_KEYS) out[k] = readRaw(k);
   return JSON.stringify(out, null, 2);
 }
 
@@ -89,13 +84,7 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
             if (!confirm('Delete all stored walking history and settings from this browser?')) return;
             // Best effort only — the reload below may outrun the beacon.
             trackEvent('storage_cleared');
-            for (const k of KEYS) {
-              try {
-                localStorage.removeItem(k);
-              } catch {
-                /* nothing more to try */
-              }
-            }
+            for (const k of ALL_STORAGE_KEYS) removeStored(k);
             location.reload();
           }}
         >

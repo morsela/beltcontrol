@@ -1,31 +1,22 @@
 import { signal } from '@preact/signals';
 import { isMobile } from '../lib/platform.js';
 import { supported } from '../state/connection.js';
-
-const KEY = 'wp.desktopNotice.dismissed.v1';
+import { STORAGE_KEYS, readRaw, writeRaw } from '../lib/storage.js';
 
 /** Evaluated once: the device does not change mid-session. `?forcemobile` is the
  *  dev-only way to see this on a desktop, in the spirit of the simulator hook —
  *  `import.meta.env.DEV` is statically false in a production build. */
 const onMobile = isMobile() || (import.meta.env.DEV && location.search.includes('forcemobile'));
 
-const dismissed = signal(read());
-
-function read(): boolean {
-  try {
-    return localStorage.getItem(KEY) === '1';
-  } catch {
-    return false;
-  }
-}
+// A bare '1' rather than JSON: it is one bit, and the raw accessors exist for exactly
+// this. Unreadable storage reads as "not dismissed", which shows the notice again — the
+// safe direction for something whose whole job is to be seen once.
+const dismissed = signal(readRaw(STORAGE_KEYS.desktopNotice) === '1');
 
 function dismiss() {
   dismissed.value = true;
-  try {
-    localStorage.setItem(KEY, '1');
-  } catch {
-    /* private mode — the notice just comes back next load */
-  }
+  // Private mode may refuse the write, and then the notice just comes back next load.
+  writeRaw(STORAGE_KEYS.desktopNotice, '1');
 }
 
 /**

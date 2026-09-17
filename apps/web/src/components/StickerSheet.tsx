@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { sessions, currentSession, bestStreak } from '../state/session.js';
+import { allSessions, bestStreak } from '../state/session.js';
 import { settings } from '../state/settings.js';
 import { badgeStates, nextBadge, type BadgeId } from '../lib/badges.js';
 
@@ -19,10 +19,9 @@ const FILLS = ['sage', 'rose', 'mustard', 'slate'] as const;
  */
 export function StickerSheet() {
   const goal = settings.value.goalMinutes;
-  // The walk in progress counts. A sticker earned at minute sixty of a walk should
-  // appear at minute sixty, not after the belt stops.
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
-  const states = badgeStates(all, bestStreak(goal));
+  // The walk in progress counts — `allSessions` includes it. A sticker earned at
+  // minute sixty of a walk should appear at minute sixty, not after the belt stops.
+  const states = badgeStates(allSessions.value, bestStreak(goal));
   const next = nextBadge(states);
   const earnedCount = states.filter((b) => b.earned).length;
 
