@@ -12,9 +12,8 @@ import {
 import { dayKey, startOfDay } from '../lib/format.js';
 import { log } from './log.js';
 import { trackEvent } from '../lib/analytics.js';
-
-const SESSIONS_KEY = 'wp.sessions.v1';
-const OPEN_KEY = 'wp.session.open.v1';
+import { isObj } from '../lib/validate.js';
+import { STORAGE_KEYS, readJson, removeStored, writeJson } from '../lib/storage.js';
 
 /** A lull shorter than this does not split a session — desk walkers stop constantly. */
 const IDLE_END_MS = 60_000;
@@ -74,9 +73,6 @@ export interface Session {
 
 const TRUSTS: readonly Trust[] = ['ok', 'unverified', 'absent'];
 const TRUSTED_FIELDS: readonly TrustedField[] = ['distKm', 'steps', 'kcal'];
-
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Finite numbers only, clamped at zero: a negative distance or a NaN duration would
  *  poison every total it touches, and there is no honest way to recover the real value. */
@@ -185,11 +181,20 @@ let heldSince: number | null = null;
 let lastSampleAt = 0;
 let ticker: number | null = null;
 
+/**
+ * The stored history, or an empty one.
+ *
+ * The blanket `catch` is not about storage — `readJson` already answers an unreachable
+ * or unparseable store with `undefined`. It is about where this runs: the signal below
+ * initialises it at module scope, which `main.tsx` reaches before `render()`, so it is
+ * outside the error boundary `App` installs. A throw here is a blank page with no
+ * Recovery screen and no retry behind it, which is the one failure this app went to
+ * some trouble to make impossible. Nothing in the body should be able to throw; that is
+ * the point of a backstop.
+ */
 function loadSessions(): Session[] {
   try {
-    const raw = localStorage.getItem(SESSIONS_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
+    const parsed = readJson(STORAGE_KEYS.sessions);
     if (!Array.isArray(parsed)) return [];
     const out: Session[] = [];
     let dropped = 0;
@@ -207,23 +212,12 @@ function loadSessions(): Session[] {
 }
 
 function persistSessions() {
-  try {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.value));
-  } catch {
-    /* quota — keep running, just stop remembering */
-  }
+  writeJson(STORAGE_KEYS.sessions, sessions.value);
 }
 
 function persistOpen() {
-  try {
-    if (currentSession.value) {
-      localStorage.setItem(OPEN_KEY, JSON.stringify(currentSession.value));
-    } else {
-      localStorage.removeItem(OPEN_KEY);
-    }
-  } catch {
-    /* ignore */
-  }
+  if (currentSession.value) writeJson(STORAGE_KEYS.openSession, currentSession.value);
+  else removeStored(STORAGE_KEYS.openSession);
 }
 
 /**
@@ -239,41 +233,51 @@ function persistOpen() {
  *
  * A session already open is the authority on itself. The stored copy is a checkpoint of
  * that same session, never a better one.
+ *
+ * Wrapped in a backstop for the same reason `loadSessions` is: `main.tsx` calls this
+ * before `render()`, so a throw here never reaches the error boundary and leaves a blank
+ * page instead of the Recovery screen. Storage itself is already handled below.
  */
 export function restoreOpenSession() {
   if (currentSession.value) return;
   try {
-    const raw = localStorage.getItem(OPEN_KEY);
-    if (!raw) return;
-    const s = sanitizeSession(JSON.parse(raw));
-    if (!s) {
-      localStorage.removeItem(OPEN_KEY);
-      log('discarded an unreadable in-flight session record', 'err');
-      return;
-    }
-    // A stale open session from days ago should be filed, not resumed.
-    if (Date.now() - s.startedAt > STALE_OPEN_MS) {
-      // Through `closeSession`, not `finalise`, for two things that path knows and this
-      // one did not. It applies the 30 s floor, so a scrap left open by a tab that closed
-      // seconds after the belt nudged is discarded rather than filed as a walk. And the
-      // end time is stamped here rather than left to `finalise`, which defaults it to
-      // *now* — a walk abandoned on Tuesday was being filed as one that ran until Friday,
-      // an eleven-hour span in the history and a day's worth of it on the wrong day.
-      // `startedAt + activeMs` is the one end the record can vouch for: it is where the
-      // belt's own moving time puts it, and it can never reach past the present.
-      currentSession.value = { ...s, endedAt: s.startedAt + s.activeMs };
-      closeSession('ended (recovered from a tab that did not close it)');
-      return;
-    }
-    currentSession.value = s;
-    counters.dist.seed(s.distKm);
-    counters.steps.seed(s.steps);
-    counters.kcal.seed(s.kcal);
-    lastMoveAt = Date.now();
-    log(`recovered in-flight session from ${new Date(s.startedAt).toLocaleTimeString()}`);
+    restoreOpen();
   } catch {
-    /* ignore */
+    /* a walk not recovered is a walk split in two, not an app that will not start */
   }
+}
+
+function restoreOpen() {
+  const stored = readJson(STORAGE_KEYS.openSession);
+  // `undefined` is nothing to recover; a stored `null` is a record the app did write,
+  // and it goes to `sanitizeSession` to be rejected and reported like any other bad one.
+  if (stored === undefined) return;
+  const s = sanitizeSession(stored);
+  if (!s) {
+    removeStored(STORAGE_KEYS.openSession);
+    log('discarded an unreadable in-flight session record', 'err');
+    return;
+  }
+  // A stale open session from days ago should be filed, not resumed.
+  if (Date.now() - s.startedAt > STALE_OPEN_MS) {
+    // Through `closeSession`, not `finalise`, for two things that path knows and this
+    // one did not. It applies the 30 s floor, so a scrap left open by a tab that closed
+    // seconds after the belt nudged is discarded rather than filed as a walk. And the
+    // end time is stamped here rather than left to `finalise`, which defaults it to
+    // *now* — a walk abandoned on Tuesday was being filed as one that ran until Friday,
+    // an eleven-hour span in the history and a day's worth of it on the wrong day.
+    // `startedAt + activeMs` is the one end the record can vouch for: it is where the
+    // belt's own moving time puts it, and it can never reach past the present.
+    currentSession.value = { ...s, endedAt: s.startedAt + s.activeMs };
+    closeSession('ended (recovered from a tab that did not close it)');
+    return;
+  }
+  currentSession.value = s;
+  counters.dist.seed(s.distKm);
+  counters.steps.seed(s.steps);
+  counters.kcal.seed(s.kcal);
+  lastMoveAt = Date.now();
+  log(`recovered in-flight session from ${new Date(s.startedAt).toLocaleTimeString()}`);
 }
 
 function open(meta: SessionMeta) {
@@ -429,6 +433,28 @@ effect(() => {
 
 // --- aggregates ------------------------------------------------------------
 
+/**
+ * Every session the app knows about, the walk in progress included.
+ *
+ * Every aggregate below wants this and so do the sticker components, and all six of
+ * them used to spell it out for themselves. Two of those copies were in the view layer,
+ * which meant a change to what counts as a session — the open one, an imported one, one
+ * being edited — had to be chased out of this module and into components to take
+ * effect. It is the store's own question and it is answered here.
+ *
+ * A `computed`, so the concatenation happens once per change to either signal rather
+ * than once per caller. That is not just tidiness: `streak` and `bestStreak` each walk
+ * `dailySeries(400)`, and the streak chain asks for both on every render.
+ *
+ * A fresh array each time rather than `sessions.value` itself when nothing is open —
+ * callers sort and filter what they are handed, and the stored list is not theirs to
+ * touch.
+ */
+export const allSessions = computed<Session[]>(() => [
+  ...sessions.value,
+  ...(currentSession.value ? [currentSession.value] : []),
+]);
+
 export interface DayTotal {
   key: string;
   date: number;
@@ -444,8 +470,7 @@ export interface DayTotal {
 /** Today's totals, including the session still in progress. */
 export const todayTotals = computed<DayTotal>(() => {
   const key = dayKey(Date.now());
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
-  return foldDay(key, startOfDay(Date.now()), all);
+  return foldDay(key, startOfDay(Date.now()), allSessions.value);
 });
 
 function foldDay(key: string, date: number, all: Session[]): DayTotal {
@@ -490,7 +515,7 @@ export interface LifetimeTotals {
  * the whole reason it is a rolling counter rather than a printed number.
  */
 export const lifetimeTotals = computed<LifetimeTotals>(() => {
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
+  const all = allSessions.value;
   const out: LifetimeTotals = {
     minutes: 0,
     distKm: 0,
@@ -513,7 +538,7 @@ export const lifetimeTotals = computed<LifetimeTotals>(() => {
 
 /** The last `days` days, oldest first, with empty days present as zeroes. */
 export function dailySeries(days: number): DayTotal[] {
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
+  const all = allSessions.value;
   const today = startOfDay(Date.now());
   const out: DayTotal[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -571,8 +596,9 @@ export function bestStreak(goalMinutes: number): number {
 }
 
 export function sessionsOn(key: string): Session[] {
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
-  return all.filter((s) => dayKey(s.startedAt) === key).sort((a, b) => b.startedAt - a.startedAt);
+  return allSessions.value
+    .filter((s) => dayKey(s.startedAt) === key)
+    .sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export function deleteSession(id: string) {

@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { classicDriver, CLASSIC_MODE, UUID } from '../src/drivers.js';
+import { classicDriver, CLASSIC_MODE, hex, UUID } from '../src/drivers.js';
 import type { Telemetry } from '../src/drivers.js';
 import { FakeServer, FakeCharacteristic } from '../src/testing/ble-mock.js';
 
-// F7 A2 <cmd> <param> <crc> FD, crc = (0xA2 + cmd + param) & 0xFF.
+// F7 A2 <cmd> <param> <crc> FD, crc = (0xA2 + cmd + param) & 0xFF. The CRC is worked
+// out here rather than taken from `classicFrame`, deliberately: an expectation derived
+// from the code under test checks nothing. Only the hex rendering is shared, because
+// that is what `hexWrites()` is being compared against.
 const frame = (cmd: number, param: number) =>
-  [0xf7, 0xa2, cmd, param, (0xa2 + cmd + param) & 0xff, 0xfd]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join(' ');
+  hex([0xf7, 0xa2, cmd, param, (0xa2 + cmd + param) & 0xff, 0xfd]);
 
 /** 18-byte F8 A2 status frame: state, speed, mode, secs:3, dist:3, steps:3. */
 function status({

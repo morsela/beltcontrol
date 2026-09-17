@@ -1,4 +1,4 @@
-import { sessions, currentSession, bestStreak } from '../state/session.js';
+import { allSessions, bestStreak } from '../state/session.js';
 import { settings } from '../state/settings.js';
 import { badgesEarnedToday } from '../lib/badges.js';
 
@@ -15,8 +15,7 @@ import { badgesEarnedToday } from '../lib/badges.js';
  * card underneath is a list of walks, and two rosettes over it would outweigh it.
  */
 export function NewSticker() {
-  const all = [...sessions.value, ...(currentSession.value ? [currentSession.value] : [])];
-  const earned = badgesEarnedToday(all, bestStreak(settings.value.goalMinutes));
+  const earned = badgesEarnedToday(allSessions.value, bestStreak(settings.value.goalMinutes));
   if (earned.length === 0) return null;
 
   const names = earned.map((b) => b.name);

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ftmsDriver, parseTreadmillData, UUID } from '../src/drivers.js';
+import { ftmsDriver, hex, parseTreadmillData, UUID } from '../src/drivers.js';
 import type { Telemetry } from '../src/drivers.js';
-import { FakeServer, FakeCharacteristic, toHex } from '../src/testing/ble-mock.js';
+import { FakeServer, FakeCharacteristic } from '../src/testing/ble-mock.js';
 
 const view = (bytes: number[]) => new DataView(Uint8Array.from(bytes).buffer);
 const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff];
@@ -90,7 +90,7 @@ describe('parseTreadmillData', () => {
 
   it('keeps the raw frame for the log', () => {
     const bytes = [...u16(0x0000), ...u16(100)];
-    expect(parseTreadmillData(view(bytes)).raw).toBe(toHex(bytes));
+    expect(parseTreadmillData(view(bytes)).raw).toBe(hex(bytes));
   });
 });
 

@@ -1,7 +1,7 @@
 import { signal, effect } from '@preact/signals';
 import { HARD_MAX_KMH, HARD_MIN_KMH } from '@beltcontrol/belt-drivers';
-
-const KEY = 'wp.settings.v1';
+import { isObj } from '../lib/validate.js';
+import { STORAGE_KEYS, readJson, writeJson } from '../lib/storage.js';
 
 export interface Settings {
   /** Daily walking goal, in minutes. */
@@ -30,9 +30,6 @@ const DEFAULTS: Settings = {
 };
 
 const HERO_METRICS: readonly Settings['heroMetric'][] = ['time', 'distance', 'steps', 'kcal'];
-
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /**
  * Whatever survives validation, as a patch over the current settings.
@@ -82,23 +79,16 @@ export function sanitizeSettings(v: unknown): Partial<Settings> {
 }
 
 function load(): Settings {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULTS };
-    return { ...DEFAULTS, ...sanitizeSettings(JSON.parse(raw)) };
-  } catch {
-    return { ...DEFAULTS };
-  }
+  // Nothing stored, unreadable storage and bytes that are not JSON all arrive here as
+  // `undefined`, which `sanitizeSettings` answers with an empty patch — so all three
+  // land on the defaults without needing to be told apart.
+  return { ...DEFAULTS, ...sanitizeSettings(readJson(STORAGE_KEYS.settings)) };
 }
 
 export const settings = signal<Settings>(load());
 
 effect(() => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(settings.value));
-  } catch {
-    /* private mode / quota — the app still works, it just forgets */
-  }
+  writeJson(STORAGE_KEYS.settings, settings.value);
 });
 
 export function updateSettings(patch: Partial<Settings>) {
