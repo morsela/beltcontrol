@@ -34,11 +34,10 @@ export function DesktopOnlyNotice() {
       <div class="banner-body">
         <strong>Best on desktop</strong>
         <p>
-          Belt Control drives the treadmill over Web Bluetooth, which this app is built and
-          tested for on desktop Chrome, Edge or Opera.{' '}
+          Belt Control is built and tested for Chrome, Edge and Opera on a computer.{' '}
           {supported.value
-            ? 'On a phone or tablet, expect a cramped layout and flaky pairing.'
-            : 'This browser has no Web Bluetooth at all — Safari on iOS and Firefox never implemented it, so connecting will not work here.'}
+            ? 'On a phone or tablet the layout can feel cramped, and pairing can be unreliable.'
+            : "This browser doesn't support Web Bluetooth (Safari on iOS and Firefox never added it), so it can't connect to a treadmill."}
         </p>
       </div>
       <button class="btn ghost banner-close" onClick={dismiss} aria-label="Dismiss desktop notice">

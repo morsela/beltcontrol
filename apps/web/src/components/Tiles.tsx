@@ -55,7 +55,7 @@ export function Tiles() {
           <span class="v tnum">
             {tile.v}
             {tile.unverified && (
-              <span class="unverified" title="Scaling for this field was never established — shown raw, excluded from totals">
+              <span class="unverified" title="The app can't be sure how to read this number, so it's shown as-is and left out of totals">
                 ?
               </span>
             )}

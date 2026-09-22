@@ -287,8 +287,7 @@ export function Legal() {
       </section>
 
       <p class="note legal-foot">
-        This page is written to be read and understood, not to be impressive. It is not legal
-        advice.
+        This page is written to be understood, not to impress. It isn&rsquo;t legal advice.
       </p>
     </div>
   );

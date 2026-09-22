@@ -162,9 +162,9 @@ export function ConnectionSheet({
       )}
 
       <p class="note" style="margin-top:1rem">
-        Disconnecting does not stop the belt. Needs Chrome, Edge, Opera or Samsung
-        Internet over HTTPS or localhost — Firefox and Safari, including on iOS, do
-        not support Web Bluetooth.
+        Disconnecting doesn&rsquo;t stop the belt. Works in Chrome, Edge, Opera and
+        Samsung Internet over HTTPS or localhost. Firefox and Safari (including on iPhone
+        and iPad) don&rsquo;t support Web Bluetooth.
       </p>
 
       {/* Kept because the project asks people to share this when a pad speaks an

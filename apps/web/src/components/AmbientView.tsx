@@ -83,7 +83,7 @@ export function AmbientView({ onExit }: { onExit: () => void }) {
           title="Resume the belt?"
           body={`The belt will pick back up at ${toMph(settings.value.targetKmh).toFixed(
             1
-          )} mph. Make sure it is clear and you are ready.`}
+          )} mph. Make sure it's clear and you're ready.`}
           confirmLabel="Resume"
           onConfirm={() => {
             setConfirmResume(false);

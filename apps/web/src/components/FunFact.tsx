@@ -47,7 +47,7 @@ export function FunFact() {
 
   return (
     <div class="funfact">
-      <p class="funfact-k">Which is to say</p>
+      <p class="funfact-k">Put another way</p>
       <p class="funfact-v">
         {fmtMiles(distKm)} miles {usingDay ? 'today' : 'in total'} is {pick.text}.
       </p>

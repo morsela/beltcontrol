@@ -37,7 +37,7 @@ function DataCard() {
       log(`backup imported: ${parts.join(', ')}`, 'ok');
       trackEvent('backup_imported', { added: r.added, duplicate: r.duplicate, skipped: r.skipped });
     } catch (err) {
-      const text = err instanceof BackupError ? err.message : 'Could not read that file.';
+      const text = err instanceof BackupError ? err.message : "Couldn't read that file.";
       setMsg({ text, err: true });
       log(`backup import failed: ${text}`, 'err');
       trackEvent('backup_import_failed');
@@ -78,10 +78,10 @@ function DataCard() {
         </p>
       )}
       <p class="note" style="margin-top:.6rem">
-        {n} session{n === 1 ? '' : 's'} stored in this browser. Nothing is ever uploaded.
-        The backup holds the complete record — every session, its speed samples and your
-        settings — and importing one merges into what is already here rather than
-        replacing it. The CSV is a flat summary for spreadsheets and cannot be read back.
+        {n} session{n === 1 ? '' : 's'} saved in this browser, and nothing is ever
+        uploaded. A backup holds everything: every session, its speed samples and your
+        settings. Importing one adds to what&rsquo;s already here instead of replacing it.
+        The CSV is a simple summary for spreadsheets and can&rsquo;t be imported back.
       </p>
     </div>
   );
@@ -117,17 +117,17 @@ function LifetimeCard() {
       {/* Same rule as every other total on this screen: say what is not in it. */}
       {head.fellBack ? (
         <p class="note" style="margin-top:.4rem">
-          Counting hours rather than miles: no walk here came from a protocol that
-          reports distance on a scale this project established, and hours are measured
-          by this app rather than taken from the pad.
+          Showing hours instead of miles: none of these walks came from a treadmill whose
+          distance the app can read reliably. Hours are timed by the app itself, so they
+          don&rsquo;t depend on the treadmill.
         </p>
       ) : (
         t.excluded > 0 && (
           <p class="note" style="margin-top:.4rem">
             {t.excluded} walk{t.excluded === 1 ? ' is' : 's are'} left out of this
-            distance — recorded on a protocol whose distance scale this project had not
-            established at the time, so those numbers are kept raw rather than summed as
-            miles.
+            distance. {t.excluded === 1 ? 'It was' : 'They were'} recorded before the app
+            could read that treadmill&rsquo;s distance reliably, so the numbers are kept
+            as they were rather than counted as miles.
           </p>
         )
       )}
@@ -157,8 +157,8 @@ export function History() {
         <h1 class="page">History</h1>
         <div class="card">
           <p class="empty">
-            Nothing recorded yet. Sessions start themselves when the belt moves — you do
-            not have to press anything.
+            Nothing recorded yet. A session starts automatically when the belt moves, so
+            there&rsquo;s nothing extra to press.
           </p>
         </div>
         <DataCard />
@@ -200,7 +200,7 @@ export function History() {
           height={desktop ? 180 : 140}
         />
         <p class="note" style="margin-top:.5rem">
-          Dashed line is the {goal}-minute goal. Filled bars met it.
+          The dashed line is your {goal}-minute goal. Filled bars are days you hit it.
         </p>
         {/* A table view always exists alongside the chart. */}
         <button class="table-toggle" onClick={() => setShowTable((v) => !v)}>
@@ -235,19 +235,17 @@ export function History() {
         <Heatmap data={heatDays} goalMinutes={goal} />
         <p class="note" style="margin-top:.75rem">
           {days > 0
-            ? `${days}-day streak at ${goal} min or more.`
-            : `No active streak. Today counts once you pass ${goal} min.`}
+            ? `${days}-day streak of ${goal} minutes or more.`
+            : `No streak right now. Walk ${goal} minutes today to start one.`}
         </p>
       </div>
 
       {anyExcluded && (
         <p class="note" style="margin-bottom:var(--gap)">
-          Some sessions are excluded from the distance totals above. They were recorded
-          on a protocol whose distance scale this project had not established at the
-          time — KingSmith 0x1234 walks logged before that pad's distance was confirmed
-          to be metres. Each session keeps the trust it was recorded with, so those
-          numbers stay raw and out of every aggregate rather than being converted now on
-          an assumption about what they meant then.
+          Some sessions aren&rsquo;t counted in the distance totals above. They&rsquo;re
+          KingSmith 0x1234 walks recorded before the app confirmed that pad reports
+          distance in metres. Rather than convert them now based on a guess, each one
+          keeps its numbers exactly as recorded and stays out of the totals.
         </p>
       )}
 

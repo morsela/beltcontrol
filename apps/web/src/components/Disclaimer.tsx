@@ -30,16 +30,16 @@ export function Disclaimer() {
   return (
     <footer class="disclaimer">
       <p>
-        <strong>Belt Control commands a motorised treadmill.</strong> Only start it when you can
-        see the belt, and stop it with the treadmill's own controls or safety key rather than
-        relying on this app — a Bluetooth link can drop while the belt keeps running. Provided
-        without warranty; you use it at your own risk.
+        <strong>Belt Control runs a motorised treadmill.</strong> Only start it when you can see
+        the belt, and don't count on this app to stop it — use the treadmill's own controls or
+        safety key, because a Bluetooth connection can drop while the belt keeps running. No
+        warranty; you use it at your own risk.
       </p>
       <p>
         Belt Control is an independent project. It is not affiliated with, endorsed by, or
         sponsored by Beijing KingSmith Technology Co., Ltd. WalkingPad<sup>®</sup> and
-        KingSmith<sup>®</sup> are trademarks of that company, used here only to say which
-        treadmills this app can talk to.
+        KingSmith<sup>®</sup> are trademarks of that company, mentioned here only to say which
+        treadmills this app works with.
       </p>
       <p class="disclaimer-links">
         <a href="#/legal">Safety, terms &amp; privacy</a>

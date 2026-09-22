@@ -68,8 +68,9 @@ export function FeedbackSheet({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="Send feedback" onClose={onClose}>
       <p class="note" style="margin:0 0 1rem">
-        Goes to {SUPPORT_EMAIL}. The page sends nothing itself — it writes the mail and
-        opens it in your own mail app, so you can read it, change it, or drop it.
+        This goes to {SUPPORT_EMAIL}. The page doesn&rsquo;t send anything itself: it
+        drafts an email and opens it in your own mail app, so you can read it, edit it or
+        discard it first.
       </p>
 
       <label class="field">
@@ -78,7 +79,7 @@ export function FeedbackSheet({ onClose }: { onClose: () => void }) {
           class="field-input"
           rows={5}
           value={message}
-          placeholder="What you did, what the belt did, and what you expected instead."
+          placeholder="What you did, what the belt did, and what you expected to happen."
           onInput={(e) => setMessage((e.currentTarget as HTMLTextAreaElement).value)}
         />
       </label>
@@ -96,7 +97,7 @@ export function FeedbackSheet({ onClose }: { onClose: () => void }) {
             {lines.length > 0
               ? `— browser, protocol, and ${lines.length} log line${lines.length === 1 ? '' : 's'}.`
               : '— browser and protocol. Nothing has been logged yet.'}{' '}
-            No sessions, no history.
+            Your walk history is never included.
           </span>
         </span>
       </label>
@@ -111,11 +112,11 @@ export function FeedbackSheet({ onClose }: { onClose: () => void }) {
       {trimmed && (
         <p class="hint" style="margin-top:0">
           {fitted.messageTruncated
-            ? 'A mail link cannot carry a message this long, so the email will hold the beginning of it.'
+            ? "This message is too long for a mail link, so the email will only include the start of it."
             : fitted.logShown === 0
-              ? `A mail link cannot carry ${fitted.logTotal} log lines, so the email will go without them.`
-              : `A mail link cannot carry ${fitted.logTotal} log lines, so the email will hold the last ${fitted.logShown}.`}{' '}
-          Save the report and attach it if the rest matters.
+              ? `${fitted.logTotal} log lines won't fit in a mail link, so the email will leave them out.`
+              : `${fitted.logTotal} log lines won't fit in a mail link, so the email will include the last ${fitted.logShown}.`}{' '}
+          If you need the rest, save the report and attach it.
         </p>
       )}
 

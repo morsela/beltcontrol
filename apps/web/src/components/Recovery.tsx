@@ -41,11 +41,11 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
 
   return (
     <main class="shell">
-      <h1 class="page">Something broke</h1>
+      <h1 class="page">Something went wrong</h1>
       <p class="page-sub">
-        The app hit an error it could not recover from on its own. Nothing was sent
-        anywhere, and the treadmill is unaffected — if the belt is moving, use its own
-        controls or remote to stop it.
+        The app ran into an error it couldn&rsquo;t recover from. Nothing was sent
+        anywhere and the treadmill wasn&rsquo;t affected, but if the belt is moving, stop
+        it with the treadmill&rsquo;s own controls or remote.
       </p>
 
       <div class="card">
@@ -57,8 +57,7 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
           Try again
         </button>
         <p class="note" style="margin-top:.6rem">
-          Worth one attempt — if the error came from something transient, this is all it
-          takes.
+          Worth a try. If it was a one-off glitch, this is all it takes.
         </p>
       </div>
 
@@ -71,9 +70,9 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
           Download my stored data
         </button>
         <p class="note" style="margin-top:.6rem">
-          The raw contents of this browser's storage, exactly as stored and without being
-          interpreted — so this works even when the data is what the app is choking on.
-          Keep it before clearing anything.
+          Saves everything this browser has stored for the app, exactly as it is, so it
+          works even if that data is what&rsquo;s causing the problem. Save a copy before
+          you clear anything.
         </p>
       </div>
 
@@ -91,8 +90,8 @@ export function Recovery({ error, onRetry }: { error: unknown; onRetry: () => vo
           Clear stored data and reload
         </button>
         <p class="note" style="margin-top:.6rem">
-          Deletes every walk recorded in this browser along with your goal and presets.
-          It cannot be undone — download the copy above first.
+          Deletes every walk recorded in this browser, plus your goal and presets. This
+          can&rsquo;t be undone, so download a copy first.
         </p>
       </div>
     </main>

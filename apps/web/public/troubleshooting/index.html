@@ -35,8 +35,8 @@
 
 <h2>Nothing shows up in the device list</h2>
 <p>
-  That list is drawn by your browser, not by this page, and it only shows what's switched
-  on and nearby right now. An empty list usually means one of these:
+  That list comes from your browser, not from this page, and it only shows devices that are
+  switched on and nearby right now. An empty list usually means one of these:
 </p>
 <ul>
   <li><strong>The treadmill has gone to sleep.</strong> Most pads stop announcing
@@ -61,7 +61,7 @@
 
 <h2>There's no Connect button, or pressing it does nothing</h2>
 <p>
-  Then your browser can't connect to Bluetooth devices. <strong>Firefox and Safari
+  That means your browser can't connect to Bluetooth devices. <strong>Firefox and Safari
   can't</strong> — and on an iPhone or iPad, every browser is Safari underneath, so
   installing Chrome there doesn't help. Chrome, Edge, Opera and Samsung Internet can, on a
   computer or on Android.
@@ -78,9 +78,9 @@
 
 <h2>It connects, then drops out after a couple of seconds</h2>
 <p>
-  That's certain KingSmith pads — the KS-C2 and its relatives — behaving exactly as
-  designed. They hang up on anything that connects and then just listens, within about
-  three seconds. It isn't a fault, and it isn't a range problem.
+  That's some KingSmith pads — the KS-C2 and its relatives — doing exactly what they were
+  designed to do. If something connects and then just listens without saying hello, they
+  hang up within about three seconds. It isn't a fault, and it isn't a range problem.
 </p>
 <p>
   Belt Control knows the greeting those pads expect, so it shouldn't happen here. If you're
@@ -89,7 +89,7 @@
 
 <h2>It connects, but the belt won't start</h2>
 <p>
-  Common on the KS-C2, and the pad does tell us why. Four things to check, in order:
+  This is common on the KS-C2. Four things to check, in order:
 </p>
 <ul>
   <li><strong>The child lock is on.</strong> The pad reports this, and when it does, the
@@ -97,8 +97,8 @@
   <li><strong>The pad is asleep.</strong> KingSmith pads go into standby after about ten
     minutes idle, and in standby the motor stops responding — to the app as much as to
     anything else. Bluetooth stays up, so it connects fine and then refuses every start.
-    The app recognises the shape of this (the pad keeps control on its own panel and never
-    sends its settings) and says so. Wake it from its panel or remote, then press Start.
+    The app can spot this (the pad keeps control on its own panel and never sends its
+    settings) and will tell you. Wake it from its panel or remote, then press Start.
     Disconnecting and reconnecting does not wake it.</li>
   <li><strong>The treadmill's own panel still has control.</strong> After a stop, control
     goes back to the pad itself, and in that state it accepts a start command and then
@@ -107,13 +107,13 @@
   <li><strong>The pad just refuses, for no visible reason.</strong> On a real KS-C2 a start
     is sometimes turned down twice and accepted on the third try, with nothing different
     about the third. The app retries a refused start up to three times — only while it's
-    still saying "starting", and never once you've pressed stop or disconnected. A belt
-    that lurches into motion long after the app gave up, when you've already stepped off,
-    is exactly what a retry must never become.</li>
+    still saying "starting", and never once you've pressed stop or disconnected. That way
+    the belt can't lurch into motion long after the app gave up and you've stepped
+    off.</li>
 </ul>
 <p>
-  Also worth a glance at the treadmill's own display: an error code there is a hardware
-  complaint, and no app can talk it out of one.
+  It's also worth checking the treadmill's own display. An error code there means a
+  hardware problem, and no app can fix that.
 </p>
 
 <h2>The numbers look wrong</h2>
@@ -129,11 +129,11 @@
   a stalled connection.
 </p>
 <p>
-  Wherever a number is missing you'll see a dash. An app that invents a number to avoid an
-  empty space is worse than one that admits it doesn't know.
+  Wherever a number is missing, you'll see a dash. We'd rather admit we don't know than
+  invent a number to fill the gap.
 </p>
 
-<h2>It worked yesterday, and today my pad isn't offered</h2>
+<h2>It worked yesterday. Why do I have to pick my pad again?</h2>
 <p>
   Your browser grants access to one device at a time, and only when you pick it from that
   list yourself — it won't hand it over any other way. Belt Control remembers your last
@@ -148,7 +148,7 @@
 <div class="cta">
   <p><strong>Still stuck?</strong> The app keeps a record of what it tried and what your
   treadmill said back, and <strong>Send feedback</strong> attaches it to an email. That
-  record is the useful part — it's how a pad nobody has seen before gets supported.</p>
+  record is what makes it possible to add support for a pad nobody has seen before.</p>
   <p><a class="btn" href="/">Open Belt Control</a></p>
 </div>
 
