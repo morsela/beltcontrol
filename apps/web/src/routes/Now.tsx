@@ -113,8 +113,8 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
                     End walk
                   </button>
                   <p class="hint">
-                    Paused — the belt is stopped. The walk stays open for 15 minutes, so
-                    resuming keeps it as one session rather than two.
+                    Paused. The belt has stopped, and your walk stays open for 15 minutes,
+                    so resuming in that time keeps it as one session, not two.
                   </p>
                 </>
               ) : (
@@ -177,12 +177,12 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           note is no longer true of it. */}
       {stopPending.value ? (
         <p class="note" style="margin-bottom:var(--gap)">
-          Stop command sent — waiting for the belt to report zero.
+          Stop sent — waiting for the belt to confirm it has stopped.
         </p>
       ) : (
         startPending.value && (
           <p class="note" style="margin-bottom:var(--gap)">
-            Start command sent — waiting for the belt to report movement.
+            Start sent — waiting for the belt to confirm it&rsquo;s moving.
           </p>
         )
       )}
@@ -194,7 +194,7 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
             confirming === 'resume' ? 'pick back up' : 'start moving'
           } at ${toMph(settings.value.targetKmh).toFixed(
             1
-          )} mph. Make sure it is clear and you are ready.`}
+          )} mph. Make sure it's clear and you're ready.`}
           confirmLabel={confirming === 'resume' ? 'Resume' : 'Start'}
           onConfirm={() => {
             const kind = confirming;

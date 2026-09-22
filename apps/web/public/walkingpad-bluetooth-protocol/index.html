@@ -66,7 +66,7 @@
   products, matched against advertised name prefixes. Do not copy that approach — the
   mapping is not what it looks like, and the <code>0x1234</code> family was initially
   missed here precisely because of an assumption about it. Detect from the GATT table
-  instead. It is both more robust and shorter.
+  instead. It's sturdier, and it takes less code.
 </div>
 
 <h2>Classic WalkingPad — <code>fe00</code></h2>
@@ -91,10 +91,10 @@
   about 400 ms after the mode byte before the start.
 </p>
 <p>
-  The leading <em>ask stats</em> is the part that looks like decoration and is not.
-  Standby parks the same app-control path that has to be woken before anything works, so a
-  start sent straight after a stop arrives at a pad that is not listening. Without it, only
-  the first start of a session lands.
+  The leading <em>ask stats</em> looks optional, but it isn't. Standby parks the same
+  app-control path that has to be woken before anything works, so a start sent straight
+  after a stop arrives at a pad that is not listening. Without it, only the first start of
+  a session lands.
 </p>
 <p>
   Status notifications arrive on <code>fe01</code> with header <code>F8 A2</code>, 18 bytes,
@@ -288,10 +288,10 @@ std     ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/</code><
 
 <h3>Pause is stop, and the pad is what makes it a pause</h3>
 <p>
-  This was open for a long time. The official app visibly carries a pause alongside start and
+  This stayed an open question for a long time. The official app visibly carries a pause alongside start and
   stop, and warns that speed cannot be adjusted while paused, but it builds its command
   templates at runtime and early captures only ever exercised <code>runState 1</code>.
-  <code>runState 2</code> was the obvious guess, and a guess is not something to aim at a
+  <code>runState 2</code> was the obvious guess, and a guess isn't something you send to a
   treadmill.
 </p>
 <p>Two independent things settled it:</p>
@@ -361,7 +361,7 @@ std     ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/</code><
 </p>
 <p>
   If you have a pad that lands on FitShow, or on nothing at all, the app's connection log is
-  the capture that would let it be decoded properly — and it is one button to send.
+  exactly the capture needed to decode it properly, and sending it takes one button.
 </p>
 
 </main>

@@ -42,12 +42,12 @@ export function ConnectPanel() {
     return (
       <div class="card">
         <div class="unsupported">
-          <strong>This browser can&rsquo;t talk to the treadmill</strong>
+          <strong>This browser can&rsquo;t connect to your treadmill</strong>
           <p>
             Firefox and Safari can&rsquo;t connect to Bluetooth devices, and on an iPhone or
             iPad every browser is Safari underneath. Chrome, Edge, Opera and Samsung
             Internet can.{' '}
-            <a href="/troubleshooting">More on why, and what to use instead.</a>
+            <a href="/troubleshooting">Why, and what to use instead.</a>
           </p>
         </div>
         <button class="btn primary block" onClick={copyLink}>
@@ -57,8 +57,8 @@ export function ConnectPanel() {
           Try it with a simulated pad
         </button>
         <p class="note" style="margin-top:.75rem">
-          History still works here — you can import a backup and browse past walks
-          without Bluetooth.
+          History still works here, though. You can import a backup and look through
+          past walks without Bluetooth.
         </p>
       </div>
     );
@@ -71,7 +71,7 @@ export function ConnectPanel() {
     <>
       {firstRun && (
         <div class="card intro">
-          <strong>Drive your WalkingPad from this browser</strong>
+          <strong>Control your WalkingPad from this browser</strong>
           <p>
             Start, stop and set the speed over Bluetooth, without the phone app. Your walks
             are saved on this device and never uploaded.
@@ -102,7 +102,7 @@ export function ConnectPanel() {
               class="btn primary block lg"
               onClick={() => void connect({ filtered: true })}
             >
-              Connect to pad
+              Connect your pad
             </button>
             <button
               class="btn block"
@@ -112,8 +112,8 @@ export function ConnectPanel() {
               Show all devices
             </button>
             <p class="hint">
-              Pad not in the list? Some show up under a name you wouldn&rsquo;t
-              recognise —{' '}<b>Show all devices</b> shows everything nearby.
+              Don&rsquo;t see your pad? Some show up under a name you wouldn&rsquo;t
+              recognise, so try{' '}<b>Show all devices</b> to see everything nearby.
             </p>
           </>
         )}
@@ -125,8 +125,8 @@ export function ConnectPanel() {
           <details class="compat">
             <summary>Which treadmills work?</summary>
             <p>
-              Most of them. The app asks your treadmill what it can do when you connect,
-              so what matters is what is inside it rather than its model name:
+              Most of them. When you connect, the app asks your treadmill what it can
+              do, so what&rsquo;s inside it matters more than the name on the box:
             </p>
             <ul>
               <li>
@@ -141,7 +141,7 @@ export function ConnectPanel() {
                 <b>KS-C2 and relatives</b> — G1, MX16, K12 Pro: the same, plus pause
               </li>
               <li>
-                <b>Some other brands</b> — found and named, but not driveable yet
+                <b>Some other brands</b> — recognised, but can&rsquo;t be controlled yet
               </li>
             </ul>
             {/* The written page, not a repetition of it: every model seen on each

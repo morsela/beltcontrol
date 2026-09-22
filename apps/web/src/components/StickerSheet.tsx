@@ -43,7 +43,7 @@ export function StickerSheet() {
       </ul>
       <p class="note" style="margin-top:.75rem">
         {earnedCount} of {states.length}
-        {next ? `. Next is ${next.name} — ${lowerFirst(next.how)}.` : '. The sheet is full.'}
+        {next ? `. Next up: ${next.name} — ${lowerFirst(next.how)}.` : ". You've collected them all."}
       </p>
     </>
   );

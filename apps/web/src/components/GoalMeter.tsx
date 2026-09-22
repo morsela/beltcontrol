@@ -76,7 +76,7 @@ function GoalDialog({ goal, onClose }: { goal: number; onClose: () => void }) {
             onInput={(e) => setValue((e.target as HTMLInputElement).value)}
           />
         </label>
-        <p class="note">Used by the meter here, the streak, and the goal line on History.</p>
+        <p class="note">Your goal drives the progress meter, your streak and the goal line on History.</p>
         <div class="dialog-actions">
           <button type="button" class="btn" onClick={onClose}>
             Cancel

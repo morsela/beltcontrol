@@ -53,9 +53,9 @@ const WEEK = 7;
 export const BADGES: readonly Badge[] = [
   { id: 'early-bird', name: 'Early Bird', how: 'Walk before 7 AM' },
   { id: 'night-owl', name: 'Night Owl', how: 'Walk after 9 PM' },
-  { id: 'long-haul', name: 'Long Haul', how: 'One walk of an hour' },
+  { id: 'long-haul', name: 'Long Haul', how: 'Walk for an hour in one go' },
   { id: 'double-day', name: 'Double Day', how: 'Two walks in one day' },
-  { id: 'week-straight', name: 'Week Straight', how: 'Meet the goal seven days running' },
+  { id: 'week-straight', name: 'Week Straight', how: 'Hit your goal seven days in a row' },
   { id: 'century', name: 'Century', how: 'Record a hundred walks' },
 ] as const;
 

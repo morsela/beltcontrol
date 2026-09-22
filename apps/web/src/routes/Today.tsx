@@ -100,13 +100,14 @@ export function Today() {
               is the register every session is entered in, open one included. A third
               statement of the same minutes is the habit this layout exists to break. */}
 
-          {list.length === 0 && <p class="note" style="margin-top:.9rem">No walking recorded yet.</p>}
+          {list.length === 0 && <p class="note" style="margin-top:.9rem">No walks yet today.</p>}
 
           {day.excluded > 0 && (
             <p class="note" style="margin-top:.9rem">
-              {day.excluded} session{day.excluded === 1 ? '' : 's'} excluded from the
-              distance total: recorded on a protocol whose distance scale this project had
-              not established at the time, so summing it would invent a number.
+              {day.excluded} session{day.excluded === 1 ? ' is' : 's are'} left out of the
+              distance total. {day.excluded === 1 ? 'It was' : 'They were'} recorded before
+              the app could read this treadmill&rsquo;s distance reliably, so adding{' '}
+              {day.excluded === 1 ? 'it' : 'them'} in would mean guessing.
             </p>
           )}
         </div>
@@ -131,7 +132,7 @@ export function Today() {
               height={isDesktop.value ? 150 : 120}
             />
           ) : (
-            <p class="empty">Nothing to trace yet. This fills in as the belt moves.</p>
+            <p class="empty">Nothing here yet. The chart fills in as the belt moves.</p>
           )}
         </div>
 
@@ -157,9 +158,11 @@ export function Today() {
       {pendingDelete && (
         <ConfirmDialog
           title="Delete this session?"
-          body={`${fmtDuration(Math.round(pendingDelete.activeMs / 1000))} from ${fmtClock(
+          body={`This removes the ${fmtDuration(
+            Math.round(pendingDelete.activeMs / 1000)
+          )} walk that started at ${fmtClock(
             pendingDelete.startedAt
-          )} will be removed from this browser. There is no undo — export first if you want it.`}
+          )} from this browser. It can't be undone, so export a backup first if you want to keep it.`}
           confirmLabel="Delete"
           tone="danger"
           onConfirm={() => {

@@ -57,8 +57,8 @@ export function StreakChain() {
 
       <p class="note">
         {todayMet
-          ? `${metCount} of the last ${DAYS} days met the goal.`
-          : `${metCount} of the last ${DAYS} days met the goal. Meet today's to fill the last one.`}
+          ? `You hit your goal on ${metCount} of the last ${DAYS} days.`
+          : `You hit your goal on ${metCount} of the last ${DAYS} days. Hit today's to fill in the last one.`}
       </p>
     </div>
   );

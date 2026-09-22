@@ -129,8 +129,8 @@ export async function connect({ filtered, name }: { filtered: boolean; name?: st
   if (!navigator.bluetooth) {
     fail(
       new Error(
-        'This browser has no Web Bluetooth. Use Chrome, Edge, Opera or Samsung Internet — ' +
-          'Firefox and Safari (including on iOS) do not implement it.'
+        "This browser doesn't support Web Bluetooth. Use Chrome, Edge, Opera or Samsung " +
+          "Internet — Firefox and Safari (including on iOS) don't have it."
       )
     );
     return;
@@ -318,7 +318,7 @@ function onDisconnected() {
   // with stale UI state, is not a safe default.
   trackEvent('disconnected', { by: 'device' });
   log('device disconnected', 'err');
-  setStatus('disconnected — belt keeps its current state, use its own controls', 'err');
+  setStatus("disconnected — the belt keeps doing what it was doing, so use the treadmill's own controls", 'err');
   phase.value = 'error';
   void teardown();
 }
@@ -573,9 +573,9 @@ function watchForStart(kind: 'start' | 'resume' = 'start', refused = false) {
             ? `${refusedAll} — and the pad reports its child lock is on. Unlock it from the ` +
               'panel, then try again.'
             : asleep
-              ? `${refusedAll} — the pad looks asleep: it never handed control to the app ` +
-                'and sent none of its settings when it connected. Wake it from its panel ' +
-                `or remote, then press ${capitalise(kind)} again. Reconnecting will not help.`
+              ? `${refusedAll} — the pad looks asleep: it didn't hand control to the app or ` +
+                'send its settings when it connected. Wake it from its panel or remote, ' +
+                `then press ${capitalise(kind)} again. Reconnecting will not help.`
               : `${refusedAll} — its own panel still has control. Press a button on the ` +
                 "treadmill's panel or remote to wake it, then try again."
           : `${capitalise(kind)} was sent but the belt never reported movement — it may ` +
@@ -695,8 +695,8 @@ async function bringUpToTarget(d: Driver, gen: number) {
       // Checked before reporting, not after, which is the difference between a write
       // that failed and a write nobody wanted any more. A pad that drops the link
       // mid-write fails this one on the way out, and the disconnect has already put the
-      // one message worth reading on the chip — "belt keeps its current state, use its
-      // own controls". Overwriting it with a raw GATT error takes that away and counts
+      // one message worth reading on the chip — "the belt keeps doing what it was doing,
+      // so use the treadmill's own controls". Overwriting it with a raw GATT error takes that away and counts
       // a `control_failed` against a command that was already moot.
       if (gen !== speedGeneration) return;
       // Otherwise: a failed speed write says nothing about whether the belt started, so
@@ -736,8 +736,8 @@ async function bringUpToTarget(d: Driver, gen: number) {
   // target". The stepper is the way out, and it is one press away.
   const stuck = mphText(live.value.speedKmh);
   setStatus(
-    `The belt is running at ${stuck} and will not take the ` +
-      `${mphText(settings.value.targetKmh)} that was asked for. Press + or − to set it, ` +
+    `The belt is running at ${stuck} and won't go to the ` +
+      `${mphText(settings.value.targetKmh)} you set. Press + or − to try again, ` +
       "or use the treadmill's own controls.",
     'err'
   );
