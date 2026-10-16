@@ -5,7 +5,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!assets/|compatible-treadmills|troubleshooting|walkingpad-|.*\\.).*)",
+      "source": "/((?!assets/|compatible-treadmills|troubleshooting|walkingpad-|what-is-belt-control|.*\\.).*)",
       "destination": "/index.html"
     }
   ],
@@ -23,7 +23,7 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "source": "/(compatible-treadmills|troubleshooting|walkingpad-bluetooth-protocol|walkingpad-without-the-app)",
+      "source": "/(compatible-treadmills|troubleshooting|walkingpad-bluetooth-protocol|walkingpad-without-the-app|what-is-belt-control)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {

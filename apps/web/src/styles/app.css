@@ -878,6 +878,11 @@ a { color: var(--accent); }
 }
 .disclaimer-links .table-toggle { font-size: inherit; }
 
+/* The welcome sheet: the one dialog that is prose rather than a form. */
+.welcome-lede { margin: 0 0 0.75rem; }
+.welcome-list { margin: 0 0 0.75rem; padding-left: 1.1rem; }
+.welcome-list li { margin-bottom: 0.4rem; }
+
 /* --- legal page ------------------------------------------------------------
    Long-form prose, which exists nowhere else in this app — every other screen is
    numbers and controls. Measure is capped well under the desktop content width:

@@ -35,6 +35,10 @@ export interface AnalyticsEvents {
    *  ordinary page view; this covers movement the URL bar alone cannot show. */
   route_viewed: { route: string };
   ambient_entered: undefined;
+  /** The welcome sheet came up. `first` separates the automatic first-visit showing
+   *  from someone reopening it from the footer — the second is the signal that it is
+   *  worth keeping a way back to. */
+  welcome_shown: { first: boolean };
 
   // --- connection funnel: attempted → connected, or cancelled/failed ---------
   connect_attempted: { filtered: boolean };

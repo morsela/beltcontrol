@@ -29,6 +29,7 @@ export const STORAGE_KEYS = {
   openSession: 'wp.session.open.v1',
   settings: 'wp.settings.v1',
   desktopNotice: 'wp.desktopNotice.dismissed.v1',
+  welcome: 'wp.welcome.seen.v1',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What Is Belt Control? A Browser Remote for Your Walking Pad</title>
+<meta name="description" content="Belt Control is a free web app that starts, stops and sets the speed of a KingSmith or WalkingPad treadmill over Bluetooth, and keeps a private record of every walk. Here's what it does and who it's for.">
+<link rel="canonical" href="https://beltcontrol.com/what-is-belt-control">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Belt Control">
+<meta property="og:url" content="https://beltcontrol.com/what-is-belt-control">
+<meta property="og:title" content="What is Belt Control?">
+<meta property="og:description" content="A free web app that controls a KingSmith or WalkingPad treadmill over Bluetooth and keeps a private record of every walk.">
+<meta property="og:image" content="https://beltcontrol.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/content.css">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e11" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <a class="brand" href="/">Belt Control <span>— treadmill control in the browser</span></a>
+</header>
+
+<main>
+<h1>What is Belt Control?</h1>
+<p class="lede">
+  Belt Control is a remote control for a walking pad that runs in a browser tab. It
+  connects to a KingSmith or WalkingPad treadmill over Bluetooth, lets you start it, stop
+  it and set the speed, and keeps a record of every walk. It's free, and you don't need an
+  account, the phone app or anything else installed.
+</p>
+
+<h2>What it's for</h2>
+<p>
+  Walking pads are mostly used under a standing desk: you walk slowly for an hour while you
+  work. The remote that comes in the box can start and stop the belt, but it doesn't
+  remember anything. The manufacturer's phone app does, but it means reaching for your
+  phone, signing in, and keeping that phone next to the treadmill.
+</p>
+<p>
+  Belt Control puts the controls in the place you're already looking, the computer on the
+  desk. It's built for that:
+</p>
+<ul>
+  <li><strong>Controls at a glance.</strong> Start, stop, pause on pads that support it, and
+    one-tap speed presets for the two or three speeds you actually walk at.</li>
+  <li><strong>Live numbers as you walk.</strong> Time, distance, steps and calories, as far
+    as your treadmill reports them. Numbers a pad sends but can't be trusted are shown as
+    such and left out of your totals.</li>
+  <li><strong>Every walk recorded automatically.</strong> Daily totals, a goal you set, a
+    30-day history and a streak, without pressing record.</li>
+  <li><strong>Your data stays yours.</strong> Your walks are saved in your own browser and
+    never uploaded. You can export them as a backup or as a spreadsheet whenever you
+    like.</li>
+</ul>
+
+<h2>How it works</h2>
+<p>
+  Chrome, Edge, Opera and Samsung Internet can talk to Bluetooth devices directly from a
+  web page. Belt Control uses that to talk to the treadmill the same way the phone app does.
+  When you press <strong>Connect</strong>, your browser shows a list of nearby treadmills.
+  Pick yours, and Belt Control asks it what it can do and works from there, so it doesn't
+  need to know your model in advance.
+</p>
+<p>
+  The connection goes straight from your browser to the treadmill over the radio. The
+  website only delivers the page itself. It never sees your walks or anything about your
+  treadmill. Once it has loaded, it works offline too.
+</p>
+
+<h2>What you need</h2>
+<ul>
+  <li><strong>A KingSmith or WalkingPad treadmill</strong>, or a pad that speaks the same
+    language. Most models from the last several years work — see
+    <a href="/compatible-treadmills">the full list</a>.</li>
+  <li><strong>Chrome, Edge, Opera or Samsung Internet</strong>, on a computer or an Android
+    device. Firefox and Safari can't connect to Bluetooth devices, and on an iPhone or iPad
+    every browser is Safari underneath.</li>
+  <li><strong>The phone app closed.</strong> These treadmills only talk to one device at a
+    time.</li>
+</ul>
+
+<div class="cta">
+  <p><strong>Try it with your treadmill.</strong> Switch the pad on, open the app and press
+  Connect. Nothing to install and no account to create.</p>
+  <p><a class="btn" href="/">Open Belt Control</a></p>
+</div>
+
+<h2>Is it safe?</h2>
+<p>
+  Belt Control runs a motorised treadmill, so treat it like the remote, not like a safety
+  device. Only start the belt when you can see it, and use the treadmill's own controls or
+  safety key to stop in a hurry: a Bluetooth connection can drop while the belt keeps
+  running. While the belt is moving, a Stop button stays on screen everywhere in the app and
+  the Esc key stops it.
+</p>
+
+<h2>Who makes it?</h2>
+<p>
+  Belt Control is an independent, open-source project. It isn't made by KingSmith and isn't
+  affiliated with them. The <a href="https://github.com/morsela/beltcontrol">source code is
+  on GitHub</a>, and the app has a <strong>Send feedback</strong> link at the bottom of every
+  screen.
+</p>
+
+</main>
+
+<footer>
+  <ul>
+    <li><a href="/">The app</a></li>
+    <li><a href="/compatible-treadmills">Compatible treadmills</a></li>
+    <li><a href="/walkingpad-without-the-app">Without the KS+Fit app</a></li>
+    <li><a href="/troubleshooting">Troubleshooting</a></li>
+    <li><a href="/walkingpad-bluetooth-protocol">How it works, technically</a></li>
+    <li><a href="https://github.com/morsela/beltcontrol">GitHub</a></li>
+  </ul>
+  <p class="fine">
+    Belt Control is an independent project, not affiliated with, endorsed by, or sponsored
+    by Beijing KingSmith Technology Co., Ltd. WalkingPad® and KingSmith® are trademarks of
+    that company, used here only to identify compatible treadmills.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>

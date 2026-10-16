@@ -1,4 +1,5 @@
 import { FeedbackLink } from './FeedbackSheet.js';
+import { WelcomeLink } from './WelcomeSheet.js';
 
 /**
  * Sits at the bottom of every screen, not behind an About tab.
@@ -25,6 +26,9 @@ import { FeedbackLink } from './FeedbackSheet.js';
  * anchor because it opens a dialog rather than a page — there is no hash for it to
  * put in front of the router. Reports about the connection have a second, closer
  * entry in the connection sheet, beside the log they need.
+ *
+ * "What is Belt Control?" is the way back to the welcome sheet a first visit opens on
+ * its own. It leads the row because it is the one a newcomer is looking for.
  */
 export function Disclaimer() {
   return (
@@ -42,6 +46,7 @@ export function Disclaimer() {
         treadmills this app works with.
       </p>
       <p class="disclaimer-links">
+        <WelcomeLink />
         <a href="#/legal">Safety, terms &amp; privacy</a>
         <FeedbackLink />
       </p>

@@ -112,18 +112,19 @@ either.
 
 ## The written pages
 
-Four ordinary HTML files live in `apps/web/public/`, copied to `apps/web/dist/` verbatim and served as
+Five ordinary HTML files live in `apps/web/public/`, copied to `apps/web/dist/` verbatim and served as
 themselves:
 
 | Path | What it answers |
 |---|---|
+| `/what-is-belt-control` | What this is, what it is for, and what you need — the page the in-app welcome links to |
 | `/compatible-treadmills` | Will it work with my pad, and which numbers will it show |
 | `/walkingpad-without-the-app` | What you give up by not installing KS+Fit, and what you don't |
 | `/troubleshooting` | Why the chooser is empty, why a start is refused, why the link drops |
 | `/walkingpad-bluetooth-protocol` | The four BLE protocols, frame by frame — the one page written for developers |
 
-They exist because a hash-routed app is one URL, and one URL cannot answer four different
-questions to four different people arriving from four different searches. Every answer on
+They exist because a hash-routed app is one URL, and one URL cannot answer five different
+questions to five different people arriving from five different searches. Every answer on
 them was already written down — in the README, in `docs/protocols.md`, in the code
 comments — just not anywhere a crawler could reach it.
 
