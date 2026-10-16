@@ -11,6 +11,7 @@ import { AmbientView } from './components/AmbientView.js';
 import { DesktopOnlyNotice } from './components/DesktopOnlyNotice.js';
 import { Recovery } from './components/Recovery.js';
 import { Disclaimer } from './components/Disclaimer.js';
+import { WelcomeSheet } from './components/WelcomeSheet.js';
 import { beltMayBeMoving, connected } from './state/connection.js';
 import { isDesktop } from './lib/viewport.js';
 import { trackEvent } from './lib/analytics.js';
@@ -106,6 +107,7 @@ export function App() {
             {r !== 'legal' && <Disclaimer />}
           </div>
         </main>
+        <WelcomeSheet />
         <Analytics />
       </>
     );
@@ -124,6 +126,7 @@ export function App() {
 
       {showStop && <StopBar />}
       <TabBar route={r} />
+      <WelcomeSheet />
       <Analytics />
     </>
   );
