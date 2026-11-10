@@ -75,10 +75,14 @@ export function WelcomeSheet() {
         </li>
       </ul>
 
+      <p class="welcome-safety">
+        <strong>Only start the belt when you can see it,</strong> and keep the
+        treadmill&rsquo;s own stop within reach.
+      </p>
+
       <p class="note">
         You'll need Chrome, Edge or Opera on a computer, or Chrome on Android, and the
-        phone app closed — the treadmill talks to one device at a time. Only start the belt
-        when you can see it, and keep the treadmill's own stop within reach.
+        phone app closed — the treadmill talks to one device at a time.
       </p>
 
       <div class="data-actions" style="margin-top:1rem">

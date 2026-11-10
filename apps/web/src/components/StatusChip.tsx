@@ -1,4 +1,4 @@
-import { beltTone, beltLabel, deviceName, phase } from '../state/connection.js';
+import { beltTone, beltLabel, deviceName, phase, supported } from '../state/connection.js';
 import { status } from '../state/log.js';
 import { LinkDot } from './LinkDot.js';
 
@@ -20,7 +20,13 @@ import { LinkDot } from './LinkDot.js';
  */
 export function StatusChip({ onOpen }: { onOpen: () => void }) {
   const busy = phase.value === 'connecting' || phase.value === 'choosing';
-  const err = status.value.kind === 'err' ? status.value.text : '';
+  // A browser without Web Bluetooth is not an error the chip needs to spell out: the
+  // connect panel directly under it explains it in full, with what to do instead. The
+  // two used to say the same thing one above the other, the chip's version in red and
+  // in the vocabulary of a spec ("over HTTPS or localhost").
+  const noBluetooth = !supported.value && phase.value !== 'connected';
+  const err = !noBluetooth && status.value.kind === 'err' ? status.value.text : '';
+  const label = noBluetooth ? 'No Bluetooth in this browser' : beltLabel.value;
   return (
     <button
       class={`chip${err ? ' chip-err' : ''}`}
@@ -28,14 +34,14 @@ export function StatusChip({ onOpen }: { onOpen: () => void }) {
       aria-label={
         err
           ? `${err} Open connection details.`
-          : `Connection: ${beltLabel.value}. Open connection details.`
+          : `Connection: ${label}. Open connection details.`
       }
     >
       <LinkDot tone={err ? 'bad' : beltTone.value} busy={busy} />
       {/* The live region is the inner text, not the button: re-announcing the
           accessible name of a focusable control on every state change fights with
           whatever the user is doing. */}
-      <span aria-live="polite">{err || beltLabel.value}</span>
+      <span aria-live="polite">{err || label}</span>
       {!err && deviceName.value && <span class="name">· {deviceName.value}</span>}
     </button>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from './Sheet.js';
 import { LogPanel } from './LogPanel.js';
 import {
@@ -11,6 +11,8 @@ import {
   supported,
   beltLabel,
   beltTone,
+  beltMayBeMoving,
+  doStop,
 } from '../state/connection.js';
 import { live, lastFrameAt } from '../state/telemetry.js';
 import { status, logLines } from '../state/log.js';
@@ -32,6 +34,20 @@ export function ConnectionSheet({
   const t = live.value;
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Disconnect asked for while the belt may be moving: answered in place, below.
+  const [leaving, setLeaving] = useState(false);
+  // Swapping the button for the question unmounts whichever of them had the focus, and
+  // focus that falls to <body> takes the sheet's Esc and Tab handling with it. So it is
+  // carried across by hand: onto the safe answer when the question appears, and back
+  // onto Disconnect when it is withdrawn.
+  const stayRef = useRef<HTMLButtonElement>(null);
+  const disconnectRef = useRef<HTMLButtonElement>(null);
+  const asked = useRef(false);
+  useEffect(() => {
+    if (leaving) stayRef.current?.focus();
+    else if (asked.current) disconnectRef.current?.focus();
+    asked.current = leaving;
+  }, [leaving]);
 
   // The age of the last frame only changes because time passes, so it needs a clock of
   // its own — nothing in the signal graph moves when a pad goes silent, which is
@@ -79,7 +95,7 @@ export function ConnectionSheet({
         <dt>Belt state</dt>
         {/* The raw code stays visible beside the guessed label so a wrong guess is
             obvious rather than silently believed. */}
-        <dd>{t.stateLabel != null ? `${t.stateLabel} (${t.state})` : '—'}</dd>
+        <dd>{t.stateLabel != null ? `${t.stateLabel} · code ${t.state}` : '—'}</dd>
 
         <dt>Speed range</dt>
         <dd>
@@ -90,20 +106,69 @@ export function ConnectionSheet({
                 `(${d.minSpeedKmh}–${d.maxSpeedKmh} km/h)`
             : '—'}
         </dd>
+
+        {/* A row like the others, with a name. It used to be a bare coloured word
+            between the table and the button — "running", belonging to nothing. */}
+        {status.value.text && (
+          <>
+            <dt>Last message</dt>
+            <dd class={`hint ${status.value.kind}`} style="margin:0;font-size:inherit">
+              {status.value.text}
+            </dd>
+          </>
+        )}
       </dl>
 
-      {status.value.text && (
-        <p class={`hint ${status.value.kind}`} style="margin-top:0">
-          {status.value.text}
-        </p>
-      )}
-
-      {connected.value ? (
+      {connected.value && leaving ? (
+        // Dropping the link leaves the belt exactly as it is, and once it is dropped
+        // nothing on this page can stop it. That was one tap away from a moving belt,
+        // with the consequence explained in a note underneath the button. Asked here
+        // rather than in a second dialog stacked on this one.
+        <div class="confirm-inline" role="group" aria-label="Disconnect while the belt is moving">
+          <p>
+            <strong>The belt is still moving.</strong> Disconnecting doesn&rsquo;t stop it,
+            and once disconnected this page can&rsquo;t. You&rsquo;d have to stop it at
+            the treadmill.
+          </p>
+          <button
+            class="btn danger block"
+            onClick={() => {
+              // Stop first and let it go out before the link is dropped. If the write
+              // fails, `doStop` has already put the reason on the chip — and the link
+              // stays up, because a failed stop is the worst moment to lose it.
+              void doStop().then(() => {
+                if (status.value.kind === 'err') return;
+                void disconnect();
+                onClose();
+              });
+            }}
+          >
+            Stop the belt, then disconnect
+          </button>
+          <button
+            class="btn block"
+            onClick={() => {
+              void disconnect();
+              onClose();
+            }}
+          >
+            Disconnect and leave it running
+          </button>
+          <button class="btn ghost block" ref={stayRef} onClick={() => setLeaving(false)}>
+            Stay connected
+          </button>
+        </div>
+      ) : connected.value ? (
         // Not `danger`: dropping the link is the least destructive thing on this
         // sheet — it leaves the belt exactly as it is. Red is reserved for Stop.
         <button
           class="btn block"
+          ref={disconnectRef}
           onClick={() => {
+            if (beltMayBeMoving.value) {
+              setLeaving(true);
+              return;
+            }
             void disconnect();
             onClose();
           }}
@@ -164,10 +229,13 @@ export function ConnectionSheet({
         </div>
       )}
 
+      {/* One note for each situation rather than both sentences always. Which browsers
+          work is no use to somebody who is connected, and what disconnecting does is no
+          use to somebody who is not. */}
       <p class="note" style="margin-top:1rem">
-        Disconnecting doesn&rsquo;t stop the belt. Works in Chrome, Edge, Opera and
-        Samsung Internet over HTTPS or localhost. Firefox and Safari (including on iPhone
-        and iPad) don&rsquo;t support Web Bluetooth.
+        {connected.value
+          ? 'Disconnecting leaves the belt doing whatever it was doing. It doesn\u2019t stop it.'
+          : 'Works in Chrome, Edge, Opera and Samsung Internet. Firefox and Safari, including every browser on an iPhone or iPad, can\u2019t connect to Bluetooth devices.'}
       </p>
 
       {/* Kept because the project asks people to share this when a pad speaks an

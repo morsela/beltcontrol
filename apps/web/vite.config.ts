@@ -138,7 +138,7 @@ export default defineConfig({
     // session.ts touches localStorage and window.setInterval at import time, and the
     // drivers decode DataViews the way the browser hands them over.
     environment: 'jsdom',
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     restoreMocks: true,
   },
 });

@@ -19,7 +19,10 @@
   --panel-2: #efebe0;
   --line: #ddd7c9;
   --ink: #2b2a27;
-  --muted: #6f6b62;
+  --muted: #69655c;
+  --ink-line: #2b2a27;
+  --ink-w: 1.5px;
+  --shadow: 3px 3px 0 var(--ink-line);
   --accent: #46705a;
   --warn: #8a5a12;
 
@@ -27,7 +30,11 @@
      src/styles/tokens.css and the licences in public/fonts/LICENSE.txt. These pages
      deliberately do not carry the display face or the paper grain: they are prose read
      once, not a book somebody keeps, and a webfont for headings they scroll past is
-     20 kB spent on nothing. The fallback stack is what the app falls back to too. */
+     20 kB spent on nothing. The fallback stack is what the app falls back to too.
+
+     What they do carry is the app's outline: the ink border and hard offset shadow on
+     the boxes and the button, which cost no bytes and are most of why the app looks
+     like itself. Without them a link from the app landed on what read as another site. */
   --font: 'Nunito', ui-rounded, 'Trebuchet MS', ui-sans-serif, -apple-system,
     "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -43,6 +50,9 @@
     --line: #39342a;
     --ink: #ede7d9;
     --muted: #a49c8b;
+    --ink-line: #39342a;
+    --ink-w: 1px;
+    --shadow: none;
     --accent: #8fc7a3;
     --warn: #dfa94a;
   }
@@ -89,10 +99,22 @@ html, body {
   margin-bottom: 2.5rem;
 }
 .masthead .brand {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1.05rem;
   color: var(--ink);
   text-decoration: none;
+}
+/* The name in the app's pill. The strapline stays outside it, as plain text. */
+.masthead .brand b {
+  display: inline-block;
+  font-weight: 700;
+  padding: 0.25rem 0.8rem 0.3rem;
+  margin-right: 0.5rem;
+  border: var(--ink-w) solid var(--ink-line);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform: rotate(-2deg);
 }
 .masthead .brand span { color: var(--muted); font-weight: 400; }
 
@@ -149,10 +171,11 @@ pre code { background: none; padding: 0; font-size: 1em; }
    rather than making the whole page scroll sideways on a phone. */
 .scroller {
   overflow-x: auto;
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   border-radius: var(--radius-sm);
   margin-bottom: 1.25rem;
   background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 /* The seven-column compatibility table does not fit a comfortable reading measure, and
@@ -177,8 +200,9 @@ td.partial { color: var(--warn); font-weight: 600; }
 
 .cta {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: var(--ink-w) solid var(--ink-line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   padding: 1.25rem 1.35rem;
   margin: 2.5rem 0;
 }
@@ -191,7 +215,9 @@ td.partial { color: var(--warn); font-weight: 600; }
   font-weight: 600;
   text-decoration: none;
   padding: 0.7rem 1.15rem;
-  border-radius: 999px;
+  border: var(--ink-w) solid var(--ink-line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
 }
 .btn:hover { filter: brightness(1.06); }
 

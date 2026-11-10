@@ -173,9 +173,11 @@ details.compat b { color: var(--ink); font-weight: 600; }
    is glanced at from a treadmill, and every pixel spent here is a pixel off the
    number that has to be read from arm's length. */
 .page-brand {
-  display: flex;
-  padding-bottom: 0.5rem;
-  font-size: var(--t-sm);
+  /* A margin, and no `display` of its own. This used to set `display: flex` and a
+     bottom padding, which turned the pill into a full-width block: an empty tilted
+     outline across the screen with the name in one corner of it. */
+  margin-bottom: 0.6rem;
+  font-size: 1.05rem;
   color: var(--muted);
 }
 
@@ -191,6 +193,7 @@ details.compat b { color: var(--ink); font-weight: 600; }
      being squeezed off the edge. */
   flex-wrap: wrap;
 }
+.topbar > .chip:not(.chip-err) { flex-basis: 0; flex-grow: 1; max-width: max-content; }
 .topbar-btn { min-height: 40px; padding: 0.3rem 0.7rem; font-size: var(--t-sm); flex: none; }
 
 .chip {
@@ -204,8 +207,13 @@ details.compat b { color: var(--ink); font-weight: 600; }
   background: var(--panel);
   cursor: pointer;
   font-size: var(--t-sm);
-  max-width: 68vw;
+  /* Shrinks to make room for the buttons beside it, down to an ellipsis on the device
+     name, rather than holding 68vw and pushing them onto a row of their own. */
+  flex: 0 1 auto;
+  min-width: 0;
 }
+.chip > span:not(.name) { white-space: nowrap; }
+.chip-err > span:not(.name) { white-space: normal; }
 .chip .name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -360,11 +368,13 @@ details.compat b { color: var(--ink); font-weight: 600; }
   font-size: var(--t-sm);
   color: var(--muted);
 }
+/* --muted at the label size, not --faint at 0.7rem: this is the only place the screen
+   says the number is a control, and it measured 2.9:1 in the light theme. */
 .hero-hint {
   text-align: center;
-  font-size: 0.7rem;
-  color: var(--faint);
-  margin-top: 0.15rem;
+  font-size: var(--t-label);
+  color: var(--muted);
+  margin: 0.15rem 0 0;
 }
 
 @media (max-width: 22rem) {
@@ -409,7 +419,10 @@ details.compat b { color: var(--ink); font-weight: 600; }
 .meter-goal-btn {
   background: none;
   border: 0;
-  padding: 0;
+  /* Padding for the finger, cancelled by the margin so the caption row keeps its
+     height: the text is 21px tall and that was the whole target. */
+  padding: 0.75rem 0 0.75rem 0.75rem;
+  margin: -0.75rem 0;
   color: var(--muted);
   font: inherit;
   font-size: var(--t-sm);
@@ -500,7 +513,13 @@ details.compat b { color: var(--ink); font-weight: 600; }
 }
 /* The units switch at the foot of the speed card: a text button, centred under the
    presets it relabels. */
-.units-toggle { display: block; margin: 0.75rem auto 0; }
+.speed-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 1.25rem;
+  margin-top: 0.75rem;
+}
 
 /* Shown only while the belt is ramping toward the setpoint. */
 .speed-readout .actual { display: block; margin-top: 0.2rem; font-size: var(--t-sm); color: var(--accent); }
@@ -567,7 +586,9 @@ details.mode { margin: 0 0 var(--gap); padding-inline: 0.25rem; }
   pointer-events: none;
 }
 .stopbar-inner {
-  max-width: var(--maxw);
+  /* The column's width less its padding, so the bar sits on the cards' edges. At
+     --maxw it was a page-pad wider than them on anything broader than a phone. */
+  max-width: calc(var(--maxw) - 2 * var(--pad));
   margin-inline: auto;
   pointer-events: auto;
   display: flex;
@@ -880,7 +901,16 @@ a { color: var(--accent); }
   flex-wrap: wrap;
   gap: 0 1.25rem;
 }
-.disclaimer-links .table-toggle { font-size: inherit; }
+.disclaimer-links .table-toggle,
+.disclaimer-links a {
+  font-size: var(--t-sm);
+}
+/* The same finger-sized box the buttons beside it get from .table-toggle. */
+.disclaimer-links a {
+  display: inline-block;
+  padding: 0.75rem 0;
+  margin: -0.35rem 0;
+}
 
 /* The welcome sheet: the one dialog that is prose rather than a form. */
 .welcome-lede { margin: 0 0 0.75rem; }
@@ -977,7 +1007,15 @@ a { color: var(--accent); }
 
 .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .stat { text-align: center; }
-.stat .v { font-size: var(--t-lg); font-weight: 650; display: block; line-height: 1.15; }
+.stat .v {
+  /* Scales down with the column on a phone and never wraps: "22h 26m" broke over two
+     lines at 390px and left the row with one figure twice the height of the others. */
+  font-size: clamp(1.2rem, 5.8vw, var(--t-lg));
+  font-weight: 650;
+  display: block;
+  line-height: 1.15;
+  white-space: nowrap;
+}
 .stat .k {
   font-size: var(--t-label);
   text-transform: uppercase;
@@ -1065,6 +1103,10 @@ a { color: var(--accent); }
 }
 .session-item:last-child { border-bottom: 0; }
 .session-item .when { font-size: var(--t-sm); color: var(--muted); }
+/* The clock and the figures on a line each. Run together they wrapped wherever the
+   card ran out, which on a third-width card was after a separator. */
+.session-item .when span { display: block; white-space: nowrap; }
+.session-del { min-height: 44px; padding: 0.3rem 0.6rem; font-size: var(--t-sm); font-weight: 500; }
 .session-item .dur { font-weight: 600; }
 
 /* Export/import row. Wraps to one button per line on a narrow phone rather than
@@ -1126,7 +1168,8 @@ a { color: var(--accent); }
 
 .chart { width: 100%; display: block; overflow: visible; touch-action: pan-y; }
 .chart .axis { stroke: var(--line); stroke-width: 1; }
-.chart .axis-text { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+.chart .axis-text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.chart .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 1 4; }
 .chart .goal-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; opacity: 0.7; }
 .chart .bar { fill: var(--accent-dim); transition: fill 0.15s var(--ease); }
 .chart .bar.met { fill: var(--accent); }
@@ -1147,19 +1190,46 @@ a { color: var(--accent); }
   z-index: 5;
 }
 
-.heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr); gap: 3px; }
+/* Eight rows: the month a week starts in, then its seven days. The first column is the
+   weekday initials, so both sets of labels share the cells' own grid and cannot drift
+   out of line with them at any width. */
+.heat {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: auto repeat(7, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+}
 .heat i {
   display: block;
   aspect-ratio: 1;
   border-radius: 3px;
   background: var(--seq-empty);
 }
+.heat i.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+.heat span {
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* A month name is wider than the week it labels; it runs on over the weeks after. */
+.heat .heat-m { overflow: visible; width: 0; }
+.heat .heat-d { align-self: center; }
+.heat-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
 .heat-legend {
   display: flex;
   align-items: center;
   gap: 4px;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
+  flex: none;
   font-size: 0.7rem;
   color: var(--muted);
 }
@@ -1171,7 +1241,10 @@ a { color: var(--accent); }
   color: var(--muted);
   font-size: var(--t-sm);
   cursor: pointer;
-  padding: 0.4rem 0;
+  /* 44px of target in the space a 0.4rem pad used to take: the extra is handed back
+     as negative margin, so nothing around a text button moves. */
+  padding: 0.75rem 0;
+  margin: -0.35rem 0;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
@@ -1341,9 +1414,9 @@ table.data th { color: var(--muted); font-weight: 500; }
   margin: 0;
   font-size: var(--t-sm);
   /* --muted is solved against the card surfaces, not against the note, so the note
-     carries its own second tone: 68% of its ink over its own paper, measured at
-     4.1:1 light and 4.2:1 dark. */
-  color: color-mix(in srgb, var(--note-ink) 68%, var(--note-paper));
+     carries its own second tone: 78% of its ink over its own paper, measured at
+     6.0:1 light and 5.0:1 dark. 68% was 4.2:1 dark, under AA at this size. */
+  color: color-mix(in srgb, var(--note-ink) 78%, var(--note-paper));
 }
 .funfact .table-toggle {
   align-self: flex-start;
@@ -1576,11 +1649,84 @@ table.data th { color: var(--muted); font-weight: 500; }
   /* The day and its note, two thirds and one third. The note is the narrow one on
      purpose: it is three lines of prose, and prose set across two thirds of a 76rem
      page is unreadable for the same reason the legal screen caps its measure. */
-  .today-lead { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .today-lead { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  /* The note is not there until the first landmark is reached, which is every new
+     browser. The day's card takes the row rather than leave a third of it empty. */
+  .today-lead > .card:only-child { grid-column: 1 / -1; }
   /* Equal thirds, and stretched, so the three rule off level. */
   .today-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   /* The charts are handed a wider viewBox up here (see Today/History), so their
      text is drawn near 1:1 and can afford the extra unit. */
   .content .chart .axis-text { font-size: 12px; }
+}
+
+/* --- small additions ------------------------------------------------------ */
+
+/* A square ghost button holding one glyph — the settings gear in the top bar. */
+.icon-btn { min-width: 44px; min-height: 44px; padding: 0; flex: none; }
+.icon-btn svg { width: 20px; height: 20px; display: block; }
+.topbar-actions { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
+
+/* Two or three mutually exclusive choices, shown as one control. */
+.seg { display: flex; gap: 0.5rem; }
+.seg .btn { flex: 1; }
+.seg .btn[aria-pressed='true'] {
+  background: var(--sticker-sage);
+  color: var(--sticker-ink);
+  border-color: var(--ink-line);
+}
+.field + .field,
+.field-group { margin-top: 1rem; }
+.field-group { border: 0; padding: 0; margin-inline: 0; min-width: 0; }
+.field-group legend { padding: 0; }
+.field-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.field-cols .field + .field { margin-top: 0; }
+.field-sub { display: block; font-size: var(--t-label); color: var(--muted); margin-top: 0.25rem; }
+select.field-input { appearance: auto; }
+
+/* A decision asked in place, inside a sheet that is already open — a second modal on
+   top would trap focus twice and paint two backdrops. */
+.confirm-inline {
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  padding: 0.75rem;
+}
+.confirm-inline p { margin: 0 0 0.75rem; font-size: var(--t-sm); }
+.confirm-inline .btn { margin-top: 0.5rem; }
+.confirm-inline .btn:first-of-type { margin-top: 0; }
+
+/* The one safety rule on the welcome sheet, at body size and full ink. It used to be
+   the second half of the smallest, dimmest paragraph on the sheet. */
+.welcome-safety {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+}
+
+/* --- tablet --------------------------------------------------------------- */
+
+/* Between a phone and the two-pane desktop the layout is still one column, but not a
+   phone's: at 820px the 30rem column was a strip down the middle of the screen with
+   as much margin as content. The column widens and dialogs centre; everything inside
+   is already fluid. The 48rem here is `TABLET_MIN_PX` in src/lib/viewport.ts, which
+   hands the charts a viewBox to match. */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  :root { --maxw: 44rem; }
+  .sheet-backdrop { align-items: center; }
+  .sheet {
+    max-width: var(--maxw-sheet);
+    max-height: 82dvh;
+    border: var(--ink-w) solid var(--ink-line);
+    border-radius: var(--radius);
+    padding-bottom: var(--pad);
+  }
+  .dialog-actions .btn { flex: none; }
+  .today-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Stickers and sessions side by side, the speed trace full width between them and
+     the day above: the trace is the one of the three that wants the width. */
+  .today-row > .card:nth-child(2) { grid-column: 1 / -1; grid-row: 1; }
 }
