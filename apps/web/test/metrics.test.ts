@@ -4,7 +4,7 @@ import {
   cycleMetric,
   metricValue,
   METRIC_ORDER,
-  METRIC_UNIT,
+  metricUnit,
 } from '../src/lib/metrics.js';
 import { trustFor } from '../src/state/telemetry.js';
 import type { DayTotal } from '../src/state/session.js';
@@ -89,7 +89,7 @@ describe('metricValue', () => {
   it('shows distance in the same units as the rest of the screen', () => {
     // Totals are stored in km because the wire is metric, but the hero reads mph
     // beside them — a km label here was the one mixed-unit hold-out.
-    expect(METRIC_UNIT.distance).toBe('mi today');
+    expect(metricUnit('distance', 'imperial')).toBe('mi today');
     expect(metricValue('distance', day({ distKm: 1.609344 }))).toBe('1.00');
   });
 

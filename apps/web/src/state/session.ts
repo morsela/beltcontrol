@@ -1,9 +1,10 @@
-import { signal, computed, effect } from '@preact/signals';
+import { signal, computed, effect, untracked } from '@preact/signals';
 import { DRIVER_IDS } from '@beltcontrol/belt-drivers';
 import type { DriverId } from '@beltcontrol/belt-drivers';
 import {
   live,
   isMoving,
+  lastFrameAt,
   trustFor,
   type Trust,
   type TrustMap,
@@ -26,6 +27,18 @@ const MIN_SESSION_MS = 30_000;
 /** Past this, an in-flight record found in storage is somebody's old walk rather than
  *  the one they are on — the tab it belonged to is long gone. File it, do not resume it. */
 const STALE_OPEN_MS = 12 * 3600_000;
+/** How often the session clock is meant to tick. */
+const TICK_MS = 1_000;
+/** The widest gap between two ticks that is still believed to be walking, provided the
+ *  belt was moving at both ends of it.
+ *
+ *  Chrome wakes the timers of a tab hidden for more than five minutes once a minute, and
+ *  a desk walker's tab is hidden for most of a walk. The cap on a late tick used to be
+ *  five seconds, on the theory that anything longer was a machine asleep — so each of
+ *  those once-a-minute ticks banked one second, and an hour's walk was filed as a minute.
+ *  A minute and a half covers the throttled cadence with room for a late wake-up; a
+ *  machine that really slept is gone for longer than that, and loses its link besides. */
+const MAX_CREDITED_GAP_MS = 90_000;
 /** One sample per this interval feeds the session speed chart. */
 const SAMPLE_EVERY_MS = 10_000;
 /** ~2 hours of samples. Beyond that we stop growing the array. */
@@ -176,6 +189,8 @@ export const sessions = signal<Session[]>(loadSessions());
 
 let counters = { dist: new Counter(), steps: new Counter(), kcal: new Counter() };
 let lastTickAt: number | null = null;
+/** Whether the belt was moving at the last tick — the other end of a long gap. */
+let movingAtLastTick = false;
 let lastMoveAt: number | null = null;
 let heldSince: number | null = null;
 let lastSampleAt = 0;
@@ -211,8 +226,45 @@ function loadSessions(): Session[] {
   }
 }
 
+/** How many of the newest stored walks keep their speed samples when storage runs out. */
+const SAMPLES_KEPT_WHEN_FULL = 30;
+
+/**
+ * True while the history in this tab is not the history in storage — a write was
+ * refused and the lean retry behind it was too. The shell says so on every screen,
+ * because the alternative is what used to happen: walks kept being "recorded", every
+ * one of them gone at the next reload, and nothing anywhere said a word.
+ */
+export const historyUnsaved = signal(false);
+
+/**
+ * Write the history, giving up speed samples before giving up walks.
+ *
+ * The whole history is one localStorage value and the origin gets about five megabytes.
+ * Samples are most of every record — up to 720 of them against a dozen scalar fields —
+ * and nothing reads a stored walk's samples back except a backup: the speed chart only
+ * ever draws the walk in progress. So when the full write is refused, the same history
+ * is written again with samples kept on the newest walks only, which is several times
+ * smaller. The copy in memory keeps everything, so a backup exported from this tab is
+ * still complete.
+ *
+ * Only if that is refused too is the history really not being saved.
+ */
 function persistSessions() {
-  writeJson(STORAGE_KEYS.sessions, sessions.value);
+  const all = sessions.value;
+  if (writeJson(STORAGE_KEYS.sessions, all)) {
+    historyUnsaved.value = false;
+    return;
+  }
+  const keepFrom = all.length - SAMPLES_KEPT_WHEN_FULL;
+  const lean = all.map((s, i) => (i < keepFrom && s.samples.length > 0 ? { ...s, samples: [] } : s));
+  if (writeJson(STORAGE_KEYS.sessions, lean)) {
+    historyUnsaved.value = false;
+    log('storage is nearly full — older walks were saved without their speed samples', 'err');
+    return;
+  }
+  historyUnsaved.value = true;
+  log('history could not be saved — browser storage is full or blocked', 'err');
 }
 
 function persistOpen() {
@@ -371,16 +423,16 @@ function tick() {
   const s = currentSession.value;
   if (!s) {
     lastTickAt = now;
+    movingAtLastTick = moving;
     return;
   }
 
   // Accumulate active time only while the belt is actually moving.
   if (moving && lastTickAt != null) {
-    const delta = now - lastTickAt;
-    // A tab that was backgrounded or a machine that slept should not bank hours.
-    s.activeMs += delta > 5_000 ? 1_000 : delta;
+    s.activeMs += creditFor(now - lastTickAt, movingAtLastTick);
   }
   lastTickAt = now;
+  movingAtLastTick = moving;
 
   const d = live.value;
   counters.dist.observe(d.distKm);
@@ -408,16 +460,46 @@ function tick() {
   }
 }
 
+/**
+ * How much of the time since the last tick counts as walking.
+ *
+ * An ordinary tick is credited whole. A late one is credited whole only when it is no
+ * later than a throttled background timer would make it *and* the belt was moving at
+ * both ends — the one case where the missing ticks are known to be the browser's doing
+ * rather than a lid that closed. Anything else banks a single tick, as it always did: a
+ * machine that slept should not bank hours.
+ */
+function creditFor(delta: number, wasMoving: boolean): number {
+  if (delta <= 5 * TICK_MS) return delta;
+  if (wasMoving && delta <= MAX_CREDITED_GAP_MS) return delta;
+  return TICK_MS;
+}
+
 export function startSessionTracking() {
   if (ticker != null) return;
   lastTickAt = Date.now();
-  ticker = window.setInterval(tick, 1000);
+  movingAtLastTick = isMoving.peek();
+  ticker = window.setInterval(tick, TICK_MS);
 }
 
 export function stopSessionTracking() {
   if (ticker != null) window.clearInterval(ticker);
   ticker = null;
 }
+
+// The telemetry stream as a second clock. Bluetooth notifications are events, not
+// timers, so they keep arriving at full rate in a hidden tab whose interval has been
+// throttled to once a minute. When a frame lands and the tick is overdue, the frame
+// runs it — which keeps the walk opening, sampling and ending on time on every pad that
+// streams, rather than up to a minute late. A pad that has to be polled is asked by a
+// timer that is throttled just the same; `MAX_CREDITED_GAP_MS` is what covers that one.
+effect(() => {
+  const frameAt = lastFrameAt.value;
+  if (frameAt == null || ticker == null || lastTickAt == null) return;
+  // Untracked: the tick reads and writes half the signals in this module, and this
+  // effect must wake on a frame and on nothing else.
+  if (frameAt - lastTickAt >= 1.5 * TICK_MS) untracked(tick);
+});
 
 // Persist the in-flight session periodically so a reload mid-walk recovers it.
 let persistAt = 0;
@@ -467,26 +549,57 @@ export interface DayTotal {
   excluded: number;
 }
 
-/** Today's totals, including the session still in progress. */
-export const todayTotals = computed<DayTotal>(() => {
-  const key = dayKey(Date.now());
-  return foldDay(key, startOfDay(Date.now()), allSessions.value);
+/** Everything a day's total sums, without the day it belongs to. */
+type DaySums = Omit<DayTotal, 'key' | 'date'>;
+
+const noSums = (): DaySums => ({ minutes: 0, distKm: 0, steps: 0, kcal: 0, excluded: 0 });
+
+function addSession(out: DaySums, s: Session) {
+  out.minutes += s.activeMs / 60_000;
+  // Unverified fields never enter a total. A history screen that quietly sums
+  // raw, unscaled numbers as if they were kilometres is worse than no history.
+  if (s.trust.distKm === 'ok') out.distKm += s.distKm;
+  else if (s.distKm > 0) out.excluded++;
+  if (s.trust.steps === 'ok') out.steps += s.steps;
+  if (s.trust.kcal === 'ok') out.kcal += s.kcal;
+}
+
+/**
+ * The stored history, summed per calendar day.
+ *
+ * Every day of every series used to be folded by walking the whole history and asking
+ * each session which day it fell on — and the two streak calculations each ask for 400
+ * days, on a screen that re-renders once a second during a walk. That is 400 passes over
+ * the history per streak, per second: about half a second of work per render at 1,500
+ * sessions, which is under two years of a desk walker's use.
+ *
+ * Bucketed once instead, and off `sessions` alone rather than `allSessions`: the stored
+ * list changes when a walk is filed, imported or deleted, while the open session changes
+ * every tick. Keeping it out of here is what stops the buckets being rebuilt every
+ * second; `dayTotal` adds it back for the one day it belongs to.
+ */
+const storedByDay = computed(() => {
+  const days = new Map<string, DaySums>();
+  for (const s of sessions.value) {
+    const key = dayKey(s.startedAt);
+    let sums = days.get(key);
+    if (!sums) days.set(key, (sums = noSums()));
+    addSession(sums, s);
+  }
+  return days;
 });
 
-function foldDay(key: string, date: number, all: Session[]): DayTotal {
-  const out: DayTotal = { key, date, minutes: 0, distKm: 0, steps: 0, kcal: 0, excluded: 0 };
-  for (const s of all) {
-    if (dayKey(s.startedAt) !== key) continue;
-    out.minutes += s.activeMs / 60_000;
-    // Unverified fields never enter a total. A history screen that quietly sums
-    // raw, unscaled numbers as if they were kilometres is worse than no history.
-    if (s.trust.distKm === 'ok') out.distKm += s.distKm;
-    else if (s.distKm > 0) out.excluded++;
-    if (s.trust.steps === 'ok') out.steps += s.steps;
-    if (s.trust.kcal === 'ok') out.kcal += s.kcal;
-  }
+function dayTotal(key: string, date: number): DayTotal {
+  const out: DayTotal = { key, date, ...(storedByDay.value.get(key) ?? noSums()) };
+  const open = currentSession.value;
+  if (open && dayKey(open.startedAt) === key) addSession(out, open);
   return out;
 }
+
+/** Today's totals, including the session still in progress. */
+export const todayTotals = computed<DayTotal>(() =>
+  dayTotal(dayKey(Date.now()), startOfDay(Date.now()))
+);
 
 export interface LifetimeTotals {
   /** Wall-clock minutes with the belt moving, across every session ever stored. */
@@ -536,14 +649,23 @@ export const lifetimeTotals = computed<LifetimeTotals>(() => {
   return out;
 });
 
-/** The last `days` days, oldest first, with empty days present as zeroes. */
+/**
+ * The last `days` days, oldest first, with empty days present as zeroes.
+ *
+ * Stepped by calendar date, not by 24 hours. A day is 23 hours long when the clocks go
+ * forward, so midnight minus a multiple of 24 hours lands at 23:00 two days back and
+ * the short day is never visited: its walks dropped out of every chart, and a streak
+ * running through it came up a day short. Everybody in a daylight-saving zone has one
+ * such day inside the 400 the streaks look across.
+ */
 export function dailySeries(days: number): DayTotal[] {
-  const all = allSessions.value;
-  const today = startOfDay(Date.now());
+  const today = new Date(startOfDay(Date.now()));
   const out: DayTotal[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const date = today - i * 86_400_000;
-    out.push(foldDay(dayKey(date), date, all));
+    // Day-of-month arithmetic overflows into the previous month by itself, and local
+    // midnight is where it lands whatever the day in between was long.
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i).getTime();
+    out.push(dayTotal(dayKey(date), date));
   }
   return out;
 }

@@ -216,8 +216,9 @@ LICENSE                 Apache-2.0
 NOTICE                  attribution, independence and safety notice carried by forks
 ```
 
-Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
-km/h — so miles are a display concern only.
+Speeds are shown in **mph or km/h** — switched at the foot of the speed card, and taken
+from the browser's locale on a first visit. Everything on the wire and in storage stays
+metric — the protocols all speak km/h — so the unit is a display concern only.
 
 ## Related projects
 

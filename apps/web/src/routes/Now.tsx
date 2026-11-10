@@ -27,7 +27,7 @@ import { isMoving } from '../state/telemetry.js';
 import { settings } from '../state/settings.js';
 import { sessions } from '../state/session.js';
 import { isDesktop } from '../lib/viewport.js';
-import { toMph } from '../lib/format.js';
+import { fmtSpeed, speedUnit } from '../lib/format.js';
 
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
@@ -107,7 +107,8 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
               {paused.value ? (
                 <>
                   <button class="btn primary block lg" onClick={() => setConfirming('resume')}>
-                    Resume at {toMph(settings.value.targetKmh).toFixed(1)} mph
+                    Resume at {fmtSpeed(settings.value.targetKmh, settings.value.units)}{' '}
+                    {speedUnit(settings.value.units)}
                   </button>
                   <button class="btn ghost block" style="margin-top:.5rem" onClick={endWalk}>
                     End walk
@@ -192,9 +193,9 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           title={confirming === 'resume' ? 'Resume the belt?' : 'Start the belt?'}
           body={`The belt will ${
             confirming === 'resume' ? 'pick back up' : 'start moving'
-          } at ${toMph(settings.value.targetKmh).toFixed(
-            1
-          )} mph. Make sure it's clear and you're ready.`}
+          } at ${fmtSpeed(settings.value.targetKmh, settings.value.units)} ${speedUnit(
+            settings.value.units
+          )}. Make sure it's clear and you're ready.`}
           confirmLabel={confirming === 'resume' ? 'Resume' : 'Start'}
           onConfirm={() => {
             const kind = confirming;

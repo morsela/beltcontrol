@@ -8,6 +8,7 @@ import { Legal } from './routes/Legal.js';
 import { TabBar } from './components/TabBar.js';
 import { StopBar } from './components/StopBar.js';
 import { AmbientView } from './components/AmbientView.js';
+import { StorageNotice } from './components/StorageNotice.js';
 import { DesktopOnlyNotice } from './components/DesktopOnlyNotice.js';
 import { Recovery } from './components/Recovery.js';
 import { Disclaimer } from './components/Disclaimer.js';
@@ -100,6 +101,7 @@ export function App() {
           </aside>
 
           <div class="content" tabIndex={-1} ref={contentRef}>
+            <StorageNotice />
             <DesktopOnlyNotice />
             {r === 'legal' ? <Legal /> : r === 'history' ? <History /> : <Today />}
             {/* The footer disclaimer is a pointer at the legal page. On the legal page
@@ -116,6 +118,7 @@ export function App() {
   return (
     <>
       <main class={`shell${showStop ? ' has-stopbar' : ''}`}>
+        <StorageNotice />
         <DesktopOnlyNotice />
         {r === 'now' && <Now onAmbient={enterAmbient} />}
         {r === 'today' && <Today />}

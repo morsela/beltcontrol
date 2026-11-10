@@ -51,8 +51,14 @@ Three tiers, each answering one question:
 | **Today** | What have I done today, and in which sessions? |
 | **History** | Am I actually keeping this up? |
 
-Speeds are shown in **mph**. Everything on the wire stays metric — the protocols all speak
-km/h — so miles are a display concern only, converted in `apps/web/src/lib/format.ts`.
+Speeds are shown in **mph or km/h**, and distances in miles or kilometres to match — one
+setting, switched at the foot of the speed card. A first visit takes it from the browser's
+locale (miles for the US and the UK, kilometres elsewhere); a browser that used the app when
+it was miles-only stays in miles until told otherwise. Everything on the wire and in storage
+stays metric — the protocols all speak km/h — so the unit is a display concern only,
+converted in `apps/web/src/lib/format.ts`. The steppers move 0.2 mph or 0.5 km/h a press,
+and each unit has its own three presets, because 1.2 mph is 1.93 km/h and nobody's desk
+speed is 1.9.
 
 ## Two layouts
 
@@ -384,12 +390,28 @@ the belt is started from its own remote or handrail.
   identical from the session tick — the difference is whether it has come to rest since.
 - Duration is **wall-clock time with the belt moving**, measured locally. It is
   protocol-independent and immune to the pad's counter resets.
+- **A hidden tab still banks the whole walk.** Chrome wakes the timers of a tab hidden for
+  more than five minutes once a minute, and a desk walker's tab is hidden for most of a
+  walk. A gap of up to 90 s between ticks is credited whole when the belt was moving at both
+  ends of it; anything longer is a machine that slept, and banks one tick. On pads that
+  stream, a telemetry frame runs an overdue tick itself — notifications are events, not
+  timers, and are not throttled. A pad that has to be polled (classic `fe00`) is polled by a
+  timer that *is* throttled, so in a hidden tab its telemetry refreshes once a minute; the
+  walk's duration is still right, its speed trace is coarser.
+- Days are stepped by calendar date, not by 24 hours, so the 23-hour day the clocks go
+  forward on is not skipped by the charts and the streaks.
 - An in-flight session is checkpointed every 5 s, so reloading mid-walk resumes rather than
   splitting the walk in two.
 - `Export CSV` on the History screen dumps everything, trust columns included.
 
 History lives in `localStorage` and is never uploaded. Clearing site data clears it; export
 first if you care about it.
+
+The whole history is one value under a quota of about 5 MB. When a write is refused, it is
+retried with speed samples kept on the newest thirty walks only — samples are most of each
+record, and nothing reads a stored walk's samples back except a backup. If that is refused
+too, a banner on every screen says the history is not being saved and points at the export;
+the copy in the open tab is still complete.
 
 ## Export and import
 

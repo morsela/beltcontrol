@@ -7,7 +7,7 @@ import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
 import { Heatmap } from '../charts/Heatmap.js';
 import { isDesktop } from '../lib/viewport.js';
-import { fmtDuration, fmtMiles, fmtDayLabel, EM_DASH } from '../lib/format.js';
+import { fmtDuration, fmtDist, fmtDayLabel, distUnit, distNoun, EM_DASH } from '../lib/format.js';
 import { download, stamped } from '../lib/download.js';
 import { log } from '../state/log.js';
 import { trackEvent } from '../lib/analytics.js';
@@ -96,9 +96,10 @@ function DataCard() {
  */
 function LifetimeCard() {
   const t = lifetimeTotals.value;
-  const head = lifetimeHeadline(t);
+  const u = settings.value.units;
+  const head = lifetimeHeadline(t, u);
   const text = fmtOdometer(head.value);
-  const noun = head.unit === 'mi' ? 'miles' : 'hours';
+  const noun = head.unit === 'h' ? 'hours' : distNoun(u);
   const since =
     t.since != null
       ? new Date(t.since).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -117,7 +118,7 @@ function LifetimeCard() {
       {/* Same rule as every other total on this screen: say what is not in it. */}
       {head.fellBack ? (
         <p class="note" style="margin-top:.4rem">
-          Showing hours instead of miles: none of these walks came from a treadmill whose
+          Showing hours instead of {distNoun(u)}: none of these walks came from a treadmill whose
           distance the app can read reliably. Hours are timed by the app itself, so they
           don&rsquo;t depend on the treadmill.
         </p>
@@ -127,7 +128,7 @@ function LifetimeCard() {
             {t.excluded} walk{t.excluded === 1 ? ' is' : 's are'} left out of this
             distance. {t.excluded === 1 ? 'It was' : 'They were'} recorded before the app
             could read that treadmill&rsquo;s distance reliably, so the numbers are kept
-            as they were rather than counted as miles.
+            as they were rather than counted as {distNoun(u)}.
           </p>
         )
       )}
@@ -139,6 +140,7 @@ export function History() {
   const [showTable, setShowTable] = useState(false);
   const desktop = isDesktop.value;
   const goal = settings.value.goalMinutes;
+  const u = settings.value.units;
   const last30 = dailySeries(30);
   // Whole weeks, so the heatmap grid is full columns. Twice as many of them on
   // desktop: the column is twice as wide, and filling it with more history beats
@@ -181,8 +183,8 @@ export function History() {
             <span class="k">total</span>
           </div>
           <div class="stat">
-            <span class="v tnum">{totalKm > 0 ? fmtMiles(totalKm, 1) : EM_DASH}</span>
-            <span class="k">mi</span>
+            <span class="v tnum">{totalKm > 0 ? fmtDist(totalKm, u, 1) : EM_DASH}</span>
+            <span class="k">{distUnit(u)}</span>
           </div>
           <div class="stat">
             <span class="v tnum">{active}</span>
@@ -213,7 +215,7 @@ export function History() {
                 <tr>
                   <th>Day</th>
                   <th>Minutes</th>
-                  <th>mi</th>
+                  <th>{distUnit(u)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -221,7 +223,7 @@ export function History() {
                   <tr key={d.key}>
                     <td>{fmtDayLabel(d.date)}</td>
                     <td class="tnum">{Math.round(d.minutes)}</td>
-                    <td class="tnum">{d.distKm > 0 ? fmtMiles(d.distKm) : EM_DASH}</td>
+                    <td class="tnum">{d.distKm > 0 ? fmtDist(d.distKm, u) : EM_DASH}</td>
                   </tr>
                 ))}
               </tbody>

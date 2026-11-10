@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -29,14 +29,16 @@ const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { versio
  */
 function stampServiceWorker(): Plugin {
   let buildId = 'dev';
+  let assets: string[] = [];
   return {
     name: 'stamp-service-worker',
     apply: 'build',
     writeBundle(_options, bundle) {
-      buildId = createHash('sha256')
-        .update(Object.keys(bundle).sort().join('|'))
-        .digest('hex')
-        .slice(0, 12);
+      const names = Object.keys(bundle).sort();
+      buildId = createHash('sha256').update(names.join('|')).digest('hex').slice(0, 12);
+      // What the worker fetches at install, so the app can start offline after one
+      // visit rather than two. Source maps are for a debugger, not for a walk.
+      assets = names.filter((n) => n.startsWith('assets/') && !n.endsWith('.map')).map((n) => `/${n}`);
     },
     // closeBundle, not writeBundle: public/ is copied after the bundle is written, so
     // an earlier hook would stamp a file that is about to be overwritten.
@@ -44,7 +46,17 @@ function stampServiceWorker(): Plugin {
       const sw = join('dist', 'sw.js');
       try {
         const src = await readFile(sw, 'utf8');
-        await writeFile(sw, src.replace('__BUILD_ID__', buildId));
+        // The fonts are in public/, not in the bundle, so they are listed off the disk.
+        const fonts = (await readdir(join('dist', 'fonts')).catch(() => [] as string[]))
+          .filter((f) => f.endsWith('.woff2'))
+          .sort()
+          .map((f) => `/fonts/${f}`);
+        await writeFile(
+          sw,
+          src
+            .replace('__BUILD_ID__', buildId)
+            .replace('/*__PRECACHE__*/ []', JSON.stringify([...assets, ...fonts]))
+        );
       } catch {
         /* no sw.js in this build */
       }

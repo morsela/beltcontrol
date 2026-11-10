@@ -1,7 +1,7 @@
 // The odometer's two decisions, kept out of the component so both are testable: what
 // number it should be counting, and how that number breaks into rolling wheels.
 
-import { toMiles } from './format.js';
+import { toDist, distUnit, type Units } from './format.js';
 import type { LifetimeTotals } from '../state/session.js';
 
 export type OdometerCell =
@@ -28,8 +28,9 @@ export function odometerCells(text: string): OdometerCell[] {
 
 export interface Headline {
   value: number;
-  /** `mi` for a distance the protocols reported in real units; `h` when none did. */
-  unit: 'mi' | 'h';
+  /** `mi` or `km` for a distance the protocols reported in real units; `h` when none
+   *  did. */
+  unit: 'mi' | 'km' | 'h';
   /** True when the app has no distance it can vouch for and is counting time instead. */
   fellBack: boolean;
 }
@@ -37,7 +38,7 @@ export interface Headline {
 /**
  * What the odometer should count.
  *
- * Miles, when any stored session came from a protocol that reports distance in real
+ * Distance, in the walker's own units, when any stored session came from a protocol that reports distance in real
  * units. Hours otherwise — and that fallback is the point rather than a nicety. A
  * history made entirely of FitShow walks, which carry no distance at all, or of
  * `0x1234` walks recorded before that pad's counter was confirmed to be metres, has no
@@ -47,8 +48,10 @@ export interface Headline {
  * Time is measured here, from the wall clock, and needs no cooperation from any pad,
  * so it is the one total that is always honest.
  */
-export function lifetimeHeadline(t: LifetimeTotals): Headline {
-  if (t.distKm > 0) return { value: toMiles(t.distKm), unit: 'mi', fellBack: false };
+export function lifetimeHeadline(t: LifetimeTotals, units: Units = 'imperial'): Headline {
+  if (t.distKm > 0) {
+    return { value: toDist(t.distKm, units), unit: distUnit(units) as 'mi' | 'km', fellBack: false };
+  }
   return { value: t.minutes / 60, unit: 'h', fellBack: t.excluded > 0 };
 }
 

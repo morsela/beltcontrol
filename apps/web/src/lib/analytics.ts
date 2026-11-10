@@ -93,6 +93,7 @@ export interface AnalyticsEvents {
   // --- settings ---------------------------------------------------------------
   goal_changed: { minutes: number };
   hero_metric_changed: { metric: string };
+  units_changed: { units: 'imperial' | 'metric' };
 
   // --- the screen of last resort ---------------------------------------------
   recovery_shown: undefined;

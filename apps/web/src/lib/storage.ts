@@ -52,12 +52,19 @@ export function readRaw(key: StorageKey): string | null {
   }
 }
 
-/** Store a string, or carry on without having stored it. */
-export function writeRaw(key: StorageKey, value: string): void {
+/**
+ * Store a string, or carry on without having stored it.
+ *
+ * `false` when it was not stored — private mode, site data blocked, or the quota spent.
+ * The app still works either way, it just forgets; the answer is for the one caller
+ * whose forgetting costs somebody a walk, so that it can say so instead of nothing.
+ */
+export function writeRaw(key: StorageKey, value: string): boolean {
   try {
     localStorage.setItem(key, value);
+    return true;
   } catch {
-    /* private mode / quota — the app still works, it just forgets */
+    return false;
   }
 }
 
@@ -88,6 +95,7 @@ export function readJson(key: StorageKey): unknown {
   }
 }
 
-export function writeJson(key: StorageKey, value: unknown): void {
-  writeRaw(key, JSON.stringify(value));
+/** As `writeRaw`: `false` when the value did not reach storage. */
+export function writeJson(key: StorageKey, value: unknown): boolean {
+  return writeRaw(key, JSON.stringify(value));
 }

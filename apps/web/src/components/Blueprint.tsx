@@ -1,7 +1,8 @@
 import type { JSX } from 'preact';
 import type { Landmark, LandmarkShape } from '../lib/landmarks.js';
 import { blueprintScale } from '../lib/blueprint.js';
-import { fmtMiles } from '../lib/format.js';
+import { fmtDist, distUnit, distNoun } from '../lib/format.js';
+import { units } from '../state/settings.js';
 
 /**
  * The drawing pinned to the fun-fact note: the walk and the landmark it was compared
@@ -48,11 +49,12 @@ export function Blueprint({
 
   const box = { x0, x1: xLand, y0: 30, y1: 66 };
 
-  const walkMi = fmtMiles(distKm);
-  const landMi = fmtMiles(landmark.km);
-  const label = `${broken ? 'Not to scale' : 'To scale'}: ${walkMi} miles walked against ${
+  const u = units.value;
+  const walkMi = fmtDist(distKm, u);
+  const landMi = fmtDist(landmark.km, u);
+  const label = `${broken ? 'Not to scale' : 'To scale'}: ${walkMi} ${distNoun(u)} walked against ${
     landmark.text
-  }, ${landMi} miles.`;
+  }, ${landMi} ${distNoun(u)}.`;
 
   return (
     <svg
@@ -82,10 +84,10 @@ export function Blueprint({
       </g>
 
       <text class="blueprint-text" x={(x0 + xWalk) / 2} y="14" text-anchor="middle">
-        {walkMi} mi
+        {walkMi} {distUnit(u)}
       </text>
       <text class="blueprint-text" x={(x0 + xLand) / 2} y="91" text-anchor="middle">
-        {landMi} mi
+        {landMi} {distUnit(u)}
       </text>
     </svg>
   );

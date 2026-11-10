@@ -163,3 +163,64 @@ describe('reading sessions back out of storage', () => {
     expect(currentSession.value?.activeMs).toBe(45_000);
   });
 });
+
+describe('writing the history when storage is running out', () => {
+  const walk = (i: number, samples = 100) => ({
+    id: `w${i}`,
+    startedAt: 1_700_000_000_000 + i * 3_600_000,
+    endedAt: 1_700_000_000_000 + i * 3_600_000 + 1_800_000,
+    activeMs: 1_800_000,
+    distKm: 1.5,
+    steps: 2_000,
+    kcal: 0,
+    protocol: 'classic',
+    trust: { distKm: 'ok', steps: 'ok', kcal: 'absent' },
+    samples: Array.from({ length: samples }, (_, n) => ({ t: n * 10_000, kmh: 3 })),
+  });
+
+  /** A store that refuses any single value longer than `limit` characters. */
+  function quota(limit: number) {
+    const real = Storage.prototype.setItem;
+    return vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string
+    ) {
+      if (value.length > limit) throw new DOMException('full', 'QuotaExceededError');
+      real.call(this, key, value);
+    });
+  }
+
+  const stored = () => JSON.parse(localStorage.getItem(SESSIONS_KEY)!) as { id: string; samples: unknown[] }[];
+
+  it('gives up old speed samples before it gives up a walk', async () => {
+    const { mergeSessions, sanitizeSession, sessions, historyUnsaved } = await freshStore([]);
+    const incoming = Array.from({ length: 40 }, (_, i) => sanitizeSession(walk(i))!);
+    const full = JSON.stringify(incoming).length;
+    quota(Math.round(full * 0.9));
+
+    mergeSessions(incoming);
+
+    expect(historyUnsaved.value).toBe(false);
+    const onDisk = stored();
+    expect(onDisk).toHaveLength(40);
+    // The newest thirty keep their samples; the ten before them paid for the space.
+    expect(onDisk.slice(0, 10).every((s) => s.samples.length === 0)).toBe(true);
+    expect(onDisk.slice(10).every((s) => s.samples.length === 100)).toBe(true);
+    // And the copy a backup is exported from is untouched.
+    expect(sessions.value.every((s) => s.samples.length === 100)).toBe(true);
+  });
+
+  it('says so when even that does not fit, and stops saying so once a write lands', async () => {
+    const { mergeSessions, deleteSession, sanitizeSession, historyUnsaved } = await freshStore([]);
+    const spy = quota(10);
+
+    mergeSessions([sanitizeSession(walk(0))!, sanitizeSession(walk(1))!]);
+    expect(historyUnsaved.value).toBe(true);
+
+    spy.mockRestore();
+    deleteSession('w0');
+    expect(historyUnsaved.value).toBe(false);
+    expect(stored().map((s) => s.id)).toEqual(['w1']);
+  });
+});

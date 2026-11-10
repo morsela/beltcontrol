@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { todayTotals, lifetimeTotals } from '../state/session.js';
 import { LANDMARKS, landmarkFor } from '../lib/landmarks.js';
-import { fmtMiles } from '../lib/format.js';
+import { fmtDist, distUnit, distNoun } from '../lib/format.js';
+import { units } from '../state/settings.js';
 import { isDesktop } from '../lib/viewport.js';
 import { Blueprint } from './Blueprint.js';
 
@@ -49,7 +50,7 @@ export function FunFact() {
     <div class="funfact">
       <p class="funfact-k">Put another way</p>
       <p class="funfact-v">
-        {fmtMiles(distKm)} miles {usingDay ? 'today' : 'in total'} is {pick.text}.
+        {fmtDist(distKm, units.value)} {distNoun(units.value)} {usingDay ? 'today' : 'in total'} is {pick.text}.
       </p>
       {/* The same comparison drawn: the walk dimensioned across the top, the landmark
           at the same scale beneath it. A narrower viewBox on desktop, where the note is
@@ -58,7 +59,7 @@ export function FunFact() {
       <Blueprint landmark={pick} distKm={distKm} width={isDesktop.value ? 220 : 320} />
       {fact.next && (
         <p class="funfact-next">
-          Next up at {fmtMiles(fact.next.km)} mi: {fact.next.text}.
+          Next up at {fmtDist(fact.next.km, units.value)} {distUnit(units.value)}: {fact.next.text}.
         </p>
       )}
       {/* Only offered when there is somewhere for it to go. Not instrumented,

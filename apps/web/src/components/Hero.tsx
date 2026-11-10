@@ -3,8 +3,8 @@ import { settings, updateSettings } from '../state/settings.js';
 import { driver } from '../state/connection.js';
 import { trustFor } from '../state/telemetry.js';
 import { todayTotals, currentSession } from '../state/session.js';
-import { availableMetrics, cycleMetric, metricValue, METRIC_UNIT } from '../lib/metrics.js';
-import { fmtDuration, fmtMiles } from '../lib/format.js';
+import { availableMetrics, cycleMetric, metricValue, metricUnit } from '../lib/metrics.js';
+import { fmtDuration, fmtDist, distUnit } from '../lib/format.js';
 import { trackEvent } from '../lib/analytics.js';
 
 /**
@@ -20,6 +20,7 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
   const key = available.includes(settings.value.heroMetric) ? settings.value.heroMetric : 'time';
   const day = todayTotals.value;
   const session = currentSession.value;
+  const u = settings.value.units;
 
   // Held in a ref, not a local: this component re-renders every second while a
   // session is running, and a plain `let` would be a fresh binding by the time
@@ -59,15 +60,15 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
         onPointerUp={endPress}
         onPointerLeave={endPress}
         onContextMenu={(e) => e.preventDefault()}
-        aria-label={`${metricValue(key, day)} ${METRIC_UNIT[key]}. Tap to change the metric.`}
+        aria-label={`${metricValue(key, day, u)} ${metricUnit(key, u)}. Tap to change the metric.`}
       >
-        <span class="value tnum">{metricValue(key, day)}</span>
-        <span class="unit">{METRIC_UNIT[key]}</span>
+        <span class="value tnum">{metricValue(key, day, u)}</span>
+        <span class="unit">{metricUnit(key, u)}</span>
         {session && (
           <span class="sub tnum">
             This session {fmtDuration(Math.round(session.activeMs / 1000))}
             {session.trust.distKm === 'ok' && session.distKm > 0
-              ? ` · ${fmtMiles(session.distKm)} mi`
+              ? ` · ${fmtDist(session.distKm, u)} ${distUnit(u)}`
               : ''}
           </span>
         )}

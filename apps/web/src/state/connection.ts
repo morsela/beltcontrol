@@ -15,7 +15,7 @@ import { log, setStatus, fail } from './log.js';
 import { trackEvent } from '../lib/analytics.js';
 import { settings, updateSettings } from './settings.js';
 import { openDialogs } from './ui.js';
-import { toMph, toKmh, MPH_STEP } from '../lib/format.js';
+import { toSpeed, fromSpeed, speedStep, fmtSpeed, speedUnit } from '../lib/format.js';
 import {
   setSessionMeta,
   startSessionTracking,
@@ -358,7 +358,7 @@ async function begin(kind: 'start' | 'resume') {
   const d = driver.value;
   if (!d) return;
 
-  const mph = toMph(settings.value.targetKmh).toFixed(1);
+  const at = speedText(settings.value.targetKmh);
 
   // A start supersedes any stop or pause still waiting to be confirmed.
   clearStopWatch();
@@ -406,7 +406,7 @@ async function begin(kind: 'start' | 'resume') {
     paused.value = false;
     holdSession(false);
     if (attempt === 1) {
-      log(`${kind} sent at ${mph} mph (${settings.value.targetKmh.toFixed(1)} km/h)`, 'ok');
+      log(`${kind} sent at ${at}${wireSuffix(settings.value.targetKmh)}`, 'ok');
       // Said up front rather than only after three refusals: the pad has already shown
       // the shape of one in standby, and the person pressing the button is the one who
       // can wake it. The start still goes out — the signature is a strong reading of
@@ -725,8 +725,8 @@ async function bringUpToTarget(d: Driver, gen: number) {
     if (attempt === MAX_SPEED_ATTEMPTS) break;
 
     log(
-      `the belt is holding ${mphText(live.value.speedKmh)} — setting ` +
-        `${mphText(target)} again (attempt ${attempt + 1} of ${MAX_SPEED_ATTEMPTS})`
+      `the belt is holding ${speedText(live.value.speedKmh)} — setting ` +
+        `${speedText(target)} again (attempt ${attempt + 1} of ${MAX_SPEED_ATTEMPTS})`
     );
   }
 
@@ -734,10 +734,10 @@ async function bringUpToTarget(d: Driver, gen: number) {
   // on screen looks wrong, and a walk quietly held at the pad's crawl is exactly the
   // failure that went unexplained long enough to be reported as "it never goes to the
   // target". The stepper is the way out, and it is one press away.
-  const stuck = mphText(live.value.speedKmh);
+  const stuck = speedText(live.value.speedKmh);
   setStatus(
     `The belt is running at ${stuck} and won't go to the ` +
-      `${mphText(settings.value.targetKmh)} you set. Press + or − to try again, ` +
+      `${speedText(settings.value.targetKmh)} you set. Press + or − to try again, ` +
       "or use the treadmill's own controls.",
     'err'
   );
@@ -748,9 +748,18 @@ async function bringUpToTarget(d: Driver, gen: number) {
   trackEvent('start_speed_rewritten', { attempts: MAX_SPEED_ATTEMPTS, applied: false });
 }
 
-/** `x.y mph`, or `an unreported speed` when the pad has not said. */
-function mphText(kmh: number | null | undefined) {
-  return kmh == null ? 'an unreported speed' : `${toMph(kmh).toFixed(1)} mph`;
+/** `x.y mph` or `x.y km/h` as the walker has it, or `an unreported speed` when the pad
+ *  has not said. */
+function speedText(kmh: number | null | undefined) {
+  if (kmh == null) return 'an unreported speed';
+  const u = settings.value.units;
+  return `${fmtSpeed(kmh, u)} ${speedUnit(u)}`;
+}
+
+/** The wire's own figure in brackets, for a log line read by somebody comparing it with
+ *  a capture — and nothing at all when the walker is already reading km/h. */
+function wireSuffix(kmh: number) {
+  return settings.value.units === 'metric' ? '' : ` (${kmh.toFixed(1)} km/h)`;
 }
 
 /** Whether this job is still the one the app wants, by everything outside it: the walk
@@ -910,7 +919,7 @@ function watchForStop(kind: 'stop' | 'pause' = 'stop') {
       const why =
         s == null
           ? 'it is not reporting speed at all'
-          : `it still reports ${toMph(s).toFixed(1)} mph`;
+          : `it still reports ${speedText(s)}`;
       setStatus(
         `${kind === 'pause' ? 'Pause' : 'Stop'} was sent but the belt has not confirmed — ` +
           `${why}. Use the treadmill's own controls.`,
@@ -957,7 +966,7 @@ export async function doPause() {
       return;
     }
 
-    log(`pause sent at ${toMph(settings.value.targetKmh).toFixed(1)} mph`, 'ok');
+    log(`pause sent at ${speedText(settings.value.targetKmh)}`, 'ok');
     trackEvent('belt_pause');
     watchForStop('pause');
   } catch (e) {
@@ -1095,9 +1104,9 @@ export async function setTarget(kmh: number) {
   if (!running.value) return; // just move the setpoint while stopped
   try {
     await d.setSpeed(next);
-    log(`speed → ${toMph(next).toFixed(1)} mph (${next.toFixed(1)} km/h)`);
+    log(`speed → ${speedText(next)}${wireSuffix(next)}`);
     // Clears any error still showing from an earlier failed write.
-    setStatus(`speed ${toMph(next).toFixed(1)} mph`, 'ok');
+    setStatus(`speed ${speedText(next)}`, 'ok');
   } catch (e) {
     updateSettings({ targetKmh: prev });
     trackEvent('control_failed', { command: 'speed', reason: errName(e) });
@@ -1109,10 +1118,13 @@ export async function nudgeSpeed(delta: 1 | -1) {
   const d = driver.value;
   if (!d) return;
   const current = settings.value.targetKmh;
-  // Step in whole mph increments so the displayed number moves cleanly, then convert back.
-  // 0.2 mph is 0.32 km/h, comfortably inside the 0.5 km/h-per-press safety limit.
-  const targetMph = Math.round((toMph(current) + delta * MPH_STEP) * 10) / 10;
-  let next = Math.round(toKmh(targetMph) * 10) / 10;
+  // Step in whole increments of the unit on screen so the displayed number moves
+  // cleanly, then convert back. 0.2 mph is 0.32 km/h, comfortably inside the 0.5 km/h
+  // per-press safety limit; in km/h the step is that limit exactly, which is the step
+  // the pads' own remotes take.
+  const u = settings.value.units;
+  const shown = Math.round((toSpeed(current, u) + delta * speedStep(u)) * 10) / 10;
+  let next = Math.round(fromSpeed(shown, u) * 10) / 10;
 
   // Rounding to the wire's 0.1 km/h resolution can land back on the current value; if so,
   // fall back to one device step so the button never feels dead.

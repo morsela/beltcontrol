@@ -6,6 +6,8 @@ export default defineConfig({
     // browser hands them over — the same reasons the app's suite runs in jsdom.
     environment: 'jsdom',
     include: ['test/**/*.test.ts'],
+    // Shortens the drivers' real sleeps; see the file for why they are not faked.
+    setupFiles: ['test/setup.ts'],
     restoreMocks: true,
   },
 });
