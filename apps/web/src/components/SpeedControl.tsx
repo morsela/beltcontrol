@@ -1,18 +1,24 @@
 import type { ComponentChildren } from 'preact';
 import { driver, connected, nudgeSpeed, setTarget, running } from '../state/connection.js';
-import { settings } from '../state/settings.js';
+import { settings, updateSettings } from '../state/settings.js';
+import { trackEvent } from '../lib/analytics.js';
 import { live, isMoving } from '../state/telemetry.js';
 import { isDesktop } from '../lib/viewport.js';
-import { toMph, toKmh, fmtMph } from '../lib/format.js';
+import { toSpeed, fromSpeed, fmtSpeed, speedUnit, distNoun } from '../lib/format.js';
 
 const PRESET_LABELS = ['slow', 'desk', 'brisk'];
 
 /**
  * The tactile centre of the screen.
  *
- * Steppers move 0.2 mph (0.32 km/h) per press, comfortably inside the 0.5 km/h
- * safety limit — but stepping from 1.2 to 3.0 mph that way is nine presses, so the
- * three presets exist because desk walkers live at two or three fixed speeds.
+ * Steppers move 0.2 mph (0.32 km/h) per press — 0.5 km/h for a walker in metric — which
+ * is inside the 0.5 km/h safety limit either way. But stepping from 1.2 to 3.0 mph that
+ * way is nine presses, so the three presets exist because desk walkers live at two or
+ * three fixed speeds.
+ *
+ * The units switch lives at the foot of this card because this is where the unit is
+ * first seen and most felt: the number here is the one that has to match the pad's own
+ * display. It is the whole app's setting, not this card's — distances follow it too.
  *
  * `lead` is rendered flush against the top edge of the card, ahead of the steppers.
  * It exists for the tread strip in the desktop rail, which has no hero card to sit on
@@ -24,6 +30,9 @@ export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
   const canSpeed = connected.value && (d?.capabilities.speed ?? false);
   const target = settings.value.targetKmh;
   const actual = live.value.speedKmh;
+  const u = settings.value.units;
+  const other = u === 'metric' ? 'imperial' : 'metric';
+  const presets = u === 'metric' ? settings.value.presetsKmh : settings.value.presetsMph;
 
   // Only worth showing while the belt is still ramping toward the setpoint.
   const ramping =
@@ -57,9 +66,9 @@ export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
         </button>
 
         <div class="speed-readout">
-          <span class="v tnum">{toMph(target).toFixed(1)}</span>
-          <span class="k">target mph</span>
-          {showActual && <span class="actual tnum">now {fmtMph(actual)}</span>}
+          <span class="v tnum">{fmtSpeed(target, u)}</span>
+          <span class="k">target {speedUnit(u)}</span>
+          {showActual && <span class="actual tnum">now {fmtSpeed(actual, u)}</span>}
         </div>
 
         <button
@@ -73,22 +82,34 @@ export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
       </div>
 
       <div class="presets">
-        {settings.value.presetsMph.map((mph, i) => {
-          const isActive = Math.abs(toMph(target) - mph) < 0.05;
+        {presets.map((speed, i) => {
+          const isActive = Math.abs(toSpeed(target, u) - speed) < 0.05;
           return (
             <button
               class="preset"
-              key={mph}
+              key={speed}
               aria-pressed={isActive}
               disabled={!canSpeed}
-              onClick={() => void setTarget(toKmh(mph))}
+              onClick={() => void setTarget(fromSpeed(speed, u))}
             >
-              <span class="p-v tnum">{mph.toFixed(1)}</span>
-              <span class="p-k">{PRESET_LABELS[i] ?? 'mph'}</span>
+              <span class="p-v tnum">{speed.toFixed(1)}</span>
+              <span class="p-k">{PRESET_LABELS[i] ?? speedUnit(u)}</span>
             </button>
           );
         })}
       </div>
+
+      {/* Never disabled: it changes what the screen says, not what the belt does, and
+          somebody deciding whether this app is for them wants it before they connect. */}
+      <button
+        class="table-toggle units-toggle"
+        onClick={() => {
+          updateSettings({ units: other });
+          trackEvent('units_changed', { units: other });
+        }}
+      >
+        Switch to {speedUnit(other)} and {distNoun(other)}
+      </button>
     </div>
   );
 }

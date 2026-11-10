@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { Sample } from '../state/session.js';
-import { toMph } from '../lib/format.js';
+import { fmtSpeed, speedUnit } from '../lib/format.js';
+import { units } from '../state/settings.js';
 
 /**
  * Speed across one session. A single series, so no legend box — the title names it.
@@ -28,11 +29,13 @@ export function AreaChart({
   const padT = 6;
   const plot = H - padB - padT;
 
-  const maxMph = Math.max(...samples.map((s) => toMph(s.kmh)), 1);
+  // Scaled in km/h whatever is shown: the shape of the trace is the same in any unit,
+  // and only the tooltip and the label have a unit to state.
+  const maxKmh = Math.max(...samples.map((s) => s.kmh), 1.6);
   const tMax = samples[samples.length - 1]!.t || 1;
 
   const x = (t: number) => (t / tMax) * W;
-  const y = (kmh: number) => padT + plot - (toMph(kmh) / maxMph) * plot;
+  const y = (kmh: number) => padT + plot - (kmh / maxKmh) * plot;
 
   const line = samples.map((s) => `${x(s.t).toFixed(1)},${y(s.kmh).toFixed(1)}`).join(' L');
   const area = `M0,${padT + plot} L${line} L${W},${padT + plot} Z`;
@@ -60,7 +63,7 @@ export function AreaChart({
         class="chart"
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label="Speed over the course of this session, in miles per hour"
+        aria-label={`Speed over the course of this session, in ${speedUnit(units.value)}`}
         onPointerMove={pick}
         onPointerLeave={() => setHover(null)}
       >
@@ -108,7 +111,7 @@ export function AreaChart({
           class="chart-tip"
           style={`left:${(x(hoverSample.t) / W) * 100}%; top:-2px`}
         >
-          {toMph(hoverSample.kmh).toFixed(1)} mph · {Math.round(hoverSample.t / 60000)} min
+          {fmtSpeed(hoverSample.kmh, units.value)} {speedUnit(units.value)} · {Math.round(hoverSample.t / 60000)} min
         </div>
       )}
     </div>

@@ -14,7 +14,8 @@ import { FunFact } from '../components/FunFact.js';
 import { StickerSheet } from '../components/StickerSheet.js';
 import { NewSticker } from '../components/NewSticker.js';
 import { isDesktop } from '../lib/viewport.js';
-import { dayKey, fmtDuration, fmtMiles, fmtInt, fmtClock, EM_DASH } from '../lib/format.js';
+import { dayKey, fmtDuration, fmtDist, fmtInt, fmtClock, speedUnit, distUnit, EM_DASH } from '../lib/format.js';
+import { units } from '../state/settings.js';
 import { trackEvent } from '../lib/analytics.js';
 
 export function Today() {
@@ -33,8 +34,8 @@ export function Today() {
   const supporting = (
     <>
       <div class="stat">
-        <span class="v tnum">{day.distKm > 0 ? fmtMiles(day.distKm) : EM_DASH}</span>
-        <span class="k">mi</span>
+        <span class="v tnum">{day.distKm > 0 ? fmtDist(day.distKm, units.value) : EM_DASH}</span>
+        <span class="k">{distUnit(units.value)}</span>
       </div>
       <div class="stat">
         <span class="v tnum">{day.steps > 0 ? fmtInt(day.steps) : EM_DASH}</span>
@@ -124,7 +125,7 @@ export function Today() {
         </div>
 
         <div class="card">
-          <p class="section-title" style="margin-top:0">Speed this session (mph)</p>
+          <p class="section-title" style="margin-top:0">Speed this session ({speedUnit(units.value)})</p>
           {open && open.samples.length >= 2 ? (
             <AreaChart
               samples={open.samples}
@@ -196,7 +197,7 @@ function SessionRow({
         <div class="when tnum">
           {fmtClock(s.startedAt)}
           {s.endedAt ? ` – ${fmtClock(s.endedAt)}` : ''}
-          {s.trust.distKm === 'ok' && s.distKm > 0 ? ` · ${fmtMiles(s.distKm)} mi` : ''}
+          {s.trust.distKm === 'ok' && s.distKm > 0 ? ` · ${fmtDist(s.distKm, units.value)} ${distUnit(units.value)}` : ''}
           {s.trust.steps === 'ok' && s.steps > 0 ? ` · ${fmtInt(s.steps)} steps` : ''}
         </div>
       </div>

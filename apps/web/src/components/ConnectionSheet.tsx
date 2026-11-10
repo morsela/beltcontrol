@@ -15,6 +15,7 @@ import {
 import { live, lastFrameAt } from '../state/telemetry.js';
 import { status, logLines } from '../state/log.js';
 import { toMph } from '../lib/format.js';
+import { units } from '../state/settings.js';
 import { fmtFrameAge } from '../lib/pulse.js';
 
 export function ConnectionSheet({
@@ -83,8 +84,10 @@ export function ConnectionSheet({
         <dt>Speed range</dt>
         <dd>
           {d
-            ? `${toMph(d.minSpeedKmh).toFixed(1)}–${toMph(d.maxSpeedKmh).toFixed(1)} mph ` +
-              `(${d.minSpeedKmh}–${d.maxSpeedKmh} km/h)`
+            ? units.value === 'metric'
+              ? `${d.minSpeedKmh}–${d.maxSpeedKmh} km/h`
+              : `${toMph(d.minSpeedKmh).toFixed(1)}–${toMph(d.maxSpeedKmh).toFixed(1)} mph ` +
+                `(${d.minSpeedKmh}–${d.maxSpeedKmh} km/h)`
             : '—'}
         </dd>
       </dl>

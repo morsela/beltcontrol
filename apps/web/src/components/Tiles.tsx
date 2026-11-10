@@ -1,7 +1,8 @@
 import { driver, connected } from '../state/connection.js';
 import { live, trustFor } from '../state/telemetry.js';
 import { currentSession } from '../state/session.js';
-import { fmtMph, fmtDuration, fmt, fmtMiles, fmtInt, EM_DASH } from '../lib/format.js';
+import { fmtSpeed, fmtDuration, fmt, fmtDist, fmtInt, speedUnit, distUnit, EM_DASH } from '../lib/format.js';
+import { units } from '../state/settings.js';
 
 interface Tile {
   k: string;
@@ -19,11 +20,12 @@ export function Tiles() {
   const t = live.value;
   const session = currentSession.value;
   const trust = d ? trustFor(d.id) : null;
+  const u = units.value;
 
   const tiles: Tile[] = [];
 
   // Live speed: every driver that reports anything reports this.
-  tiles.push({ k: 'mph now', v: connected.value ? fmtMph(t.speedKmh) : EM_DASH });
+  tiles.push({ k: `${speedUnit(u)} now`, v: connected.value ? fmtSpeed(t.speedKmh, u) : EM_DASH });
 
   tiles.push({
     k: 'session',
@@ -36,8 +38,8 @@ export function Tiles() {
     // back. It keeps the pad's own number under a bare "distance".
     const raw = trust.distKm === 'unverified';
     tiles.push({
-      k: raw ? 'distance' : 'mi',
-      v: session ? (raw ? fmt(session.distKm, 2) : fmtMiles(session.distKm)) : EM_DASH,
+      k: raw ? 'distance' : distUnit(u),
+      v: session ? (raw ? fmt(session.distKm, 2) : fmtDist(session.distKm, u)) : EM_DASH,
       unverified: raw,
     });
   } else if (trust && trust.steps !== 'absent') {

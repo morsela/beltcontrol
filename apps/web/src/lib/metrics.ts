@@ -7,19 +7,22 @@
 // not re-guessed per render from whether a value happens to be null right now.
 
 import type { TrustMap } from '../state/telemetry.js';
-import { fmtDuration, fmtMiles, fmtInt, EM_DASH } from './format.js';
+import { fmtDuration, fmtDist, fmtInt, distUnit, EM_DASH, type Units } from './format.js';
 import type { DayTotal } from '../state/session.js';
 
 export type MetricKey = 'time' | 'distance' | 'steps' | 'kcal';
 
 export const METRIC_ORDER: MetricKey[] = ['time', 'distance', 'steps', 'kcal'];
 
-export const METRIC_UNIT: Record<MetricKey, string> = {
+const METRIC_UNIT: Record<Exclude<MetricKey, 'distance'>, string> = {
   time: 'walked today',
-  distance: 'mi today',
   steps: 'steps today',
   kcal: 'kcal today',
 };
+
+/** The caption under the hero figure. Distance is the one whose unit is a choice. */
+export const metricUnit = (key: MetricKey, units: Units): string =>
+  key === 'distance' ? `${distUnit(units)} today` : METRIC_UNIT[key];
 
 /**
  * Time is always available — it is wall-clock, measured here, and needs no
@@ -41,7 +44,7 @@ export function cycleMetric(current: MetricKey, available: MetricKey[]): MetricK
   return available[(i + 1) % available.length] ?? available[0]!;
 }
 
-export function metricValue(key: MetricKey, day: DayTotal): string {
+export function metricValue(key: MetricKey, day: DayTotal, units: Units = 'imperial'): string {
   switch (key) {
     case 'time': {
       const secs = Math.round(day.minutes * 60);
@@ -50,7 +53,7 @@ export function metricValue(key: MetricKey, day: DayTotal): string {
     case 'distance':
       // Day totals only ever accumulate a distance the protocol reports in real
       // units — session.ts leaves unverified ones out — so this is safe to convert.
-      return fmtMiles(day.distKm);
+      return fmtDist(day.distKm, units);
     case 'steps':
       return fmtInt(day.steps);
     case 'kcal':

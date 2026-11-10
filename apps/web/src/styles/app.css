@@ -498,6 +498,10 @@ details.compat b { color: var(--ink); font-weight: 600; }
   letter-spacing: 0.06em;
   color: var(--muted);
 }
+/* The units switch at the foot of the speed card: a text button, centred under the
+   presets it relabels. */
+.units-toggle { display: block; margin: 0.75rem auto 0; }
+
 /* Shown only while the belt is ramping toward the setpoint. */
 .speed-readout .actual { display: block; margin-top: 0.2rem; font-size: var(--t-sm); color: var(--accent); }
 

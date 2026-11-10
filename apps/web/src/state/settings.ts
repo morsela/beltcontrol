@@ -1,6 +1,7 @@
-import { signal, effect } from '@preact/signals';
+import { signal, computed, effect } from '@preact/signals';
 import { HARD_MAX_KMH, HARD_MIN_KMH } from '@beltcontrol/belt-drivers';
 import { isObj } from '../lib/validate.js';
+import { unitsForLocale, type Units } from '../lib/format.js';
 import { STORAGE_KEYS, readJson, writeJson } from '../lib/storage.js';
 
 export interface Settings {
@@ -8,6 +9,12 @@ export interface Settings {
   goalMinutes: number;
   /** Speed preset chips, in mph — desk walkers live at two or three fixed speeds. */
   presetsMph: number[];
+  /** The same three chips for a walker in km/h. A list of its own rather than the mph
+   *  one converted: 1.2 mph is 1.93 km/h, and nobody's desk speed is 1.9. */
+  presetsKmh: number[];
+  /** Whether the screen speaks miles or kilometres. Display only — every speed stored
+   *  here and sent to the belt is km/h either way. */
+  units: Units;
   /** Which metric the hero shows. Persisted so it survives a reload. */
   heroMetric: 'time' | 'distance' | 'steps' | 'kcal';
   /** Last target speed, in km/h. The old app reset this to 2.0 on every load. */
@@ -21,6 +28,8 @@ export interface Settings {
 const DEFAULTS: Settings = {
   goalMinutes: 60,
   presetsMph: [1.2, 2.0, 3.0],
+  presetsKmh: [2.0, 3.0, 5.0],
+  units: 'imperial',
   heroMetric: 'time',
   // 1.0 km/h is 0.6 mph: the speed a walking pad moves off at by itself, and the
   // slowest the app will drive one. Starting anywhere else means the first press of
@@ -59,6 +68,13 @@ export function sanitizeSettings(v: unknown): Partial<Settings> {
     );
     if (presets.length > 0) out.presetsMph = presets;
   }
+  if (Array.isArray(v.presetsKmh)) {
+    const presets = v.presetsKmh.filter(
+      (p): p is number => typeof p === 'number' && Number.isFinite(p) && p > 0
+    );
+    if (presets.length > 0) out.presetsKmh = presets;
+  }
+  if (v.units === 'imperial' || v.units === 'metric') out.units = v.units;
   if (typeof v.heroMetric === 'string' && (HERO_METRICS as readonly string[]).includes(v.heroMetric)) {
     out.heroMetric = v.heroMetric as Settings['heroMetric'];
   }
@@ -82,7 +98,20 @@ function load(): Settings {
   // Nothing stored, unreadable storage and bytes that are not JSON all arrive here as
   // `undefined`, which `sanitizeSettings` answers with an empty patch — so all three
   // land on the defaults without needing to be told apart.
-  return { ...DEFAULTS, ...sanitizeSettings(readJson(STORAGE_KEYS.settings)) };
+  const stored = readJson(STORAGE_KEYS.settings);
+  return {
+    ...DEFAULTS,
+    // Units are the one default that depends on who is asking. A browser with nothing
+    // stored is a first visit and gets what its locale implies; one with settings from
+    // before there was a choice has only ever seen miles, and keeps seeing them until
+    // it is told otherwise.
+    units: stored === undefined ? localeUnits() : DEFAULTS.units,
+    ...sanitizeSettings(stored),
+  };
+}
+
+function localeUnits(): Units {
+  return unitsForLocale(typeof navigator === 'undefined' ? undefined : navigator.language);
 }
 
 export const settings = signal<Settings>(load());
@@ -90,6 +119,9 @@ export const settings = signal<Settings>(load());
 effect(() => {
   writeJson(STORAGE_KEYS.settings, settings.value);
 });
+
+/** The chosen units, for the many places that only want to format a number. */
+export const units = computed(() => settings.value.units);
 
 export function updateSettings(patch: Partial<Settings>) {
   settings.value = { ...settings.value, ...patch };

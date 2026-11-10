@@ -10,6 +10,47 @@ export const toMiles = (km: number) => km / KM_PER_MILE;
 /** 0.2 mph is 0.32 km/h — comfortably inside the 0.5 km/h-per-press safety limit. */
 export const MPH_STEP = 0.2;
 
+/**
+ * Which units the screen speaks. The wire and the store are metric whatever this says.
+ *
+ * The app was miles-only, which made sense where it was written and nowhere the pads
+ * are mostly sold: they are metric machines — their own display, their remote and
+ * every protocol they speak are in km/h — and a walker who sets 4.0 on the handrail
+ * was being shown 2.5.
+ */
+export type Units = 'imperial' | 'metric';
+
+export const speedUnit = (u: Units): string => (u === 'metric' ? 'km/h' : 'mph');
+export const distUnit = (u: Units): string => (u === 'metric' ? 'km' : 'mi');
+export const distNoun = (u: Units): string => (u === 'metric' ? 'kilometres' : 'miles');
+
+/** A speed in the chosen unit, from the km/h everything is stored in — and back. */
+export const toSpeed = (kmh: number, u: Units): number => (u === 'metric' ? kmh : toMph(kmh));
+export const fromSpeed = (v: number, u: Units): number => (u === 'metric' ? v : toKmh(v));
+export const toDist = (km: number, u: Units): number => (u === 'metric' ? km : toMiles(km));
+
+/** 0.5 km/h is the step the pads' own remotes take, and exactly the per-press limit. */
+export const KMH_STEP = 0.5;
+/** One press of a stepper, in the chosen unit. */
+export const speedStep = (u: Units): number => (u === 'metric' ? KMH_STEP : MPH_STEP);
+
+/**
+ * The units a browser's locale implies, for a first visit with nothing stored.
+ *
+ * Miles for the United States and the United Kingdom — which measures roads and walks
+ * in miles whatever else it has metricated — and for Liberia and Myanmar; kilometres
+ * for everybody else. A locale with no region in it is asked for its likeliest one, so
+ * a bare `en` reads as American and a bare `de` as German.
+ */
+export function unitsForLocale(locale: string | undefined): Units {
+  try {
+    const region = new Intl.Locale(locale ?? '').maximize().region;
+    return region != null && ['US', 'GB', 'LR', 'MM'].includes(region) ? 'imperial' : 'metric';
+  } catch {
+    return 'imperial'; // no usable locale: what the app has always shown
+  }
+}
+
 export const EM_DASH = '—';
 
 const pad2 = (n: number) => String(Math.floor(n)).padStart(2, '0');
@@ -68,6 +109,15 @@ export const fmtInt = (v: number | null | undefined): string =>
 
 export const fmtMph = (kmh: number | null | undefined): string =>
   kmh == null ? EM_DASH : toMph(kmh).toFixed(1);
+
+/** A speed for display in the chosen unit, to the 0.1 the wire resolves. */
+export const fmtSpeed = (kmh: number | null | undefined, u: Units): string =>
+  kmh == null ? EM_DASH : toSpeed(kmh, u).toFixed(1);
+
+/** A distance for display in the chosen unit. The same caveat as `fmtMiles` below:
+ *  only for a distance the protocol reports in real units. */
+export const fmtDist = (km: number | null | undefined, u: Units, digits = 2): string =>
+  km == null ? EM_DASH : toDist(km, u).toFixed(digits);
 
 /**
  * Distance for display, in miles. The same split fmtMph makes for speed: distance
