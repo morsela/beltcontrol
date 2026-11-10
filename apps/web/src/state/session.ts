@@ -226,8 +226,45 @@ function loadSessions(): Session[] {
   }
 }
 
+/** How many of the newest stored walks keep their speed samples when storage runs out. */
+const SAMPLES_KEPT_WHEN_FULL = 30;
+
+/**
+ * True while the history in this tab is not the history in storage — a write was
+ * refused and the lean retry behind it was too. The shell says so on every screen,
+ * because the alternative is what used to happen: walks kept being "recorded", every
+ * one of them gone at the next reload, and nothing anywhere said a word.
+ */
+export const historyUnsaved = signal(false);
+
+/**
+ * Write the history, giving up speed samples before giving up walks.
+ *
+ * The whole history is one localStorage value and the origin gets about five megabytes.
+ * Samples are most of every record — up to 720 of them against a dozen scalar fields —
+ * and nothing reads a stored walk's samples back except a backup: the speed chart only
+ * ever draws the walk in progress. So when the full write is refused, the same history
+ * is written again with samples kept on the newest walks only, which is several times
+ * smaller. The copy in memory keeps everything, so a backup exported from this tab is
+ * still complete.
+ *
+ * Only if that is refused too is the history really not being saved.
+ */
 function persistSessions() {
-  writeJson(STORAGE_KEYS.sessions, sessions.value);
+  const all = sessions.value;
+  if (writeJson(STORAGE_KEYS.sessions, all)) {
+    historyUnsaved.value = false;
+    return;
+  }
+  const keepFrom = all.length - SAMPLES_KEPT_WHEN_FULL;
+  const lean = all.map((s, i) => (i < keepFrom && s.samples.length > 0 ? { ...s, samples: [] } : s));
+  if (writeJson(STORAGE_KEYS.sessions, lean)) {
+    historyUnsaved.value = false;
+    log('storage is nearly full — older walks were saved without their speed samples', 'err');
+    return;
+  }
+  historyUnsaved.value = true;
+  log('history could not be saved — browser storage is full or blocked', 'err');
 }
 
 function persistOpen() {
