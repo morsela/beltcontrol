@@ -198,8 +198,9 @@ describe('ks1234Driver', () => {
       await expect(d.startVerdict!()).resolves.toBe('accepted');
     });
 
-    // Real timers, and so a genuinely slow test: the driver paces its own writes with
-    // sleeps, and faking the clock deadlocks `attach` before the pad can say anything.
+    // Real timers — shortened by test/setup.ts, not faked: the driver paces its own
+    // writes with sleeps, and faking the clock deadlocks `attach` before the pad can
+    // say anything.
     it('says nothing either way when the pad says nothing', async () => {
       const { d } = await started();
       // Not 'accepted': silence is not consent. The caller falls back to waiting for the

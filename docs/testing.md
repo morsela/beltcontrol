@@ -92,6 +92,10 @@ reachable, and the attach/handshake/ack paths — where the real bugs live — w
   applies that scale; they cannot vouch for the derivation, which rests on the pad's own
   reported speed as ground truth. An odometer disagreeing with the app would settle it.
 
-The `0x1234` driver tests take ~10 s of the run: the driver sleeps between fragments to match
-the pad's tolerance, and the handshake is nine messages. That delay is real protocol
-behaviour, so it is left in rather than mocked away.
+The drivers pace their own writes with real sleeps — the `0x1234` one between fragments, to
+match the pad's tolerance, across a handshake of nine messages — and the suite used to wait
+every one of them out, about a minute in all. Faking the clock deadlocks `attach`, so
+`packages/belt-drivers/test/setup.ts` shortens the delays instead: every timer runs twenty
+times fast. They still fire, asynchronously and in the same relative order, which is all the
+tests assert; the suite takes a few seconds. The delays themselves are real protocol
+behaviour and are untouched in the driver.
