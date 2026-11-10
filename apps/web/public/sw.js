@@ -18,9 +18,31 @@
 const VERSION = 'wp-__BUILD_ID__';
 const SHELL = ['/', '/manifest.json', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
+// The build's own scripts, styles and fonts, written in by the same plugin that stamps
+// VERSION. Empty in a dev build, where the placeholder comment is all there is.
+//
+// Without this the first visit cached a page and nothing the page needs. A worker does
+// not control the page that registered it until the next load, so the bundle that visit
+// fetched never passed through the handler below, and `/` was the only thing in the
+// cache: launched offline before a second online visit, the app was its own static
+// intro with no script behind it. Which is the visit an installed PWA is most likely
+// to make.
+const PRECACHE = /*__PRECACHE__*/ [];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches
+      .open(VERSION)
+      .then((c) =>
+        c.addAll(SHELL).then(() =>
+          // One at a time and allowed to fail, where SHELL is all-or-nothing: a font
+          // that will not fetch must not take the install down with it, and anything
+          // missed here is still picked up by the fetch handler the next time it is
+          // asked for.
+          Promise.all(PRECACHE.map((url) => c.add(url).catch(() => {})))
+        )
+      )
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -61,8 +83,13 @@ self.addEventListener('fetch', (event) => {
   // version so a hit can be served without revalidating, and a file that fails to
   // fetch must not take the whole install down with it the way an addAll would.
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/fonts/')) {
+    // `ignoreVary`, because a name with a content hash in it identifies its bytes by
+    // itself. A host that answers `Vary: Origin` otherwise makes the copy fetched at
+    // install — by the worker, with no Origin — a miss for the page's own
+    // `crossorigin` request for the very same file, which is a cache that is full and
+    // an app that will not start offline.
     event.respondWith(
-      caches.match(req).then(
+      caches.match(req, { ignoreVary: true }).then(
         (hit) =>
           hit ??
           fetch(req).then((res) => {
