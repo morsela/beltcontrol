@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isDesktopWidth, DESKTOP_MIN_PX, DESKTOP_QUERY } from '../src/lib/viewport.js';
+import {
+  isDesktopWidth,
+  isTabletWidth,
+  DESKTOP_MIN_PX,
+  DESKTOP_QUERY,
+  TABLET_MIN_PX,
+} from '../src/lib/viewport.js';
 
 describe('isDesktopWidth', () => {
   it('puts phones and narrow side-by-side windows on the mobile layout', () => {
@@ -19,5 +25,22 @@ describe('isDesktopWidth', () => {
     // mode. app.css names this file above its @media block for the same reason.
     expect(DESKTOP_QUERY).toBe('(min-width: 64rem)');
     expect(DESKTOP_MIN_PX).toBe(1024);
+  });
+});
+
+describe('isTabletWidth', () => {
+  it('is the band between the phone column and the two-pane desktop', () => {
+    expect(isTabletWidth(390)).toBe(false);
+    expect(isTabletWidth(TABLET_MIN_PX - 1)).toBe(false);
+    expect(isTabletWidth(TABLET_MIN_PX)).toBe(true);
+    expect(isTabletWidth(820)).toBe(true); // iPad portrait
+    expect(isTabletWidth(DESKTOP_MIN_PX - 1)).toBe(true);
+  });
+
+  it('hands over to desktop at exactly the desktop breakpoint, with no overlap', () => {
+    // A width that is both would draw desktop charts in the one-column layout.
+    expect(isTabletWidth(DESKTOP_MIN_PX)).toBe(false);
+    expect(isDesktopWidth(DESKTOP_MIN_PX)).toBe(true);
+    expect(TABLET_MIN_PX).toBe(768); // 48rem, the query in app.css
   });
 });

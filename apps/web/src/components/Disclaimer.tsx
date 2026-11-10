@@ -33,17 +33,18 @@ import { WelcomeLink } from './WelcomeSheet.js';
 export function Disclaimer() {
   return (
     <footer class="disclaimer">
+      {/* Cut to what has to be under every screen. It ran to nine lines on a phone, on
+          all three tabs, and a block that long is one people learn to stop reading —
+          which defeats the only reason it is here. The warranty wording and the full
+          trademark statement are on the legal page, one tap away on the row below. */}
       <p>
         <strong>Belt Control runs a motorised treadmill.</strong> Only start it when you can see
-        the belt, and don't count on this app to stop it — use the treadmill's own controls or
-        safety key, because a Bluetooth connection can drop while the belt keeps running. No
-        warranty; you use it at your own risk.
+        the belt, and keep the treadmill&rsquo;s own stop or safety key within reach: Bluetooth
+        can drop while the belt keeps running.
       </p>
       <p>
-        Belt Control is an independent project. It is not affiliated with, endorsed by, or
-        sponsored by Beijing KingSmith Technology Co., Ltd. WalkingPad<sup>®</sup> and
-        KingSmith<sup>®</sup> are trademarks of that company, mentioned here only to say which
-        treadmills this app works with.
+        An independent project, not affiliated with or endorsed by Beijing KingSmith Technology
+        Co., Ltd. WalkingPad<sup>®</sup> and KingSmith<sup>®</sup> are its trademarks.
       </p>
       <p class="disclaimer-links">
         <WelcomeLink />

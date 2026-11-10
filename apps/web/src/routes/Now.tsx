@@ -6,6 +6,7 @@ import { SpeedControl } from '../components/SpeedControl.js';
 import { ConnectionSheet } from '../components/ConnectionSheet.js';
 import { ConnectPanel } from '../components/ConnectPanel.js';
 import { FeedbackSheet } from '../components/FeedbackSheet.js';
+import { SettingsSheet } from '../components/SettingsSheet.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { StatusChip } from '../components/StatusChip.js';
 import { TreadStrip } from '../components/TreadStrip.js';
@@ -32,6 +33,7 @@ import { fmtSpeed, speedUnit } from '../lib/format.js';
 export function Now({ onAmbient }: { onAmbient: () => void }) {
   const [sheet, setSheet] = useState(false);
   const [feedback, setFeedback] = useState(false);
+  const [prefs, setPrefs] = useState(false);
   // Which kind of "the belt is about to move" is waiting on a yes, if any. Resuming is
   // confirmed exactly like starting: it may not be the person who paused it standing on
   // the belt now.
@@ -72,6 +74,31 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
     </div>
   );
 
+  // Only a card when there is something to put in it.
+  const startCard = canStart && (
+    <div class="card">
+      {paused.value ? (
+        <>
+          <button class="btn primary block lg" onClick={() => setConfirming('resume')}>
+            Resume at {fmtSpeed(settings.value.targetKmh, settings.value.units)}{' '}
+            {speedUnit(settings.value.units)}
+          </button>
+          <button class="btn ghost block" style="margin-top:.5rem" onClick={endWalk}>
+            End walk
+          </button>
+          <p class="hint">
+            Paused. The belt has stopped, and your walk stays open for 15 minutes,
+            so resuming in that time keeps it as one session, not two.
+          </p>
+        </>
+      ) : (
+        <button class="btn primary block lg" onClick={() => setConfirming('start')}>
+          Start
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Only on a phone. On desktop this route is the rail, and the top bar above it
@@ -79,17 +106,46 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           not branding, it is a duplicate. */}
       {!rail && <Brand class="page-brand" />}
 
+      {/* The phone screen had no heading at all: the brand is deliberately not one, and
+          Today and History each open with theirs. Named for assistive tech only — the
+          tab bar already tells a sighted reader which screen this is. */}
+      {!rail && <h1 class="sr-only">Now</h1>}
+
       <div class="topbar">
         <StatusChip onOpen={() => setSheet(true)} />
-        {/* Ambient mode used to be reachable only by holding the hero number, which
-            is no gesture at all on a keyboard — and the hint that it exists is
-            hidden on protocols with a single metric. A button is both. */}
-        {connected.value && (
-          <button class="btn ghost topbar-btn" onClick={onAmbient}>
-            Ambient
+        <div class="topbar-actions">
+          {/* Ambient mode used to be reachable only by holding the hero number, which
+              is no gesture at all on a keyboard — and the hint that it exists is
+              hidden on protocols with a single metric. A button is both. */}
+          {connected.value && (
+            <button class="btn ghost topbar-btn" onClick={onAmbient}>
+              Ambient
+            </button>
+          )}
+          {/* Always here, connected or not: units and the goal are things somebody
+              sizing the app up wants to set before there is a pad to set them for. */}
+          <button
+            class="btn ghost icon-btn"
+            onClick={() => setPrefs(true)}
+            aria-label="Settings"
+            title="Settings"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+              <circle cx="16" cy="7" r="2" />
+              <circle cx="8" cy="17" r="2" />
+            </svg>
           </button>
-        )}
+        </div>
       </div>
+
+      {/* On a phone, Start leads while the belt is at rest. It is the one thing a
+          connected, idle screen is for, and under the numbers and the speed card it sat
+          a full screen down on a small phone — connect, then scroll to find out how to
+          begin. Once the belt moves the card is gone and the numbers lead, which is
+          the glance-from-the-belt layout. The rail keeps it under the speed it starts
+          at: everything there is on screen at once. */}
+      {connected.value && !rail && startCard}
 
       {connected.value && numbers}
 
@@ -98,33 +154,12 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
           {/* The strip follows the speed it reports. In the rail that is the top of the
               speed card, which is the only card left for it to lead; on a phone it stays
               over the hero, where it is the deck the number sits on. */}
-          <SpeedControl lead={rail ? <TreadStrip variant="lead" /> : undefined} />
+          <SpeedControl
+            lead={rail ? <TreadStrip variant="lead" /> : undefined}
+            onSettings={() => setPrefs(true)}
+          />
 
-          {/* Only wrap in a card when there is something to put in it — with no
-              Start button, a panel holding one collapsed disclosure is just noise. */}
-          {canStart && (
-            <div class="card">
-              {paused.value ? (
-                <>
-                  <button class="btn primary block lg" onClick={() => setConfirming('resume')}>
-                    Resume at {fmtSpeed(settings.value.targetKmh, settings.value.units)}{' '}
-                    {speedUnit(settings.value.units)}
-                  </button>
-                  <button class="btn ghost block" style="margin-top:.5rem" onClick={endWalk}>
-                    End walk
-                  </button>
-                  <p class="hint">
-                    Paused. The belt has stopped, and your walk stays open for 15 minutes,
-                    so resuming in that time keeps it as one session, not two.
-                  </p>
-                </>
-              ) : (
-                <button class="btn primary block lg" onClick={() => setConfirming('start')}>
-                  Start
-                </button>
-              )}
-            </div>
-          )}
+          {rail && startCard}
 
           {/* Behind a disclosure, and outside any card. Mode is the pad's own operating
               switch, not a walking control — it was carrying the same weight as the
@@ -220,6 +255,8 @@ export function Now({ onAmbient }: { onAmbient: () => void }) {
       )}
 
       {feedback && <FeedbackSheet onClose={() => setFeedback(false)} />}
+
+      {prefs && <SettingsSheet onClose={() => setPrefs(false)} />}
     </>
   );
 }

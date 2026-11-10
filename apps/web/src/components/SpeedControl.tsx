@@ -1,3 +1,4 @@
+import { PRESET_LABELS } from './SettingsSheet.js';
 import type { ComponentChildren } from 'preact';
 import { driver, connected, nudgeSpeed, setTarget, running } from '../state/connection.js';
 import { settings, updateSettings } from '../state/settings.js';
@@ -6,7 +7,6 @@ import { live, isMoving } from '../state/telemetry.js';
 import { isDesktop } from '../lib/viewport.js';
 import { toSpeed, fromSpeed, fmtSpeed, speedUnit, distNoun } from '../lib/format.js';
 
-const PRESET_LABELS = ['slow', 'desk', 'brisk'];
 
 /**
  * The tactile centre of the screen.
@@ -25,7 +25,14 @@ const PRESET_LABELS = ['slow', 'desk', 'brisk'];
  * up there — the strip belongs above the speed it is a readout of, not floating in a
  * card of its own.
  */
-export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
+export function SpeedControl({
+  lead,
+  onSettings,
+}: {
+  lead?: ComponentChildren;
+  /** Opens the settings sheet, which is where the three presets are edited. */
+  onSettings?: () => void;
+}) {
   const d = driver.value;
   const canSpeed = connected.value && (d?.capabilities.speed ?? false);
   const target = settings.value.targetKmh;
@@ -87,7 +94,7 @@ export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
           return (
             <button
               class="preset"
-              key={speed}
+              key={i}
               aria-pressed={isActive}
               disabled={!canSpeed}
               onClick={() => void setTarget(fromSpeed(speed, u))}
@@ -101,15 +108,24 @@ export function SpeedControl({ lead }: { lead?: ComponentChildren }) {
 
       {/* Never disabled: it changes what the screen says, not what the belt does, and
           somebody deciding whether this app is for them wants it before they connect. */}
-      <button
-        class="table-toggle units-toggle"
-        onClick={() => {
-          updateSettings({ units: other });
-          trackEvent('units_changed', { units: other });
-        }}
-      >
-        Switch to {speedUnit(other)} and {distNoun(other)}
-      </button>
+      <div class="speed-links">
+        <button
+          class="table-toggle"
+          onClick={() => {
+            updateSettings({ units: other });
+            trackEvent('units_changed', { units: other });
+          }}
+        >
+          Switch to {speedUnit(other)} and {distNoun(other)}
+        </button>
+        {/* The chips above were fixed at 1.2, 2.0 and 3.0 with no way to change them
+            from the app. The link sits under the thing it edits. */}
+        {onSettings && (
+          <button class="table-toggle" onClick={onSettings}>
+            Edit presets
+          </button>
+        )}
+      </div>
     </div>
   );
 }

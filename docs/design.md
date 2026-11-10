@@ -264,6 +264,32 @@ moment Escape has somewhere better to be.
   carries. It is also why the phone layout is left alone: `Now` and `Today` are separate
   screens down there, so a number on each is not a repetition, it is the only copy on the
   screen you are looking at.
+- **Start leads an idle phone screen.** Connected and at rest, the Start card sits
+  directly under the status chip, above the numbers. It used to follow the hero card and
+  the speed card, which put the one action the screen exists for a full scroll down on a
+  small phone. Once the belt moves the card is gone and the numbers lead again. The rail
+  is unchanged: everything in it is on screen at once, so Start stays under the speed it
+  starts at.
+- **Settings have one home, and the shortcuts stay.** Units, the daily goal, the hero
+  metric and the three speed presets are all in `SettingsSheet`, behind the button at the
+  end of the top bar. The in-place shortcuts — the units link under the presets, "edit
+  goal" beside the meter, tapping the hero — still work; the sheet is for when you do not
+  already know where one lives. It is also the only place the presets can be changed,
+  which before it meant editing a backup file by hand.
+- **Disconnecting from a moving belt asks first.** Dropping the link leaves the belt as
+  it is, and afterwards nothing on the page can stop it. The connection sheet asks in
+  place — stop then disconnect, disconnect anyway, or stay — rather than in a second
+  dialog stacked on the first.
+- **Escape that closes a dialog stops there.** `Sheet` stops the event, so the
+  document-level handler that stops the belt never sees it. The `openDialogs` guard alone
+  did not hold: closing re-renders in a microtask between the two listeners, so the
+  dialog had already counted itself out by the time the press reached the document.
+- **Charts carry a scale.** Both charts label their y-axis in round steps and the
+  heatmap names its months and weekdays. A tap selects a bar or a day and writes its
+  figures out, because a hover tooltip is not something a phone has.
+- **A tablet is not a wide phone.** Between 48rem and the 64rem desktop breakpoint the
+  single column widens to 44rem and dialogs centre. `isTablet` in `src/lib/viewport.ts`
+  exists only so the charts are drawn into a viewBox that matches.
 - **Mode is behind a disclosure.** `Auto / Manual / Standby` is the pad's own operating
   switch, set once if ever, and it was carrying the same visual weight as the speed
   presets, which are pressed several times a walk. It is closed by default and its summary

@@ -66,8 +66,13 @@ export function Sheet({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // The global Esc handler checks openDialogs and stands down, so this does
-        // not also stop the belt.
+        // Stopped here, so the document-level handler that stops the belt never sees
+        // this press. Its `openDialogs` check was meant to cover it and did not: the
+        // close below re-renders in a microtask, which runs between this listener and
+        // that one, so by the time the event reached the document the dialog had
+        // already unmounted and counted itself out — and every Esc that dismissed a
+        // sheet also halted the walk. The check stays as the second line of defence.
+        e.stopPropagation();
         close.current();
         return;
       }

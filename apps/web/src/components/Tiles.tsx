@@ -38,13 +38,15 @@ export function Tiles() {
     // back. It keeps the pad's own number under a bare "distance".
     const raw = trust.distKm === 'unverified';
     tiles.push({
-      k: raw ? 'distance' : distUnit(u),
+      // "session", because the hero above may be showing the day's distance and a bare
+      // unit under a different number does not say which of the two this one is.
+      k: raw ? 'distance' : `session ${distUnit(u)}`,
       v: session ? (raw ? fmt(session.distKm, 2) : fmtDist(session.distKm, u)) : EM_DASH,
       unverified: raw,
     });
   } else if (trust && trust.steps !== 'absent') {
     tiles.push({
-      k: 'steps',
+      k: 'session steps',
       v: session ? fmtInt(session.steps) : EM_DASH,
       unverified: trust.steps === 'unverified',
     });

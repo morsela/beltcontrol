@@ -6,7 +6,7 @@ import { exportJson, importBackup, BackupError } from '../state/backup.js';
 import { settings } from '../state/settings.js';
 import { ColumnChart } from '../charts/Column.js';
 import { Heatmap } from '../charts/Heatmap.js';
-import { isDesktop } from '../lib/viewport.js';
+import { isDesktop, isTablet } from '../lib/viewport.js';
 import { fmtDuration, fmtDist, fmtDayLabel, distUnit, distNoun, EM_DASH } from '../lib/format.js';
 import { download, stamped } from '../lib/download.js';
 import { log } from '../state/log.js';
@@ -47,26 +47,31 @@ function DataCard() {
   return (
     <div class="card">
       <div class="data-actions">
-        <button
-          class="btn"
-          disabled={n === 0}
-          onClick={() => {
-            download(stamped('backup', 'json'), exportJson(), 'application/json');
-            trackEvent('data_exported', { format: 'backup' });
-          }}
-        >
-          Export backup
-        </button>
-        <button
-          class="btn"
-          disabled={n === 0}
-          onClick={() => {
-            download(stamped('sessions', 'csv'), exportCsv(), 'text/csv');
-            trackEvent('data_exported', { format: 'csv' });
-          }}
-        >
-          Export CSV
-        </button>
+        {/* Not rendered rather than disabled while there is nothing to export: two
+            greyed-out buttons were the first thing on a new browser's History screen,
+            and a control that cannot work should not be on screen looking broken. */}
+        {n > 0 && (
+          <>
+            <button
+              class="btn"
+              onClick={() => {
+                download(stamped('backup', 'json'), exportJson(), 'application/json');
+                trackEvent('data_exported', { format: 'backup' });
+              }}
+            >
+              Export backup
+            </button>
+            <button
+              class="btn"
+              onClick={() => {
+                download(stamped('sessions', 'csv'), exportCsv(), 'text/csv');
+                trackEvent('data_exported', { format: 'csv' });
+              }}
+            >
+              Export CSV
+            </button>
+          </>
+        )}
         <button class="btn" onClick={() => file.current?.click()}>
           Import backup
         </button>
@@ -77,12 +82,20 @@ function DataCard() {
           {msg.text}
         </p>
       )}
-      <p class="note" style="margin-top:.6rem">
-        {n} session{n === 1 ? '' : 's'} saved in this browser, and nothing is ever
-        uploaded. A backup holds everything: every session, its speed samples and your
-        settings. Importing one adds to what&rsquo;s already here instead of replacing it.
-        The CSV is a simple summary for spreadsheets and can&rsquo;t be imported back.
-      </p>
+      {n === 0 ? (
+        <p class="note" style="margin-top:.6rem">
+          Walked with Belt Control in another browser? Import a backup from it and your
+          history carries over. Everything stays in this browser, and nothing is ever
+          uploaded.
+        </p>
+      ) : (
+        <p class="note" style="margin-top:.6rem">
+          {n} session{n === 1 ? '' : 's'} saved in this browser, and nothing is ever
+          uploaded. A backup holds everything: every session, its speed samples and your
+          settings. Importing one adds to what&rsquo;s already here instead of replacing it.
+          The CSV is a simple summary for spreadsheets and can&rsquo;t be imported back.
+        </p>
+      )}
     </div>
   );
 }
@@ -145,7 +158,7 @@ export function History() {
   // Whole weeks, so the heatmap grid is full columns. Twice as many of them on
   // desktop: the column is twice as wide, and filling it with more history beats
   // filling it with bigger squares.
-  const heatDays = dailySeries(desktop ? 182 : 98);
+  const heatDays = dailySeries(desktop || isTablet.value ? 182 : 98);
   const days = streak(goal);
 
   const totalMin = last30.reduce((a, d) => a + d.minutes, 0);
@@ -198,8 +211,8 @@ export function History() {
         <ColumnChart
           data={last30}
           goalMinutes={goal}
-          width={desktop ? 720 : 320}
-          height={desktop ? 180 : 140}
+          width={desktop || isTablet.value ? 720 : 320}
+          height={desktop || isTablet.value ? 200 : 150}
         />
         <p class="note" style="margin-top:.5rem">
           The dashed line is your {goal}-minute goal. Filled bars are days you hit it.

@@ -2,9 +2,8 @@ import { useRef } from 'preact/hooks';
 import { settings, updateSettings } from '../state/settings.js';
 import { driver } from '../state/connection.js';
 import { trustFor } from '../state/telemetry.js';
-import { todayTotals, currentSession } from '../state/session.js';
+import { todayTotals } from '../state/session.js';
 import { availableMetrics, cycleMetric, metricValue, metricUnit } from '../lib/metrics.js';
-import { fmtDuration, fmtDist, distUnit } from '../lib/format.js';
 import { trackEvent } from '../lib/analytics.js';
 
 /**
@@ -19,7 +18,6 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
   const available = availableMetrics(trust);
   const key = available.includes(settings.value.heroMetric) ? settings.value.heroMetric : 'time';
   const day = todayTotals.value;
-  const session = currentSession.value;
   const u = settings.value.units;
 
   // Held in a ref, not a local: this component re-renders every second while a
@@ -64,16 +62,13 @@ export function Hero({ onLongPress }: { onLongPress?: () => void }) {
       >
         <span class="value tnum">{metricValue(key, day, u)}</span>
         <span class="unit">{metricUnit(key, u)}</span>
-        {session && (
-          <span class="sub tnum">
-            This session {fmtDuration(Math.round(session.activeMs / 1000))}
-            {session.trust.distKm === 'ok' && session.distKm > 0
-              ? ` · ${fmtDist(session.distKm, u)} ${distUnit(u)}`
-              : ''}
-          </span>
-        )}
+        {/* No "this session" line under it any more. The tiles a few lines down state
+            the session's time and distance, and this said both again 150px above them. */}
       </button>
-      {available.length > 1 && <p class="hero-hint">tap to change · hold for ambient mode</p>}
+      {/* Says what the number is as well as that it changes. Ambient mode has a button
+          of its own in the top bar now, so the long press is a shortcut and not the
+          thing a 11px line has to teach. */}
+      {available.length > 1 && <p class="hero-hint">Tap the number to show something else</p>}
     </>
   );
 }

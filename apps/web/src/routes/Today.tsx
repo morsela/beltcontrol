@@ -13,7 +13,7 @@ import { GoalMeter } from '../components/GoalMeter.js';
 import { FunFact } from '../components/FunFact.js';
 import { StickerSheet } from '../components/StickerSheet.js';
 import { NewSticker } from '../components/NewSticker.js';
-import { isDesktop } from '../lib/viewport.js';
+import { isDesktop, isTablet } from '../lib/viewport.js';
 import { dayKey, fmtDuration, fmtDist, fmtInt, fmtClock, speedUnit, distUnit, EM_DASH } from '../lib/format.js';
 import { units } from '../state/settings.js';
 import { trackEvent } from '../lib/analytics.js';
@@ -62,9 +62,15 @@ export function Today() {
             </span>
           )}
 
-          <p class="lead-hand">Today you walked</p>
+          {/* A day with nothing in it says so, in words. It used to lead with "0s" at hero
+              size over two em dashes, which reads as a display that failed to load. */}
+          <p class="lead-hand">{list.length === 0 ? 'Nothing yet today' : 'Today you walked'}</p>
 
-          {dayLead ? (
+          {list.length === 0 ? (
+            <p class="note" style="margin:.35rem 0 0">
+              Your minutes, distance and steps show up here once the belt moves.
+            </p>
+          ) : dayLead ? (
             <div class="day-lead">
               <div class="day-primary">
                 <span class="v tnum">{fmtDuration(Math.round(day.minutes * 60))}</span>
@@ -101,8 +107,6 @@ export function Today() {
               is the register every session is entered in, open one included. A third
               statement of the same minutes is the habit this layout exists to break. */}
 
-          {list.length === 0 && <p class="note" style="margin-top:.9rem">No walks yet today.</p>}
-
           {day.excluded > 0 && (
             <p class="note" style="margin-top:.9rem">
               {day.excluded} session{day.excluded === 1 ? ' is' : 's are'} left out of the
@@ -122,6 +126,9 @@ export function Today() {
         <div class="card">
           <p class="section-title" style="margin-top:0">Stickers</p>
           <StickerSheet />
+          {/* With the sheet it was earned on, not under the session list two cards
+              away, where it read as a note about the walks. */}
+          <NewSticker />
         </div>
 
         <div class="card">
@@ -129,8 +136,8 @@ export function Today() {
           {open && open.samples.length >= 2 ? (
             <AreaChart
               samples={open.samples}
-              width={isDesktop.value ? 340 : 320}
-              height={isDesktop.value ? 150 : 120}
+              width={isTablet.value ? 640 : isDesktop.value ? 340 : 320}
+              height={isTablet.value ? 180 : isDesktop.value ? 190 : 130}
             />
           ) : (
             <p class="empty">Nothing here yet. The chart fills in as the belt moves.</p>
@@ -151,7 +158,6 @@ export function Today() {
               />
             ))
           )}
-          <NewSticker />
         </div>
       </div>
 
@@ -187,6 +193,15 @@ function SessionRow({
   live: boolean;
   onDelete: () => void;
 }) {
+  const figures = [
+    s.trust.distKm === 'ok' && s.distKm > 0
+      ? `${fmtDist(s.distKm, units.value)} ${distUnit(units.value)}`
+      : '',
+    s.trust.steps === 'ok' && s.steps > 0 ? `${fmtInt(s.steps)} steps` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div class="session-item">
       <div>
@@ -195,16 +210,16 @@ function SessionRow({
           {live && <span style="color:var(--accent);font-weight:400"> · in progress</span>}
         </div>
         <div class="when tnum">
-          {fmtClock(s.startedAt)}
-          {s.endedAt ? ` – ${fmtClock(s.endedAt)}` : ''}
-          {s.trust.distKm === 'ok' && s.distKm > 0 ? ` · ${fmtDist(s.distKm, units.value)} ${distUnit(units.value)}` : ''}
-          {s.trust.steps === 'ok' && s.steps > 0 ? ` · ${fmtInt(s.steps)} steps` : ''}
+          <span>
+            {fmtClock(s.startedAt)}
+            {s.endedAt ? ` – ${fmtClock(s.endedAt)}` : ''}
+          </span>
+          {figures && <span>{figures}</span>}
         </div>
       </div>
       {!live && (
         <button
-          class="btn ghost"
-          style="min-height:36px;padding:.3rem .6rem"
+          class="btn ghost session-del"
           onClick={onDelete}
           aria-label={`Delete session from ${fmtClock(s.startedAt)}`}
         >

@@ -54,7 +54,9 @@
   --panel-2: #efebe0;
   --line: #ddd7c9;
   --ink: #2b2a27;
-  --muted: #6f6b62;
+  /* #6f6b62 measured 4.45:1 on --panel-2, a hair under AA for the 11-12px labels that
+     sit on tiles and preset chips. This is 4.87:1 there and 5.7:1 on a card. */
+  --muted: #69655c;
   --faint: #9a958a;
 
   /* The outline that makes a card read as a sticker rather than a panel. It is
@@ -256,7 +258,9 @@
 
     /* Dark steps are solved against the dark surface, not flipped: monotone,
        ΔL ≥ 0.09, lightest step 2.04:1 against the card, same 155° hue. */
-    --seq-empty: #262218;
+    /* The empty step was 1.03:1 against the card, so a mostly-empty grid read as a
+       clump of green in one corner rather than a calendar with days missing. */
+    --seq-empty: #2f2a1f;
     --seq-1: #285a3c;
     --seq-2: #427454;
     --seq-3: #5c8f6e;

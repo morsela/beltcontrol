@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { Sample } from '../state/session.js';
-import { fmtSpeed, speedUnit } from '../lib/format.js';
+import { fmtSpeed, speedUnit, toSpeed, fromSpeed } from '../lib/format.js';
 import { units } from '../state/settings.js';
 
 /**
@@ -26,25 +26,35 @@ export function AreaChart({
   const W = width;
   const H = height;
   const padB = 16;
-  const padT = 6;
+  const padT = 8;
+  // Room for the scale on the left — see the note in ColumnChart.
+  const padL = 24;
   const plot = H - padB - padT;
 
-  // Scaled in km/h whatever is shown: the shape of the trace is the same in any unit,
-  // and only the tooltip and the label have a unit to state.
-  const maxKmh = Math.max(...samples.map((s) => s.kmh), 1.6);
+  // Scaled in km/h whatever is shown: the shape of the trace is the same in any unit.
+  // The scale beside it is in the unit on screen, so its top is a whole number of
+  // *those* — whole mph or whole km/h — converted back to place it.
+  const u = units.value;
+  const peakShown = toSpeed(Math.max(...samples.map((s) => s.kmh), 1.6), u);
+  const topShown = Math.max(1, Math.ceil(peakShown));
+  const maxKmh = fromSpeed(topShown, u);
+  const tickStep = topShown > 4 ? 2 : 1;
+  const ticks: number[] = [];
+  for (let v = tickStep; v <= topShown; v += tickStep) ticks.push(v);
   const tMax = samples[samples.length - 1]!.t || 1;
 
-  const x = (t: number) => (t / tMax) * W;
+  const x = (t: number) => padL + (t / tMax) * (W - padL);
   const y = (kmh: number) => padT + plot - (kmh / maxKmh) * plot;
 
   const line = samples.map((s) => `${x(s.t).toFixed(1)},${y(s.kmh).toFixed(1)}`).join(' L');
-  const area = `M0,${padT + plot} L${line} L${W},${padT + plot} Z`;
+  const area = `M${padL},${padT + plot} L${line} L${W},${padT + plot} Z`;
 
   const hoverSample = hover != null ? samples[hover] : null;
 
   const pick = (e: PointerEvent) => {
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-    const rel = ((e.clientX - rect.left) / rect.width) * tMax;
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    const rel = ((px - padL) / (W - padL)) * tMax;
     let best = 0;
     let bestD = Infinity;
     samples.forEach((s, i) => {
@@ -65,6 +75,7 @@ export function AreaChart({
         role="img"
         aria-label={`Speed over the course of this session, in ${speedUnit(units.value)}`}
         onPointerMove={pick}
+        onPointerDown={pick}
         onPointerLeave={() => setHover(null)}
       >
         <defs>
@@ -73,6 +84,15 @@ export function AreaChart({
             <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02" />
           </linearGradient>
         </defs>
+
+        {ticks.map((v) => (
+          <g key={v}>
+            <line class="grid" x1={padL} x2={W} y1={y(fromSpeed(v, u))} y2={y(fromSpeed(v, u))} />
+            <text class="axis-text" x={padL - 5} y={y(fromSpeed(v, u)) + 4} text-anchor="end">
+              {v}
+            </text>
+          </g>
+        ))}
 
         <path d={area} fill="url(#areaFill)" />
         <path d={`M${line}`} fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" />
@@ -97,8 +117,8 @@ export function AreaChart({
           </>
         )}
 
-        <line class="axis" x1="0" x2={W} y1={padT + plot} y2={padT + plot} />
-        <text class="axis-text" x="0" y={H - 3}>
+        <line class="axis" x1={padL} x2={W} y1={padT + plot} y2={padT + plot} />
+        <text class="axis-text" x={padL} y={H - 3}>
           start
         </text>
         <text class="axis-text" x={W} y={H - 3} text-anchor="end">

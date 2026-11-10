@@ -22,10 +22,33 @@ function initial(): boolean {
 
 export const isDesktop = signal(initial());
 
+/**
+ * The tier between: one column still, but a wide one. Only the charts read this — they
+ * are drawn into a viewBox sized for the width they will be shown at, and a phone-sized
+ * one stretched across a tablet doubles the axis lettering. The layout itself changes in
+ * CSS alone; app.css names this constant above its tablet query.
+ */
+export const TABLET_MIN_PX = 768;
+const TABLET_QUERY = `(min-width: ${TABLET_MIN_PX / 16}rem) and (max-width: ${
+  (DESKTOP_MIN_PX - 0.16) / 16
+}rem)`;
+export const isTabletWidth = (px: number): boolean => px >= TABLET_MIN_PX && px < DESKTOP_MIN_PX;
+
+export const isTablet = signal(
+  typeof window === 'undefined'
+    ? false
+    : typeof window.matchMedia === 'function'
+      ? window.matchMedia(TABLET_QUERY).matches
+      : isTabletWidth(window.innerWidth)
+);
+
 if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   // Dragging a window across the boundary reflows the whole shell, so this has to be
   // live rather than read once at load.
   window.matchMedia(DESKTOP_QUERY).addEventListener('change', (e) => {
     isDesktop.value = e.matches;
+  });
+  window.matchMedia(TABLET_QUERY).addEventListener('change', (e) => {
+    isTablet.value = e.matches;
   });
 }
