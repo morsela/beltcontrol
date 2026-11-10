@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Counter, sessions, currentSession, todayTotals, lifetimeTotals, dailySeries, streak, bestStreak, sessionsOn, deleteSession, exportCsv, csvField, holdSession, setSessionMeta, startSessionTracking, stopSessionTracking, type Session } from '../src/state/session.js';
-import { live, EMPTY, trustFor } from '../src/state/telemetry.js';
+import { live, EMPTY, trustFor, ingest, lastFrameAt } from '../src/state/telemetry.js';
 import type { DriverId } from '@beltcontrol/belt-drivers';
 import { dayKey } from '../src/lib/format.js';
 
@@ -345,6 +345,88 @@ describe('sessionsOn', () => {
 
   it('is empty for a day with nothing on it', () => {
     expect(sessionsOn('2020-01-01')).toEqual([]);
+  });
+});
+
+describe('time banked across late ticks', () => {
+  const MINUTE = 60_000;
+  const belt = (kmh: number) => {
+    live.value = { ...live.value, speedKmh: kmh };
+  };
+  /**
+   * Run the session clock the way a hidden tab does: Chrome wakes the timers of a tab
+   * hidden for more than five minutes once a minute. The interval is swapped out under
+   * `startSessionTracking` rather than faked afterwards, so what is under test is the
+   * module's own tick arriving late.
+   */
+  const throttled = (everyMs: number) => {
+    const real = window.setInterval;
+    vi.spyOn(window, 'setInterval').mockImplementation(((fn: TimerHandler) =>
+      real(fn, everyMs)) as typeof window.setInterval);
+  };
+
+  beforeEach(() => {
+    setSessionMeta({ protocol: 'classic', protocolName: 'test', deviceName: 'test' });
+  });
+
+  afterEach(() => {
+    stopSessionTracking();
+    live.value = { ...EMPTY };
+    lastFrameAt.value = null;
+  });
+
+  it('banks the whole of a walk taken in a throttled background tab', () => {
+    throttled(MINUTE);
+    startSessionTracking();
+    belt(3);
+    vi.advanceTimersByTime(61 * MINUTE);
+    // The first throttled tick opens the session; the sixty after it are each a minute.
+    expect(currentSession.value!.activeMs).toBe(60 * MINUTE);
+  });
+
+  it('banks one tick for a gap too long to be throttling', () => {
+    throttled(10 * MINUTE);
+    startSessionTracking();
+    belt(3);
+    vi.advanceTimersByTime(31 * MINUTE);
+    expect(currentSession.value!.activeMs).toBe(2_000);
+  });
+
+  it('does not bank a long gap the belt was stopped at the start of', () => {
+    throttled(MINUTE);
+    startSessionTracking();
+    belt(3);
+    vi.advanceTimersByTime(2 * MINUTE); // open, then one credited minute
+    belt(0);
+    vi.advanceTimersByTime(30_000); // no tick falls in here
+    belt(3);
+    vi.advanceTimersByTime(30_000); // moving at both ends of this minute
+    belt(0);
+    vi.advanceTimersByTime(MINUTE); // stopped at the tick: nothing
+    belt(3);
+    vi.advanceTimersByTime(MINUTE); // stopped at the last tick, so one tick only
+    expect(currentSession.value!.activeMs).toBe(2 * MINUTE + 1_000);
+  });
+
+  it('lets a telemetry frame run a tick the timer is late for', () => {
+    throttled(MINUTE);
+    startSessionTracking();
+    vi.advanceTimersByTime(5_000);
+    ingest({ speedKmh: 3 });
+    // No timer has fired, and the walk is open all the same.
+    expect(currentSession.value).not.toBeNull();
+    vi.advanceTimersByTime(2_000);
+    ingest({ speedKmh: 3 });
+    expect(currentSession.value!.activeMs).toBe(2_000);
+  });
+
+  it('leaves the tick to the timer while the timer is keeping up', () => {
+    startSessionTracking();
+    belt(3);
+    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(400);
+    ingest({ speedKmh: 3 });
+    expect(currentSession.value!.activeMs).toBe(9_000);
   });
 });
 
